@@ -295,24 +295,28 @@ class DataRetriever:
                 data_blob = zlib.decompress(data_blob)
 
             while True:
-                # The first 2 bytes of any blob is a collectable ID,
-                # followed by the raw bytes of that collectable, then
-                # another collectable ID, and so on.
-                cid = struct.unpack('H', data_blob[:2])[0]
-                if self.IsDevDebug():
-                    print ('[simdb verbose] tick {}, cid {}'.format(tick, cid))
+                try:
+                    # The first 2 bytes of any blob is a collectable ID,
+                    # followed by the raw bytes of that collectable, then
+                    # another collectable ID, and so on.
+                    cid = struct.unpack('H', data_blob[:2])[0]
+                    if self.IsDevDebug():
+                        print ('[simdb verbose] tick {}, cid {}'.format(tick, cid))
 
-                data_blob = data_blob[2:]
+                    data_blob = data_blob[2:]
 
-                replayer = self._replayers_by_elem_path[self.simhier.GetElemPath(cid)]
-                is_auto_collected = cid in self._auto_collected_cids
-                is_dev_debug = self.IsDevDebug()
-                num_bytes_read = replayer.Replay(tick, data_blob, is_auto_collected, is_dev_debug)
-                if num_bytes_read == 0:
-                    break
+                    replayer = self._replayers_by_elem_path[self.simhier.GetElemPath(cid)]
+                    is_auto_collected = cid in self._auto_collected_cids
+                    is_dev_debug = self.IsDevDebug()
+                    num_bytes_read = replayer.Replay(tick, data_blob, is_auto_collected, is_dev_debug)
+                    if num_bytes_read == 0:
+                        break
 
-                data_blob = data_blob[num_bytes_read:]
-                if len(data_blob) == 0:
+                    data_blob = data_blob[num_bytes_read:]
+                    if len(data_blob) == 0:
+                        break
+                except Exception as e:
+                    print ('[simdb verbose] Exception: tick {}, cid {}, error "{}"'.format(tick, cid, str(e)))
                     break
 
         time_vals = []
@@ -772,13 +776,22 @@ class SparseIterableReplayer:
 
         # The top of the blob always has the number of structs as a uint16_t.
         size = struct.unpack('H', data_blob[:2])[0]
+        data_blob = data_blob[2:]
+        num_bytes_read = 2
+
+        self.values = [None]*self.capacity
         if is_dev_debug:
             print ('[simdb verbose] num valid: {}'.format(size))
 
         for i in range(size):
             # Each entry is preceeded by a uint16_t bin index.
-            bin_idx = struct.unpack('H', data_blob[2+i*2:2+(i+1)*2])[0]
-            struct_blob = data_blob[2+size*2+i*self.struct_num_bytes:2+size*2+(i+1)*self.struct_num_bytes]
+            bin_idx = struct.unpack('H', data_blob[:2])[0]
+            data_blob = data_blob[2:]
+            num_bytes_read += 2
+
+            struct_blob = data_blob[:self.struct_num_bytes]
+            data_blob = data_blob[self.struct_num_bytes:]
+            num_bytes_read += self.struct_num_bytes
 
             assert bin_idx >= 0 and bin_idx < self.capacity and bin_idx < len(self.values)
             self.values[bin_idx] = struct_blob
@@ -787,7 +800,7 @@ class SparseIterableReplayer:
                 print ('[simdb verbose] bin {}, {} bytes'.format(bin_idx, self.struct_num_bytes))
 
         self.values_by_tick[tick] = copy.deepcopy(self.values)
-        return 2 + size*2 + size*self.struct_num_bytes
+        return num_bytes_read
 
 class EnumDef:
     def __init__(self, name, int_type):
