@@ -316,8 +316,9 @@ class DataRetriever:
                     if len(data_blob) == 0:
                         break
                 except Exception as e:
-                    print ('[simdb verbose] Exception: tick {}, cid {}, error "{}"'.format(tick, cid, str(e)))
-                    break
+                    msg = '[simdb verbose] Exception: tick {}, cid {}, error "{}"'.format(tick, cid, str(e))
+                    wx.MessageBox(msg, "Error", wx.OK | wx.ICON_ERROR)
+                    return {'TimeVals': [], 'DataVals': []}
 
         time_vals = []
         data_vals = []
@@ -793,9 +794,10 @@ class SparseIterableReplayer:
             data_blob = data_blob[self.struct_num_bytes:]
             num_bytes_read += self.struct_num_bytes
 
-            assert bin_idx >= 0 and bin_idx < self.capacity and bin_idx < len(self.values)
-            self.values[bin_idx] = struct_blob
+            if bin_idx < 0 or bin_idx >= len(self.values):
+                raise ValueError('Invalid bin: {}'.format(bin_idx))
 
+            self.values[bin_idx] = struct_blob
             if is_dev_debug:
                 print ('[simdb verbose] bin {}, {} bytes'.format(bin_idx, self.struct_num_bytes))
 
