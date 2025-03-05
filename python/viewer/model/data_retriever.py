@@ -1,6 +1,28 @@
-import zlib, struct, copy, re
+import zlib, struct, copy, re, wx
 from enum import IntEnum
 from viewer.gui.view_settings import DirtyReasons
+from .cache import LRUCache
+
+class CachedUtilizSizes(LRUCache):
+    def __init__(self, data_retriever, capacity=100):
+        super().__init__(capacity)
+        self.data_retriever = data_retriever
+        self.simhier = data_retriever.simhier
+
+    def load(self, tick):
+        sizes_by_id = {}
+        for elem_id in self.simhier.GetContainerIDs():
+            elem_path = self.simhier.GetElemPath(elem_id)
+            unpacked = self.data_retriever.Unpack(elem_path, tick)
+            size = 0
+
+            for data_vals in unpacked['DataVals']:
+                if data_vals is not None:
+                    size += 1
+
+            sizes_by_id[elem_id] = size
+
+        return sizes_by_id
 
 class DataRetriever:
     def __init__(self, frame, db, simhier):
@@ -18,8 +40,7 @@ class DataRetriever:
 
         self._displayed_columns_by_struct_name = {}
         self._auto_colorize_column_by_struct_name = {}
-        self._cached_utiliz_sizes = {}
-        self._cached_utiliz_time_val = None
+        self._cached_utiliz_sizes = CachedUtilizSizes(self)
 
         self._collection_ids_by_elem_path = {}
         for elem_path in simhier.GetElemPaths():
@@ -239,10 +260,7 @@ class DataRetriever:
         return self._deserializers_by_dtype[dtype]
 
     def GetIterableSizesByCollectionID(self, time_val):
-        if self._cached_utiliz_time_val is not None and time_val == self._cached_utiliz_time_val:
-            return self._cached_utiliz_sizes
-
-        return {id:0 for id in self.simhier.GetContainerIDs()}
+        return self._cached_utiliz_sizes.get(time_val)
 
     def Unpack(self, elem_path, time_range=None):
         cmd = 'SELECT Tick,Data,IsCompressed FROM CollectionRecords '
@@ -316,7 +334,7 @@ class DataRetriever:
                     if len(data_blob) == 0:
                         break
                 except Exception as e:
-                    msg = '[simdb verbose] Exception: tick {}, cid {}, error "{}"'.format(tick, cid, str(e))
+                    msg = 'Exception: tick {}, cid {}, error "{}"'.format(tick, cid, str(e))
                     wx.MessageBox(msg, "Error", wx.OK | wx.ICON_ERROR)
                     return {'TimeVals': [], 'DataVals': []}
 
@@ -327,14 +345,23 @@ class DataRetriever:
         ticks.sort()
 
         deserializer = self.GetDeserializer(requested_elem_path)
-        for tick in ticks:
-            if time_range is None or (tick >= time_range[0] and tick <= time_range[1]):
-                time_vals.append(tick)
+        try:
+            for tick in ticks:
+                if time_range is None or (tick >= time_range[0] and tick <= time_range[1]):
+                    time_vals.append(tick)
 
-                data_vals.append([])
-                data_blobs = self._replayers_by_elem_path[requested_elem_path].values_by_tick[tick]
-                for data_blob in data_blobs:
-                    data_vals[-1].append(deserializer.Deserialize(data_blob))
+                    data_vals.append([])
+                    data_blobs = self._replayers_by_elem_path[requested_elem_path].values_by_tick[tick]
+                    for data_blob in data_blobs:
+                        if data_blob is not None:
+                            data_vals[-1].append(deserializer.Deserialize(data_blob))
+                        else:
+                            data_vals[-1].append(None)
+
+        except Exception as e:
+            msg = 'Exception: error deserialing "{}" at tick {}, error "{}"'.format(requested_elem_path, tick, str(e))
+            wx.MessageBox(msg, "Error", wx.OK | wx.ICON_ERROR)
+            return {'TimeVals': [], 'DataVals': []}
 
         return {'TimeVals': time_vals, 'DataVals': data_vals}
 
