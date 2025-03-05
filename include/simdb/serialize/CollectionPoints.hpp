@@ -367,7 +367,8 @@ public:
         BOOKENDS,
         CHANGE,
         CARRY,
-        FULL
+        FULL,
+        EMPTY
     };
 
     ContigIterableCollectionPoint(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype, size_t capacity)
@@ -450,30 +451,30 @@ private:
         void compareAndMinify(IterableSnapshot& prev, CollectionBuffer& buffer, uint64_t tick, uint16_t elem_id, bool is_auto_collected)
         {
             uint16_t changed_idx = 0;
-            switch (getMinificationAction_(prev, changed_idx, is_auto_collected))
+            switch (auto action = getMinificationAction_(prev, changed_idx, is_auto_collected))
             {
                 case Action::CARRY:
                     if (LOG_MINIFICATION)
                         std::cout << "[simdb verbose] cid " << elem_id << ", tick " << tick << ", CARRY\n";
-                    buffer << ContigIterableCollectionPoint::Action::CARRY;
+                    buffer << action;
                     break;
                 case Action::ARRIVE:
                     if (LOG_MINIFICATION)
                         std::cout << "[simdb verbose] cid " << elem_id << ", tick " << tick << ", ARRIVE "
                                   << bytes_by_bin_[changed_idx].size() << " bytes\n";
-                    buffer << ContigIterableCollectionPoint::Action::ARRIVE;
+                    buffer << action;
                     buffer << bytes_by_bin_[changed_idx];
                     break;
                 case Action::DEPART:
                     if (LOG_MINIFICATION)
                         std::cout << "[simdb verbose] cid " << elem_id << ", tick " << tick << ", DEPART\n";
-                    buffer << ContigIterableCollectionPoint::Action::DEPART;
+                    buffer << action;
                     break;
                 case Action::CHANGE:
                     if (LOG_MINIFICATION)
                         std::cout << "[simdb verbose] cid " << elem_id << ", tick " << tick << ", CHANGE index " << changed_idx << ","
                                   << bytes_by_bin_[changed_idx].size() << " bytes\n";
-                    buffer << ContigIterableCollectionPoint::Action::CHANGE;
+                    buffer << action;
                     buffer << changed_idx;
                     buffer << bytes_by_bin_[changed_idx];
                     break;
@@ -481,12 +482,12 @@ private:
                     if (LOG_MINIFICATION)
                         std::cout << "[simdb verbose] cid " << elem_id << ", tick " << tick << ", BOOKENDS, appended "
                                   << bytes_by_bin_[changed_idx].size() << " bytes\n";
-                    buffer << ContigIterableCollectionPoint::Action::BOOKENDS;
+                    buffer << action;
                     buffer << bytes_by_bin_[changed_idx];
                     break;
-                case Action::FULL:
+                case Action::FULL: {
                     auto num_elems = size();
-                    buffer << ContigIterableCollectionPoint::Action::FULL;
+                    buffer << action;
                     buffer << num_elems;
 
                     uint64_t num_bytes_per_bin = 0;
@@ -517,6 +518,10 @@ private:
                         }
                     }
                     break;
+                }
+                case Action::EMPTY:
+                    buffer << action;
+                    break;
             }
         }
 
@@ -532,6 +537,11 @@ private:
             {
                 action_count_ = 0;
                 return Action::FULL;
+            }
+
+            if (bytes_by_bin_.empty())
+            {
+                return Action::EMPTY;
             }
 
             if (prev.bytes_by_bin_ == bytes_by_bin_)
