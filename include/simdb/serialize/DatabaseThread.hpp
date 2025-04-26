@@ -11,6 +11,7 @@ struct DatabaseEntry
     std::vector<char> bytes;
     bool compressed = false;
     uint64_t tick = 0;
+    std::string notes;
 };
 
 class DatabaseManager;
