@@ -60,6 +60,8 @@ public:
     {
     }
 
+    virtual ~CollectionPointBase() = default;
+
     static void enableMinificationLogging()
     {
         const bool log = true;
