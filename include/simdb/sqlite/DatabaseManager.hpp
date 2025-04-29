@@ -897,6 +897,11 @@ inline TreeNode* CollectionMgr::updateTree_(const std::string& path, const std::
 /// Note that this method is defined here since we need the INSERT() method.
 inline void CollectionMgr::finalizeCollections_()
 {
+    if (!root_)
+    {
+        throw DBException("Collection system does not have any collectables!");
+    }
+
     db_mgr_->INSERT(SQL_TABLE("CollectionGlobals"), SQL_COLUMNS("Heartbeat"), SQL_VALUES((int)heartbeat_));
 
     std::vector<TreeNode*> leaf_nodes;
