@@ -335,6 +335,22 @@ public:
         return record;
     }
 
+    /// \brief Execute an arbitrary SQL command on this database.
+    void EXECUTE(const std::string& sql_cmd)
+    {
+        db_conn_->safeTransaction(
+            [&]()
+            {
+                auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_->getDatabase(), sql_cmd.c_str(), nullptr, nullptr, nullptr));
+                if (rc)
+                {
+                    throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
+                }
+
+                return true;
+            });
+    }
+
     /// \brief  Get a SqlRecord from a database ID for the given table.
     ///
     /// \return Returns the record wrapper if found, or nullptr if not.
