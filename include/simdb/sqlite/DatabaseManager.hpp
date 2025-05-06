@@ -54,7 +54,7 @@ public:
     // Optionally provide some "notes" to be associated with this sweep. This
     // could be used for debug purposes, or to provide a "tag" for the data,
     // or associate each sweep with a specific simulation event, etc.
-    void sweep(const std::string& clk, uint64_t tick, const std::string& notes = "");
+    void sweep(const std::string& clk, uint64_t tick, const std::string& notes = "", bool force = false);
 
     // One-time call to write post-simulation metadata to SimDB.
     void postSim();
@@ -802,7 +802,7 @@ CollectionMgr::createIterableCollector(const std::string& path, const std::strin
 
 /// Sweep the collection system for all active collectables that exist on
 /// the given clock, and send their data to the database.
-inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const std::string& notes)
+inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const std::string& notes, bool force)
 {
     const auto clk_id = clock_db_ids_by_name_.at(clk);
 
@@ -815,7 +815,7 @@ inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const st
         }
     }
 
-    if (swept_data_.empty())
+    if (swept_data_.empty() && !force)
     {
         return;
     }
