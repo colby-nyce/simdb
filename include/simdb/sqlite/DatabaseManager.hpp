@@ -446,22 +446,6 @@ public:
         return count;
     }
 
-    /// Execute any SQL command.
-    void executeSQL(const std::string& sql_cmd)
-    {
-        db_conn_->safeTransaction(
-            [&]()
-            {
-                auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_->getDatabase(), sql_cmd.c_str(), nullptr, nullptr, nullptr));
-                if (rc)
-                {
-                    throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
-                }
-
-                return true;
-            });
-    }
-
     /// Get a query object to issue SELECT statements with constraints.
     std::unique_ptr<SqlQuery> createQuery(const char* table_name)
     {
