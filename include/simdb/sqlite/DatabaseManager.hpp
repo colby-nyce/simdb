@@ -6,11 +6,11 @@
 #include "simdb/serialize/CollectionPoints.hpp"
 #include "simdb/serialize/Serialize.hpp"
 #include "simdb/serialize/ThreadedSink.hpp"
+#include "simdb/serialize/TreeNode.hpp"
 #include "simdb/sqlite/SQLiteConnection.hpp"
 #include "simdb/sqlite/SQLiteQuery.hpp"
 #include "simdb/sqlite/SQLiteTable.hpp"
 #include "simdb/utils/Compress.hpp"
-#include "simdb/utils/TreeBuilder.hpp"
 
 namespace simdb
 {
@@ -705,6 +705,7 @@ template <typename T>
 inline std::shared_ptr<CollectionPoint> CollectionMgr::createCollectable(const std::string& path, const std::string& clock)
 {
     auto treenode = updateTree_(path, clock);
+    treenode->is_collectable = true;
     auto elem_id = treenode->db_id;
     auto clk_id = treenode->clk_id;
 
@@ -742,6 +743,7 @@ std::shared_ptr<std::conditional_t<Sparse, SparseIterableCollectionPoint, Contig
 CollectionMgr::createIterableCollector(const std::string& path, const std::string& clock, const size_t capacity)
 {
     auto treenode = updateTree_(path, clock);
+    treenode->is_collectable = true;
     auto elem_id = treenode->db_id;
     auto clk_id = treenode->clk_id;
 
@@ -858,6 +860,19 @@ inline TreeNode* CollectionMgr::updateTree_(const std::string& path, const std::
         clock_db_ids_by_name_[clk] = record->getId();
     }
 
+    // Function to split_string a string by a delimiter
+    auto split_string = [](const std::string& s, char delimiter)
+    {
+        std::vector<std::string> tokens;
+        std::stringstream ss(s);
+        std::string item;
+        while (std::getline(ss, item, delimiter))
+        {
+            tokens.push_back(item);
+        }
+        return tokens;
+    };
+
     auto node = root_.get();
     auto path_parts = split_string(path, '.');
     for (size_t part_idx = 0; part_idx < path_parts.size(); ++part_idx)
@@ -904,30 +919,28 @@ inline void CollectionMgr::finalizeCollections_()
 
     db_mgr_->INSERT(SQL_TABLE("CollectionGlobals"), SQL_COLUMNS("Heartbeat"), SQL_VALUES((int)heartbeat_));
 
-    std::vector<TreeNode*> leaf_nodes;
+    std::vector<TreeNode*> collectable_nodes;
 
-    std::function<void(TreeNode*)> findLeafNodes = [&](TreeNode* node)
+    std::function<void(TreeNode*)> findCollectableNodes = [&](TreeNode* node)
     {
-        if (node->children.empty())
+        if (node->is_collectable)
         {
-            leaf_nodes.push_back(node);
+            collectable_nodes.push_back(node);
         }
-        else
+
+        for (auto& child : node->children)
         {
-            for (auto& child : node->children)
-            {
-                findLeafNodes(child.get());
-            }
+            findCollectableNodes(child.get());
         }
     };
 
-    findLeafNodes(root_.get());
+    findCollectableNodes(root_.get());
 
-    for (auto leaf : leaf_nodes)
+    for (auto collectable_node : collectable_nodes)
     {
-        auto elem_id = leaf->db_id;
-        auto clk_id = leaf->clk_id;
-        auto loc = leaf->getLocation();
+        auto elem_id = collectable_node->db_id;
+        auto clk_id = collectable_node->clk_id;
+        auto loc = collectable_node->getLocation();
         auto collectable = collectables_by_path_.at(loc);
         auto dtype = collectable->getDataTypeStr();
 
