@@ -6,11 +6,26 @@
 namespace simdb
 {
 
+//! Callback function for database entry post-processing. If you pass in a function
+//! pointer to the CollectionMgr::sweep() method, your callback will be invoked
+//! as soon as the record is written to the database.
+//!
+//! \param datablob_db_id The database ID of the written record (CollectionRecords table).
+//!
+//! \param tick The tick at which the record was written to the database.
+//!
+//! \param user_data Optional user data (e.g. a "this" pointer) that was passed into sweep().
+//!
+//! \note This callback is always called inside a BEGIN/COMMIT TRANSACTION block on the database thread.
+typedef void(*DatabaseEntryCallback)(const int datablob_db_id, const uint64_t tick, void* user_data);
+
 struct DatabaseEntry
 {
     std::vector<char> bytes;
     bool compressed = false;
     uint64_t tick = 0;
+    DatabaseEntryCallback post_process_callback = nullptr;
+    void* post_process_user_data = nullptr;
 };
 
 class DatabaseManager;
