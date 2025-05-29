@@ -26,6 +26,7 @@ struct ArgosRecord
     Status status = Status::DONT_READ;
 
     const uint16_t elem_id = 0;
+    bool write_elem_id = true;
     std::vector<char> data;
 
     ArgosRecord(uint16_t elem_id)
@@ -77,6 +78,14 @@ public:
     uint16_t getElemId() const
     {
         return elem_id_;
+    }
+
+    /// We typically serialize [elem_id, value] pairs to the database blobs.
+    /// Some use cases might not need the elem_id however, so this method
+    /// helps minimize disk space for those use cases.
+    void doNotWriteElemId()
+    {
+        argos_record_.write_elem_id = false;
     }
 
     /// Get the clock database ID for this collection point.
@@ -231,7 +240,8 @@ private:
     /// Write the collectable bytes in the smallest form possible.
     template <typename T> void minify_(const T& val)
     {
-        CollectionBuffer buffer(argos_record_.data, getElemId());
+        const uint16_t elem_id = argos_record_.write_elem_id ? getElemId() : 0;
+        CollectionBuffer buffer(argos_record_.data, elem_id);
         if (LOG_MINIFICATION)
             std::cout << "\n\n[simdb verbose] tick " << getTick_() << ", cid " << getElemId() << "\n";
 
