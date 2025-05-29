@@ -671,7 +671,8 @@ inline void CollectionMgr::defineSchema(Schema& schema) const
         .addColumn("DataType", dt::string_t)
         .addColumn("Location", dt::string_t)
         .addColumn("AutoCollected", dt::int32_t)
-        .setColumnDefaultValue("AutoCollected", 0);
+        .setColumnDefaultValue("AutoCollected", 0)
+        .disableAutoIncPrimaryKey();
 
     schema.addTable("StructFields")
         .addColumn("StructName", dt::string_t)

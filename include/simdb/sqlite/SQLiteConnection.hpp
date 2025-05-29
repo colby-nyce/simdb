@@ -129,12 +129,14 @@ public:
                     oss << "CREATE TABLE " << table.getName() << "(";
 
                     // All tables have an auto-incrementing primary key
-                    oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT";
+                    if (table.use_auto_inc_primary_key_) {
+                        oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
+                    }
 
                     // Fill in the rest of the CREATE TABLE command:
                     // CREATE TABLE Id INTEGER PRIMARY KEY AUTOINCREMENT First TEXT, ...
                     //                                                   ---------------
-                    oss << ", " << getColumnsSqlCommand_(table) << ");";
+                    oss << getColumnsSqlCommand_(table) << ");";
 
                     // Create the table in the database
                     executeCommand(oss.str());
