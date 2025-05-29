@@ -31,10 +31,15 @@ public:
         buffer_.reserve(buffer_.capacity());
     }
 
+    /// Note that the elem_id corresponds to a database record's primary key,
+    /// and thus typically will not be zero. Passing in elem_id=0 means "do not
+    /// write elem_id to the buffer".
     CollectionBuffer(std::vector<char>& buffer, uint16_t elem_id)
         : CollectionBuffer(buffer)
     {
-        append(&elem_id, sizeof(elem_id));
+        if (elem_id != 0) {
+            append(&elem_id, sizeof(elem_id));
+        }
     }
 
     void append(const void* data, size_t num_bytes)

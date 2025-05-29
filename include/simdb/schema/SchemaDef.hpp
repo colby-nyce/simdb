@@ -299,6 +299,13 @@ public:
         return *this;
     }
 
+    /// Disable the auto-incrementing primary key for this table.
+    Table& disableAutoIncPrimaryKey()
+    {
+        use_auto_inc_primary_key_ = false;
+        return *this;
+    }
+
     /// Read-only access to this table's columns.
     const std::vector<std::shared_ptr<Column>>& getColumns() const
     {
@@ -322,6 +329,9 @@ private:
     ///     CREATE INDEX IndexName ON TableName(ColA,ColB,ColC)
     ///      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
     std::vector<std::string> index_creation_strs_;
+
+    /// Use an auto-incrementing primary key for this table by default.
+    bool use_auto_inc_primary_key_ = true;
 
     friend class SQLiteConnection;
 };

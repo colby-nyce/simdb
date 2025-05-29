@@ -50,11 +50,17 @@ public:
 
     // Sweep the collection system for all active collectables that exist on
     // the given clock, and send their data to the database.
-    //
-    // Optionally provide some "notes" to be associated with this sweep. This
-    // could be used for debug purposes, or to provide a "tag" for the data,
-    // or associate each sweep with a specific simulation event, etc.
-    void sweep(const std::string& clk, uint64_t tick, const std::string& notes = "", bool force = false);
+    void sweep(const std::string& clk,
+               uint64_t tick,
+               DatabaseEntryCallback post_process_callback = nullptr,
+               void* post_process_user_data = nullptr);
+
+    // Add arbitrary code to be invoked on the database thread inside
+    // a BEGIN/COMMIT TRANSACTION block.
+    void queueWork(const AnyDatabaseWork& work)
+    {
+        sink_.queueWork(work);
+    }
 
     // One-time call to write post-simulation metadata to SimDB.
     void postSim();
@@ -671,7 +677,8 @@ inline void CollectionMgr::defineSchema(Schema& schema) const
         .addColumn("DataType", dt::string_t)
         .addColumn("Location", dt::string_t)
         .addColumn("AutoCollected", dt::int32_t)
-        .setColumnDefaultValue("AutoCollected", 0);
+        .setColumnDefaultValue("AutoCollected", 0)
+        .disableAutoIncPrimaryKey();
 
     schema.addTable("StructFields")
         .addColumn("StructName", dt::string_t)
@@ -692,7 +699,6 @@ inline void CollectionMgr::defineSchema(Schema& schema) const
     schema.addTable("StringMap").addColumn("IntVal", dt::int32_t).addColumn("String", dt::string_t);
 
     schema.addTable("CollectionRecords")
-        .addColumn("Notes", dt::string_t)
         .addColumn("Tick", dt::int64_t)
         .addColumn("Data", dt::blob_t)
         .addColumn("IsCompressed", dt::int32_t)
@@ -788,7 +794,9 @@ CollectionMgr::createIterableCollector(const std::string& path, const std::strin
 
 /// Sweep the collection system for all active collectables that exist on
 /// the given clock, and send their data to the database.
-inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const std::string& notes, bool force)
+inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick,
+                                 DatabaseEntryCallback post_process_callback,
+                                 void* post_process_user_data)
 {
     const auto clk_id = clock_db_ids_by_name_.at(clk);
 
@@ -801,7 +809,7 @@ inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const st
         }
     }
 
-    if (swept_data_.empty() && !force)
+    if (swept_data_.empty())
     {
         return;
     }
@@ -810,7 +818,8 @@ inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const st
     entry.bytes = std::move(swept_data_);
     entry.compressed = false;
     entry.tick = tick;
-    entry.notes = notes;
+    entry.post_process_callback = post_process_callback;
+    entry.post_process_user_data = post_process_user_data;
 
     sink_.push(std::move(entry));
 }
@@ -962,13 +971,23 @@ inline void DatabaseThread::flush()
                 const auto& data = entry.bytes;
                 const auto tick = entry.tick;
                 const auto compressed = entry.compressed;
-                const auto& notes = entry.notes;
 
-                db_mgr_->INSERT(SQL_TABLE("CollectionRecords"),
-                                SQL_COLUMNS("Notes", "Tick", "Data", "IsCompressed"),
-                                SQL_VALUES(notes, tick, data, (int)compressed));
+                const auto record = db_mgr_->INSERT(SQL_TABLE("CollectionRecords"),
+                                                    SQL_COLUMNS("Tick", "Data", "IsCompressed"),
+                                                    SQL_VALUES(tick, data, (int)compressed));
+
+                if (entry.post_process_callback)
+                {
+                    entry.post_process_callback(record->getId(), entry.tick, entry.post_process_user_data);
+                }
 
                 ++num_processed_;
+            }
+
+            AnyDatabaseWork extra_work;
+            while (work_queue_.try_pop(extra_work))
+            {
+                extra_work(db_mgr_);
             }
 
             for (const auto& kvp : StringMap::instance()->getUnserializedMap())
