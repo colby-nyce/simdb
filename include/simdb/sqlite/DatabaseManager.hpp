@@ -52,9 +52,15 @@ public:
     // the given clock, and send their data to the database.
     void sweep(const std::string& clk,
                uint64_t tick,
-               bool force = false,
                DatabaseEntryCallback post_process_callback = nullptr,
                void* post_process_user_data = nullptr);
+
+    // Add arbitrary code to be invoked on the database thread inside
+    // a BEGIN/COMMIT TRANSACTION block.
+    void queueWork(const AnyDatabaseWork& work)
+    {
+        sink_.queueWork(work);
+    }
 
     // One-time call to write post-simulation metadata to SimDB.
     void postSim();
@@ -788,7 +794,7 @@ CollectionMgr::createIterableCollector(const std::string& path, const std::strin
 
 /// Sweep the collection system for all active collectables that exist on
 /// the given clock, and send their data to the database.
-inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, bool force,
+inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick,
                                  DatabaseEntryCallback post_process_callback,
                                  void* post_process_user_data)
 {
@@ -803,7 +809,7 @@ inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, bool for
         }
     }
 
-    if (swept_data_.empty() && !force)
+    if (swept_data_.empty())
     {
         return;
     }
@@ -976,6 +982,12 @@ inline void DatabaseThread::flush()
                 }
 
                 ++num_processed_;
+            }
+
+            AnyDatabaseWork extra_work;
+            while (work_queue_.try_pop(extra_work))
+            {
+                extra_work(db_mgr_);
             }
 
             for (const auto& kvp : StringMap::instance()->getUnserializedMap())

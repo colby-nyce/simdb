@@ -2,6 +2,7 @@
 
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"
+#include <functional>
 
 namespace simdb
 {
@@ -29,6 +30,8 @@ struct DatabaseEntry
 };
 
 class DatabaseManager;
+
+using AnyDatabaseWork = std::function<void(DatabaseManager*)>;
 
 class DatabaseThread : public Thread
 {
@@ -61,6 +64,11 @@ public:
         return num_processed_;
     }
 
+    void queueWork(const AnyDatabaseWork& work)
+    {
+        work_queue_.emplace(work);
+    }
+
     void flush();
 
 private:
@@ -70,6 +78,7 @@ private:
     }
 
     ConcurrentQueue<DatabaseEntry> queue_;
+    ConcurrentQueue<AnyDatabaseWork> work_queue_;
     DatabaseManager* db_mgr_;
     uint64_t num_processed_ = 0;
 };

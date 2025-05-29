@@ -86,6 +86,11 @@ public:
         startThreads_();
     }
 
+    void queueWork(const AnyDatabaseWork& work)
+    {
+        db_thread_.queueWork(work);
+    }
+
     void flush()
     {
         if (!sink_threads_.empty())
