@@ -50,11 +50,7 @@ public:
 
     // Sweep the collection system for all active collectables that exist on
     // the given clock, and send their data to the database.
-    //
-    // Optionally provide some "notes" to be associated with this sweep. This
-    // could be used for debug purposes, or to provide a "tag" for the data,
-    // or associate each sweep with a specific simulation event, etc.
-    void sweep(const std::string& clk, uint64_t tick, const std::string& notes = "", bool force = false);
+    void sweep(const std::string& clk, uint64_t tick, bool force = false);
 
     // One-time call to write post-simulation metadata to SimDB.
     void postSim();
@@ -693,7 +689,6 @@ inline void CollectionMgr::defineSchema(Schema& schema) const
     schema.addTable("StringMap").addColumn("IntVal", dt::int32_t).addColumn("String", dt::string_t);
 
     schema.addTable("CollectionRecords")
-        .addColumn("Notes", dt::string_t)
         .addColumn("Tick", dt::int64_t)
         .addColumn("Data", dt::blob_t)
         .addColumn("IsCompressed", dt::int32_t)
@@ -789,7 +784,7 @@ CollectionMgr::createIterableCollector(const std::string& path, const std::strin
 
 /// Sweep the collection system for all active collectables that exist on
 /// the given clock, and send their data to the database.
-inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const std::string& notes, bool force)
+inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, bool force)
 {
     const auto clk_id = clock_db_ids_by_name_.at(clk);
 
@@ -811,7 +806,6 @@ inline void CollectionMgr::sweep(const std::string& clk, uint64_t tick, const st
     entry.bytes = std::move(swept_data_);
     entry.compressed = false;
     entry.tick = tick;
-    entry.notes = notes;
 
     sink_.push(std::move(entry));
 }
@@ -963,11 +957,10 @@ inline void DatabaseThread::flush()
                 const auto& data = entry.bytes;
                 const auto tick = entry.tick;
                 const auto compressed = entry.compressed;
-                const auto& notes = entry.notes;
 
                 db_mgr_->INSERT(SQL_TABLE("CollectionRecords"),
-                                SQL_COLUMNS("Notes", "Tick", "Data", "IsCompressed"),
-                                SQL_VALUES(notes, tick, data, (int)compressed));
+                                SQL_COLUMNS("Tick", "Data", "IsCompressed"),
+                                SQL_VALUES(tick, data, (int)compressed));
 
                 ++num_processed_;
             }
