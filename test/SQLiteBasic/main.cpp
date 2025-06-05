@@ -1,5 +1,9 @@
 /*
- \brief Tests for SQLite connections, INSERT, UPDATE, etc.
+ * Tests for SQLite connections, INSERT, UPDATE, etc.
+ *
+ * This test is only for the core SQLite functionality of SimDB.
+ * It does not test SimDB threads (async writes), compression
+ * pipelines, or data collection.
  */
 
 // clang-format off
