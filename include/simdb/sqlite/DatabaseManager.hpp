@@ -6,7 +6,6 @@
 #include "simdb/sqlite/SQLiteConnection.hpp"
 #include "simdb/sqlite/SQLiteQuery.hpp"
 #include "simdb/sqlite/SQLiteTable.hpp"
-#include "simdb/utils/Compress.hpp"
 
 namespace simdb
 {
