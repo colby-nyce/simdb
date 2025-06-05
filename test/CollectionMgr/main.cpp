@@ -1,7 +1,8 @@
 /// Tests for SimDB collections feature.
 
+#if 0
 #include <random>
-#include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/apps/ArgosCollection.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
 TEST_INIT;
@@ -292,3 +293,10 @@ int main()
     REPORT_ERROR;
     return ERROR_CODE;
 }
+#else
+int main()
+{
+    // Test should not be running at the moment...
+    return 1;
+}
+#endif
