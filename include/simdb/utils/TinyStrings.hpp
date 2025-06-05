@@ -1,4 +1,4 @@
-// <StringMap.hpp> -*- C++ -*-
+// <TinyStrings.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -13,15 +13,15 @@ namespace simdb
 /// not as actual strings, but as ints. This class is used to map strings to ints,
 /// while the SimDB compression/sqlite pipeline will serialize the map to the database
 /// throughout simulation.
-class StringMap
+class TinyStrings
 {
 public:
     using string_map_t = std::shared_ptr<std::unordered_map<std::string, uint32_t>>;
     using unserialized_string_map_t = std::unordered_map<uint32_t, std::string>;
 
-    static StringMap* instance()
+    static TinyStrings* instance()
     {
-        static StringMap map;
+        static TinyStrings map;
         return &map;
     }
 
@@ -52,7 +52,7 @@ public:
     }
 
 private:
-    StringMap() = default;
+    TinyStrings() = default;
     string_map_t map_ = std::make_shared<std::unordered_map<std::string, uint32_t>>();
     unserialized_string_map_t unserialized_map_;
 };

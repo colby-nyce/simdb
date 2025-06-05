@@ -5,7 +5,7 @@
 #include "simdb/Exceptions.hpp"
 #include "simdb/serialize/CollectionBuffer.hpp"
 #include "simdb/utils/MetaStructs.hpp"
-#include "simdb/utils/StringMap.hpp"
+#include "simdb/utils/TinyStrings.hpp"
 
 #include <cxxabi.h>
 #include <stdint.h>
