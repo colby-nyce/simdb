@@ -37,7 +37,8 @@ public:
     CollectionBuffer(std::vector<char>& buffer, uint16_t elem_id)
         : CollectionBuffer(buffer)
     {
-        if (elem_id != 0) {
+        if (elem_id != 0)
+        {
             append(&elem_id, sizeof(elem_id));
         }
     }

@@ -1,8 +1,8 @@
 #pragma once
 
+#include <functional>
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"
-#include <functional>
 
 namespace simdb
 {
@@ -18,7 +18,7 @@ namespace simdb
 //! \param user_data Optional user data (e.g. a "this" pointer) that was passed into sweep().
 //!
 //! \note This callback is always called inside a BEGIN/COMMIT TRANSACTION block on the database thread.
-typedef void(*DatabaseEntryCallback)(const int datablob_db_id, const uint64_t tick, void* user_data);
+typedef void (*DatabaseEntryCallback)(const int datablob_db_id, const uint64_t tick, void* user_data);
 
 struct DatabaseEntry
 {

@@ -129,7 +129,8 @@ public:
                     oss << "CREATE TABLE " << table.getName() << "(";
 
                     // All tables have an auto-incrementing primary key
-                    if (table.use_auto_inc_primary_key_) {
+                    if (table.use_auto_inc_primary_key_)
+                    {
                         oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
                     }
 

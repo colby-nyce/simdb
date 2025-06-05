@@ -376,6 +376,35 @@ public:
         return tables_;
     }
 
+    /// Get a table by its name. Throws if not found.
+    const Table& getTable(const std::string& table_name) const
+    {
+        for (const auto& table : tables_)
+        {
+            if (table.getName() == table_name)
+            {
+                return table;
+            }
+        }
+
+        throw DBException("Table '" + table_name + "' not found in schema");
+    }
+
+    /// Before calling getTable(), you can use this method to
+    /// check if a table with the given name exists in this schema.
+    bool hasTable(const std::string& table_name) const
+    {
+        for (const auto& table : tables_)
+        {
+            if (table.getName() == table_name)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 private:
     /// All the tables in this schema, whether added via
     /// addTable() or appendSchema().
