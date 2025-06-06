@@ -10,16 +10,34 @@ namespace simdb
 
 /// One or more of these threads work on the ThreadedSink's queue of pending
 /// DatabaseEntry objects. Each of these threads can have its own compression
-/// or no compression at all. They individually regulate their own internals
-/// in response to their % of the total work load (higher/lower/no compression).
+/// level, and compression can also be disabled and re-enabled at runtime.
 class SinkThread : public Thread
 {
 public:
-    SinkThread(ConcurrentQueue<DatabaseEntry>& queue, DatabaseThread& db_thread)
+    SinkThread(ConcurrentQueue<DatabaseEntry>& queue, DatabaseThread<DatabaseEntry>& db_thread,
+               CompressionLevel compression_level = CompressionLevel::DEFAULT)
         : Thread(500)
         , queue_(queue)
         , db_thread_(db_thread)
     {
+    }
+
+    /// Reconfigure the compression level for this thread.
+    void setCompressionLevel(CompressionLevel level)
+    {
+        compression_level_ = level;
+    }
+
+    /// Disable compression for this thread.
+    void disableCompression()
+    {
+        setCompressionLevel(CompressionLevel::DISABLED);
+    }
+
+    /// Enable compression for this thread.
+    void enableCompression(CompressionLevel compression_level = CompressionLevel::DEFAULT)
+    {
+        setCompressionLevel(compression_level);
     }
 
 private:
@@ -44,14 +62,15 @@ private:
             return;
         }
 
-        compressDataVec(entry.bytes, compressed_bytes_, 1);
+        compressDataVec(entry.bytes, compressed_bytes_, compression_level_);
         std::swap(entry.bytes, compressed_bytes_);
         entry.compressed = true;
     }
 
     ConcurrentQueue<DatabaseEntry>& queue_;
-    DatabaseThread& db_thread_;
+    DatabaseThread<DatabaseEntry>& db_thread_;
     std::vector<char> compressed_bytes_;
+    CompressionLevel compression_level_;
 };
 
 /// This class holds onto a configurable number of threads that work on
@@ -67,11 +86,14 @@ private:
 ///
 /// All that to say that the total number of threads is the number of
 /// SinkThreads plus the DatabaseThread.
+template <typename PipelineDataT = DatabaseEntry>
 class ThreadedSink
 {
 public:
-    ThreadedSink(DatabaseManager* db_mgr, size_t num_compression_threads = 1)
-        : db_thread_(db_mgr)
+    ThreadedSink(DatabaseManager* db_mgr,
+                 EndOfPipelineCallback<PipelineDataT> end_of_pipeline_callback,
+                 size_t num_compression_threads = 0)
+        : db_thread_(db_mgr, end_of_pipeline_callback)
     {
         for (size_t i = 0; i < num_compression_threads; ++i)
         {
@@ -80,17 +102,50 @@ public:
         }
     }
 
-    void push(DatabaseEntry&& entry)
+    /// Reconfigure the compression level for this thread.
+    void setCompressionLevel(CompressionLevel level)
+    {
+        for (auto& thread : sink_threads_)
+        {
+            thread->setCompressionLevel(level);
+        }
+    }
+
+    /// Disable compression for this thread.
+    void disableCompression()
+    {
+        for (auto& thread : sink_threads_)
+        {
+            thread->disableCompression();
+        }
+    }
+
+    /// Enable compression for this thread.
+    void enableCompression(CompressionLevel compression_level = CompressionLevel::DEFAULT)
+    {
+        for (auto& thread : sink_threads_)
+        {
+            thread->enableCompression(compression_level);
+        }
+    }
+
+    /// Send a new packet down the pipeline. 
+    void push(PipelineDataT&& entry)
     {
         compression_queue_.emplace(std::move(entry));
         startThreads_();
     }
 
+    /// Queue arbitrary work to be done on the database thread. This will be
+    /// executed inside a BEGIN/COMMIT TRANSACTION block.
     void queueWork(const AnyDatabaseWork& work)
     {
         db_thread_.queueWork(work);
     }
 
+    /// Flush the pipeline, allowing all threads to finish their work. This
+    /// occurs periodically on the background thread even if you do not call
+    /// this method explicitly.
     void flush()
     {
         if (!sink_threads_.empty())
@@ -104,7 +159,7 @@ public:
         else
         {
             // Send uncompressed data directly to the database thread.
-            DatabaseEntry entry;
+            PipelineDataT entry;
             while (compression_queue_.try_pop(entry))
             {
                 db_thread_.push(std::move(entry));
@@ -114,6 +169,7 @@ public:
         db_thread_.flush();
     }
 
+    /// Stop all threads and flush the pipeline.
     void teardown()
     {
         flush();
@@ -138,8 +194,8 @@ private:
         }
     }
 
-    ConcurrentQueue<DatabaseEntry> compression_queue_;
-    DatabaseThread db_thread_;
+    ConcurrentQueue<PipelineDataT> compression_queue_;
+    DatabaseThread<PipelineDataT> db_thread_;
     std::vector<std::unique_ptr<SinkThread>> sink_threads_;
     bool threads_running_ = false;
 };

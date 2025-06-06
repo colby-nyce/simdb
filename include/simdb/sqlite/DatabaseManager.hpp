@@ -72,6 +72,12 @@ public:
         return true;
     }
 
+    /// Get the schema for this database.
+    const Schema& getSchema() const
+    {
+        return schema_;
+    }
+
     /// Get the full database file path.
     const std::string& getDatabaseFilePath() const
     {

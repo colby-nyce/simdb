@@ -7,3 +7,4 @@ add_custom_command(
 
 #add_subdirectory(ArgosCollection)
 add_subdirectory(SQLiteBasic)
+add_subdirectory(SQLiteAdvanced)

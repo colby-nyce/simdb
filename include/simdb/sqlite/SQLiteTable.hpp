@@ -21,7 +21,7 @@ namespace simdb
 class SqlTable
 {
 public:
-    SqlTable(const char* table_name)
+    SqlTable(const std::string& table_name)
         : table_name_(table_name)
     {
     }

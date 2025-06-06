@@ -1,6 +1,6 @@
 #pragma once
 
-#include <functional>
+#include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"
 
@@ -20,6 +20,9 @@ namespace simdb
 //! \note This callback is always called inside a BEGIN/COMMIT TRANSACTION block on the database thread.
 typedef void (*DatabaseEntryCallback)(const int datablob_db_id, const uint64_t tick, void* user_data);
 
+template <typename PipelineDataT>
+using EndOfPipelineCallback = std::function<void(DatabaseManager*, PipelineDataT&&)>;
+
 struct DatabaseEntry
 {
     std::vector<char> bytes;
@@ -33,16 +36,19 @@ class DatabaseManager;
 
 using AnyDatabaseWork = std::function<void(DatabaseManager*)>;
 
+/// This class serves as the last stage in a database pipeline.
+template <typename PipelineDataT>
 class DatabaseThread : public Thread
 {
 public:
-    DatabaseThread(DatabaseManager* db_mgr)
+    DatabaseThread(DatabaseManager* db_mgr, EndOfPipelineCallback<PipelineDataT> end_of_pipeline_callback)
         : Thread(500)
         , db_mgr_(db_mgr)
+        , end_of_pipeline_callback_(end_of_pipeline_callback)
     {
     }
 
-    void push(DatabaseEntry&& entry)
+    void push(PipelineDataT&& entry)
     {
         queue_.emplace(std::move(entry));
         startThreadLoop();
@@ -54,22 +60,31 @@ public:
         stopThreadLoop();
     }
 
-    uint64_t getNumPending() const
-    {
-        return queue_.size();
-    }
-
-    uint64_t getNumProcessed() const
-    {
-        return num_processed_;
-    }
-
     void queueWork(const AnyDatabaseWork& work)
     {
         work_queue_.emplace(work);
     }
 
-    void flush();
+    void flush()
+    {
+        db_mgr_->safeTransaction(
+            [&]()
+            {
+                PipelineDataT entry;
+                while (queue_.try_pop(entry))
+                {
+                    end_of_pipeline_callback_(db_mgr_, std::move(entry));
+                }
+
+                AnyDatabaseWork work;
+                while (work_queue_.try_pop(work))
+                {
+                    work(db_mgr_);
+                }
+
+                return true;
+            });
+    }
 
 private:
     void onInterval_() override
@@ -77,10 +92,10 @@ private:
         flush();
     }
 
-    ConcurrentQueue<DatabaseEntry> queue_;
+    ConcurrentQueue<PipelineDataT> queue_;
     ConcurrentQueue<AnyDatabaseWork> work_queue_;
     DatabaseManager* db_mgr_;
-    uint64_t num_processed_ = 0;
+    EndOfPipelineCallback<PipelineDataT> end_of_pipeline_callback_;
 };
 
 } // namespace simdb
