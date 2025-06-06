@@ -232,4 +232,4 @@ struct AppRegistration
 ///   REGISTER_SIMDB_APPLICATION(MyApp);
 ///
 #define REGISTER_SIMDB_APPLICATION(ApplicationType) \
-	AppRegistration<ApplicationType> __##ApplicationType##_registration;
+    AppRegistration<ApplicationType> __##ApplicationType##_registration;
