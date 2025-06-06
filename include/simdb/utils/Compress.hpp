@@ -89,7 +89,6 @@ inline void decompressDataVec(const std::vector<char>& in, std::vector<T>& out)
         throw DBException("Failed to initialize zlib inflate stream.");
     }
 
-    int ret;
     do
     {
         size_t current_size = decompressed_buffer.size();
@@ -97,18 +96,18 @@ inline void decompressDataVec(const std::vector<char>& in, std::vector<T>& out)
         stream.next_out = reinterpret_cast<Bytef*>(&decompressed_buffer[current_size]);
         stream.avail_out = CHUNK_SIZE;
 
-        ret = inflate(&stream, Z_NO_FLUSH);
+        int ret = inflate(&stream, Z_NO_FLUSH);
 
         if (ret != Z_OK && ret != Z_STREAM_END)
         {
             inflateEnd(&stream);
             throw DBException("Decompression failed with zlib error code: " + std::to_string(ret));
         }
+    } while (stream.avail_out == 0);
 
-        // Adjust actual used size
-        decompressed_buffer.resize(current_size + (CHUNK_SIZE - stream.avail_out));
-    } while (ret != Z_STREAM_END);
-
+    // Adjust actual used size
+    size_t current_size = decompressed_buffer.size();
+    decompressed_buffer.resize(current_size - stream.avail_out);
     inflateEnd(&stream);
 
     // Convert decompressed bytes to std::vector<T>

@@ -232,6 +232,24 @@ public:
         return *this;
     }
 
+    /// Get a column by its name. Throws if not found.
+    const Column& getColumn(const std::string& col_name) const
+    {
+        auto iter = columns_by_name_.find(col_name);
+        if (iter == columns_by_name_.end())
+        {
+            throw DBException("No column named ") << col_name << " in table " << name_;
+        }
+
+        return *(iter->second);
+    }
+
+    /// Check if this table has a column with the given name.
+    bool hasColumn(const std::string& col_name) const
+    {
+        return columns_by_name_.find(col_name) != columns_by_name_.end();
+    }
+
     /// Assign a default value for the given column.
     template <typename T> Table& setColumnDefaultValue(const std::string& col_name, const T default_val)
     {

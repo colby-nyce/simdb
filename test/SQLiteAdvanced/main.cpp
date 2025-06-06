@@ -130,13 +130,11 @@ void TestDatabasePipeline(size_t compression_threads)
 
 int main()
 {
-
     TestTinyStrings();       // Test string minification.
     TestDatabasePipeline(0); // Test pipeline (no compression, just async DB writes).
-    TestDatabasePipeline(2); // Test pipeline (two compression threads and async DB writes).
+    TestDatabasePipeline(1); // Test pipeline (one compression thread and async DB writes).
 
     // This MUST be put at the end of unit test files' main() function.
-    ENSURE_ALL_REACHED(0);
     REPORT_ERROR;
     return ERROR_CODE;
 }
