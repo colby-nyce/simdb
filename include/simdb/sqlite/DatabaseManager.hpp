@@ -6,6 +6,7 @@
 #include "simdb/sqlite/SQLiteConnection.hpp"
 #include "simdb/sqlite/SQLiteQuery.hpp"
 #include "simdb/sqlite/SQLiteTable.hpp"
+#include <filesystem>
 
 namespace simdb
 {
@@ -24,18 +25,15 @@ public:
     /// \param db_file Name of the database file, typically with .db extension
     /// \param force_new_file Force the <db_file> to be overwritten if it exists.
     ///                       If the file already existed and this flag is false,
-    ///                       then you will not be able to call createDatabaseFromSchema()
-    ///                       or appendSchema(). The schema is considered read-only for
-    ///                       previously existing database files.
+    ///                       then you will not be able to call appendSchema()
+    ///                       on this DatabaseManager as the schema is fixed.
     DatabaseManager(const std::string& db_file = "sim.db", const bool force_new_file = false)
         : db_file_(db_file)
     {
-        std::ifstream fin(db_file);
-        if (fin.good())
+        if (std::filesystem::exists(db_file))
         {
             if (force_new_file)
             {
-                fin.close();
                 const auto cmd = "rm -f " + db_file;
                 auto rc = system(cmd.c_str());
                 (void)rc;
@@ -49,57 +47,12 @@ public:
                 append_schema_allowed_ = false;
             }
         }
-    }
-
-    /// You must explicitly call closeDatabase() prior to deleting
-    /// the DatabaseManager to close the sqlite3 connection.
-    ~DatabaseManager()
-    {
-        if (db_conn_)
-        {
-            std::cout << "You must call DatabaseManager::closeDatabase() "
-                      << "before it goes out of scope!" << std::endl;
-            std::terminate();
-        }
-    }
-
-    /// \brief  Using a Schema object for your database, construct
-    ///         the physical database file and open the connection.
-    ///
-    /// \throws This will throw an exception for DatabaseManager's
-    ///         whose connection was initialized with a previously
-    ///         existing file.
-    ///
-    /// \return Returns true if successful, false otherwise.
-    bool createDatabaseFromSchema(const Schema& schema)
-    {
-        if (!append_schema_allowed_)
-        {
-            throw DBException(
-                "Cannot alter schema if you created a DatabaseManager with an existing file.");
-        }
-
-        if (db_conn_)
-        {
-            throw DBException(
-                "SQLite connection already exists. Did you mean to call appendSchema() instead?");
-        }
 
         db_conn_.reset(new SQLiteConnection);
-        schema_ = schema;
-
-        assertNoDatabaseConnectionOpen_();
         createDatabaseFile_();
-
-        db_conn_->realizeSchema(schema_);
-        return db_conn_->isValid();
     }
 
-    /// \brief   After calling createDatabaseFromSchema(), you may
-    ///          add additional tables with this method.
-    ///
-    /// \throws  This will throw an exception if the schema was invalid
-    ///          for any reason.
+    /// \brief   Add one or more tables to the existing schema.
     ///
     /// \throws  This will throw an exception for DatabaseManager's
     ///          whose connection was initialized with a previously
@@ -108,16 +61,6 @@ public:
     /// \return  Returns true if successful, false otherwise.
     bool appendSchema(const Schema& schema)
     {
-        if (!db_conn_)
-        {
-            return false;
-        }
-        else if (!db_conn_->isValid())
-        {
-            throw DBException("Attempt to append schema tables to a DatabaseManager that does not "
-                              "have a valid database connection");
-        }
-
         if (!append_schema_allowed_)
         {
             throw DBException(
@@ -331,12 +274,6 @@ public:
         return std::unique_ptr<SqlQuery>(new SqlQuery(table_name, db_conn_->getDatabase()));
     }
 
-    /// Close the sqlite3 connection.
-    void closeDatabase()
-    {
-        db_conn_.reset();
-    }
-
 private:
     /// \brief  Open a database connection to an existing database file.
     ///
@@ -349,7 +286,6 @@ private:
     /// \return Returns true if successful, false otherwise.
     bool connectToExistingDatabase_(const std::string& db_fpath)
     {
-        assertNoDatabaseConnectionOpen_();
         db_conn_.reset(new SQLiteConnection);
 
         if (db_conn_->openDbFile_(db_fpath).empty())
@@ -386,22 +322,6 @@ private:
         return false;
     }
 
-    /// This class does not currently allow one DatabaseManager
-    /// to be simultaneously connected to multiple databases.
-    void assertNoDatabaseConnectionOpen_() const
-    {
-        if (!db_conn_)
-        {
-            return;
-        }
-
-        if (db_conn_->isValid())
-        {
-            throw DBException("A database connection has already been "
-                              "made for this DatabaseManager");
-        }
-    }
-
     /// Get a SqlRecord from a database ID for the given table.
     std::unique_ptr<SqlRecord>
     findRecord_(const char* table_name, const int db_id, const bool must_exist) const
@@ -436,8 +356,7 @@ private:
     /// Database connection.
     std::shared_ptr<SQLiteConnection> db_conn_;
 
-    /// Schema for this database as given to createDatabaseFromSchema()
-    /// and optionally appendSchema().
+    /// Schema for this database.
     Schema schema_;
 
     /// Name of the database file.

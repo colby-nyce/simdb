@@ -89,7 +89,7 @@ int main()
         .addColumn("SomeString", dt::string_t);
 
     simdb::DatabaseManager db_mgr("test.db");
-    EXPECT_TRUE(db_mgr.createDatabaseFromSchema(schema));
+    EXPECT_TRUE(db_mgr.appendSchema(schema));
 
     // Verify set/get APIs for integer types
     auto record1 = db_mgr.INSERT(SQL_TABLE("IntegerTypes"),
@@ -831,9 +831,6 @@ int main()
 
     // Verify that we cannot open a database connection for an invalid file
     EXPECT_THROW(simdb::DatabaseManager db_mgr3(__FILE__));
-
-    db_mgr.closeDatabase();
-    db_mgr2.closeDatabase();
 
     // This MUST be put at the end of unit test files' main() function.
     ENSURE_ALL_REACHED(0);
