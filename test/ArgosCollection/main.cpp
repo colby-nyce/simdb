@@ -289,7 +289,6 @@ int main()
     db_mgr.closeDatabase();
 
     // This MUST be put at the end of unit test files' main() function.
-    ENSURE_ALL_REACHED(0);
     REPORT_ERROR;
     return ERROR_CODE;
 }

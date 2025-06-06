@@ -23,6 +23,10 @@ typedef void (*DatabaseEntryCallback)(const int datablob_db_id, const uint64_t t
 template <typename PipelineDataT>
 using EndOfPipelineCallback = std::function<void(DatabaseManager*, PipelineDataT&&)>;
 
+#define END_OF_PIPELINE_CALLBACK(ApplicationType, method_name) \
+    std::bind(&ApplicationType::method_name, dynamic_cast<ApplicationType*>(__this__), \
+              std::placeholders::_1, std::placeholders::_2)
+
 struct DatabaseEntry
 {
     std::vector<char> bytes;
