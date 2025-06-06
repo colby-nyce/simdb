@@ -23,7 +23,16 @@ public:
     virtual void teardown() {}
 
 protected:
-    App* __this__ = this;
+    int getAppID_() const { return app_id_; }
+
+    App *const __this__ = this;
+
+private:
+    void setAppID_(int app_id) { app_id_ = app_id; }
+    int app_id_ = 0;
+
+    // Allow AppManager to set the app ID
+    friend class AppManager;
 };
 
 class AppFactoryBase
@@ -116,8 +125,21 @@ public:
         db_mgr->safeTransaction(
             [&]()
             {
+                Schema schema;
+                using dt = SqlDataType;
+
+                auto& tbl = schema.addTable("RegisteredApps");
+                tbl.addColumn("AppName", dt::string_t);
+                db_mgr->appendSchema(schema);
+
                 for (const auto& [name, app] : apps_)
                 {
+                    auto record = db_mgr->INSERT(
+                        SQL_TABLE("RegisteredApps"),
+                        SQL_COLUMNS("AppName"),
+                        SQL_VALUES(name));
+
+                    app->setAppID_(record->getId());
                     app->appendSchema();
                 }
                 return true;
