@@ -74,7 +74,6 @@ public:
                 }
 
                 unserialized_map_.clear();
-                return true;
             });
     }
 

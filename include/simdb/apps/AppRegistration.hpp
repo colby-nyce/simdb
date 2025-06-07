@@ -205,7 +205,6 @@ public:
                     app->setAppID_(record->getId());
                     app->appendSchema();
                 }
-                return true;
             });
     }
 
@@ -219,7 +218,6 @@ public:
                 {
                     app->preInit(argc, argv);
                 }
-                return true;
             });
     }
 
@@ -234,7 +232,6 @@ public:
                 {
                     app->preSim();
                 }
-                return true;
             });
     }
 
@@ -248,7 +245,6 @@ public:
                 {
                     app->postSim();
                 }
-                return true;
             });
     }
 

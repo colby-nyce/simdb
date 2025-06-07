@@ -16,7 +16,7 @@ namespace simdb
 
 /// To support SimDB self-profiling, return TRUE only if the transaction
 /// involved touching the database (setProperty*(), INSERT, SELECT, etc.)
-using TransactionFunc = std::function<bool()>;
+using TransactionFunc = std::function<void()>;
 
 /*!
  * \class SQLiteReturnCode

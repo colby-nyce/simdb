@@ -151,8 +151,6 @@ public:
                         executeCommand(cmd);
                     }
                 }
-
-                return true;
             });
     }
 

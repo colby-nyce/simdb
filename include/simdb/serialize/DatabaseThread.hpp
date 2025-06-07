@@ -58,7 +58,6 @@ public:
                 {
                     end_of_pipeline_callback_(db_mgr_, std::move(entry));
                 }
-                return true;
             });
     }
 

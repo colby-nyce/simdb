@@ -372,8 +372,6 @@ inline void SqlRecord::setPropertyInt32(const char* col_name, const int32_t val)
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -388,8 +386,6 @@ inline void SqlRecord::setPropertyInt64(const char* col_name, const int64_t val)
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -404,8 +400,6 @@ inline void SqlRecord::setPropertyUInt32(const char* col_name, const uint32_t va
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -420,8 +414,6 @@ inline void SqlRecord::setPropertyUInt64(const char* col_name, const uint64_t va
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -452,8 +444,6 @@ inline void SqlRecord::setPropertyString(const char* col_name, const std::string
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -468,8 +458,6 @@ template <typename T> inline void SqlRecord::setPropertyBlob(const char* col_nam
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -484,8 +472,6 @@ inline void SqlRecord::setPropertyBlob(const char* col_name, const void* data, c
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
             stepStatement_(stmt, {SQLITE_DONE});
-
-            return true;
         });
 }
 
@@ -503,8 +489,6 @@ inline bool SqlRecord::removeFromTable()
             {
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
-
-            return true;
         });
 
     return sqlite3_changes(db_conn_) == 1;

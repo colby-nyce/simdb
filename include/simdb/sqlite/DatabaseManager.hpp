@@ -126,7 +126,6 @@ public:
                 auto db_id = db_conn_->getLastInsertRowId();
                 record.reset(
                     new SqlRecord(table.getName(), db_id, db_conn_->getDatabase(), db_conn_.get()));
-                return true;
             });
 
         return record;
@@ -154,7 +153,6 @@ public:
                 auto db_id = db_conn_->getLastInsertRowId();
                 record.reset(
                     new SqlRecord(table.getName(), db_id, db_conn_->getDatabase(), db_conn_.get()));
-                return true;
             });
 
         return record;
@@ -172,8 +170,6 @@ public:
                 {
                     throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
                 }
-
-                return true;
             });
     }
 
@@ -211,8 +207,6 @@ public:
                 {
                     throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
                 }
-
-                return true;
             });
 
         return sqlite3_changes(db_conn_->getDatabase()) == 1;
@@ -236,8 +230,6 @@ public:
                 {
                     throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
                 }
-
-                return true;
             });
 
         return sqlite3_changes(db_conn_->getDatabase());
@@ -267,8 +259,6 @@ public:
                     auto table_name = sqlite3_column_text(stmt, 0);
                     count += removeAllRecordsFromTable((const char*)table_name);
                 }
-
-                return true;
             });
 
         return count;

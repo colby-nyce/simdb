@@ -319,8 +319,6 @@ int main()
                               SQL_COLUMNS("SomeInt32", "SomeDouble", "SomeString"),
                               SQL_VALUES(val_int, val_dbl, val_str));
             }
-
-            return true;
         });
 
     // Test SQL queries for integer types.
