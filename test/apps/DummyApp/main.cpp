@@ -42,8 +42,7 @@ public:
     // App constructors must have this signature.
     DummyApp(simdb::DatabaseManager* db_mgr, size_t num_compression_threads)
         : db_mgr_(db_mgr)
-        , sink_(db_mgr,
-                END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_),
+        , sink_(END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_),
                 num_compression_threads)
     {
     }
@@ -105,11 +104,12 @@ public:
     void process(uint64_t tick, std::vector<char>&& data_bytes)
     {
         simdb::DatabaseEntry entry;
+        entry.db_mgr = db_mgr_;
         entry.tick = tick;
         entry.data_ptr = data_bytes.data();
         entry.num_bytes = data_bytes.size();
         entry.container = data_bytes;
-        sink_.push(std::move(entry));
+        sink_.process(std::move(entry));
 
         ++num_blobs_written_;
     }
@@ -138,8 +138,7 @@ private:
         return oss.str();
     }
 
-    void endOfPipeline_(simdb::DatabaseManager* db_mgr,
-                        simdb::DatabaseEntry&& entry)
+    void endOfPipeline_(simdb::DatabaseEntry&& entry)
     {
         // We are using 1 compression thread, so make sure it was compressed.
         if (!entry.compressed)
@@ -151,7 +150,13 @@ private:
         blob.data_ptr = entry.data_ptr;
         blob.num_bytes = entry.num_bytes;
 
-        db_mgr->INSERT(
+        // Sanity check that the DatabaseEntry has our DatabaseManager.
+        if (entry.db_mgr != db_mgr_)
+        {
+            throw simdb::DBException("DatabaseEntry's db_mgr does not match DummyApp's db_mgr.");
+        }
+
+        db_mgr_->INSERT(
             SQL_TABLE("BlobData"),
             SQL_COLUMNS("Tick", "Data"),
             SQL_VALUES(entry.tick, blob));

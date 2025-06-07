@@ -33,8 +33,7 @@ public:
     UnifiedSerializer(DatabaseManager* db_mgr, size_t num_compression_threads)
         : db_mgr_(db_mgr)
         , compression_enabled_(num_compression_threads > 0)
-        , sink_(db_mgr,
-                END_OF_PIPELINE_CALLBACK(UnifiedSerializer, endOfPipeline_),
+        , sink_(END_OF_PIPELINE_CALLBACK(UnifiedSerializer, endOfPipeline_),
                 num_compression_threads)
     {
     }
@@ -131,32 +130,39 @@ private:
     void process_(uint64_t tick, const void* data_ptr, size_t num_bytes, const BytesContainer& container)
     {
         DatabaseEntry entry;
+        entry.db_mgr = db_mgr_;
         entry.tick = tick;
         entry.data_ptr = data_ptr;
         entry.num_bytes = num_bytes;
         entry.container = container;
-        sink_.push(std::move(entry));
+        sink_.process(std::move(entry));
     }
 
     template <typename BytesContainer>
     void process_(uint64_t tick, const void* data_ptr, size_t num_bytes, BytesContainer&& container)
     {
         DatabaseEntry entry;
+        entry.db_mgr = db_mgr_;
         entry.tick = tick;
         entry.data_ptr = data_ptr;
         entry.num_bytes = num_bytes;
         entry.container = std::move(container);
-        sink_.push(std::move(entry));
+        sink_.process(std::move(entry));
     }
 
-    void endOfPipeline_(DatabaseManager* db_mgr,
-                        DatabaseEntry&& entry)
+    void endOfPipeline_(DatabaseEntry&& entry)
     {
         SqlBlob blob;
         blob.data_ptr = entry.data_ptr;
         blob.num_bytes = entry.num_bytes;
 
-        db_mgr->INSERT(
+        // Sanity check that the DatabaseEntry has our DatabaseManager.
+        if (entry.db_mgr != db_mgr_)
+        {
+            throw DBException("DatabaseEntry's db_mgr does not match UnifiedSerializer's db_mgr.");
+        }
+
+        db_mgr_->INSERT(
             SQL_TABLE("UnifiedCollectorBlobs"),
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
             SQL_VALUES(getAppID_(), entry.tick, blob, entry.compressed));

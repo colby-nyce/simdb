@@ -54,7 +54,7 @@ private:
         while (queue_.try_pop(entry))
         {
             compress_(entry);
-            db_thread_.push(std::move(entry));
+            db_thread_.process(std::move(entry));
         }
     }
 

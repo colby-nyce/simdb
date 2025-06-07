@@ -21,10 +21,9 @@ namespace simdb
 class ThreadedSink
 {
 public:
-    ThreadedSink(DatabaseManager* db_mgr,
-                 EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
+    ThreadedSink(EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
                  size_t num_compression_threads = 0)
-        : db_thread_(db_mgr, end_of_pipeline_callback)
+        : db_thread_(end_of_pipeline_callback)
     {
         for (size_t i = 0; i < num_compression_threads; ++i)
         {
@@ -108,8 +107,8 @@ public:
         }
     }
 
-    /// Send a new packet down the pipeline. 
-    void push(DatabaseEntry&& entry)
+    /// Send a new packet down the pipeline.
+    void process(DatabaseEntry&& entry)
     {
         compression_queue_.emplace(std::move(entry));
         startThreads_();
@@ -134,7 +133,7 @@ public:
             DatabaseEntry entry;
             while (compression_queue_.try_pop(entry))
             {
-                db_thread_.push(std::move(entry));
+                db_thread_.process(std::move(entry));
             }
         }
 
