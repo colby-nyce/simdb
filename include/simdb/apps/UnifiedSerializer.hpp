@@ -22,6 +22,7 @@
 
 namespace simdb {
 
+template <typename RawDataT = char>
 class UnifiedSerializer : public simdb::App
 {
 public:
@@ -101,17 +102,19 @@ public:
         setCompressionLevel_(simdb::CompressionLevel::DISABLED);
     }
 
-    void process(uint64_t tick, const std::vector<char>& data)
+    template <typename T=char>
+    void process(uint64_t tick, const std::vector<T>& data)
     {
-        simdb::DatabaseEntry entry;
+        simdb::DatabaseEntry<T> entry;
         entry.tick = tick;
         entry.bytes = data;
         sink_.push(std::move(entry));
     }
 
-    void process(uint64_t tick, std::vector<char>&& data)
+    template <typename T=char>
+    void process(uint64_t tick, std::vector<T>&& data)
     {
-        simdb::DatabaseEntry entry;
+        simdb::DatabaseEntry<T> entry;
         entry.tick = tick;
         entry.bytes = std::move(data);
         sink_.push(std::move(entry));
@@ -119,12 +122,12 @@ public:
 
 private:
     void endOfPipeline_(simdb::DatabaseManager* db_mgr,
-                        simdb::DatabaseEntry&& entry)
+                        simdb::DatabaseEntry<RawDataT>&& entry)
     {
         db_mgr->INSERT(
             SQL_TABLE("UnifiedCollectorBlobs"),
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
-            SQL_VALUES(getAppID_(), entry.tick, std::move(entry.bytes), entry.compressed));
+            SQL_VALUES(getAppID_(), entry.tick, entry.bytes, entry.compressed));
     }
 
     void setCompressionLevel_(simdb::CompressionLevel level)
@@ -154,7 +157,7 @@ private:
 
     simdb::DatabaseManager* db_mgr_;
     bool compression_enabled_;
-    simdb::ThreadedSink<> sink_;
+    simdb::ThreadedSink<RawDataT> sink_;
 };
 
 } // namespace simdb

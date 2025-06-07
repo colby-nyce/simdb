@@ -79,7 +79,7 @@ void TestDatabasePipeline(size_t compression_threads)
     EXPECT_TRUE(db_mgr.appendSchema(schema));
 
     // End-of-pipeline callback to write the data to the database.
-    auto end_of_pipeline_callback = [](simdb::DatabaseManager* db_mgr, simdb::DatabaseEntry&& entry)
+    auto end_of_pipeline_callback = [](simdb::DatabaseManager* db_mgr, simdb::DatabaseEntry<double>&& entry)
     {
         db_mgr->INSERT(
             SQL_TABLE("DataBlobs"),
@@ -88,17 +88,16 @@ void TestDatabasePipeline(size_t compression_threads)
     };
 
     // Create a ThreadedSink to build the pipeline.
-    simdb::ThreadedSink<> sink(&db_mgr, end_of_pipeline_callback, compression_threads);
+    simdb::ThreadedSink<double> sink(&db_mgr, end_of_pipeline_callback, compression_threads);
 
     // Send a blob down the pipeline.
-    std::vector<char> alphabet;
-    for (int letter = 'a'; letter <= 'z'; ++letter)
-    {
-        alphabet.push_back(static_cast<char>(letter));
-    }
+    std::vector<double> stats_values = {
+         1.1,  2.2,  3.3,  4.4,  5.5,  6.6,  7.7,  8.8,  9.9, 10.0,
+        11.1, 12.2, 13.3, 14.4, 15.5, 16.6, 17.7, 18.8, 19.9, 20.0
+    };
 
-    simdb::DatabaseEntry entry;
-    entry.bytes = alphabet;
+    simdb::DatabaseEntry<double> entry;
+    entry.bytes = stats_values;
     entry.tick = 12345;
     sink.push(std::move(entry));
 
@@ -112,20 +111,21 @@ void TestDatabasePipeline(size_t compression_threads)
     int is_compressed;
     query->select("IsCompressed", is_compressed);
 
-    std::vector<char> data_blob;
+    std::vector<double> data_blob;
     query->select("DataBlob", data_blob);
 
     auto result_set = query->getResultSet();
     EXPECT_TRUE(result_set.getNextRecord());
 
+    EXPECT_EQUAL(is_compressed, compression_threads > 0);
     if (is_compressed)
     {
-        std::vector<char> decompressed_data;
+        std::vector<double> decompressed_data;
         simdb::decompressDataVec(data_blob, decompressed_data);
         std::swap(data_blob, decompressed_data);
     }
 
-    EXPECT_EQUAL(data_blob, alphabet);
+    EXPECT_EQUAL(data_blob, stats_values);
 }
 
 int main()

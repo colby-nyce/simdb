@@ -104,7 +104,7 @@ public:
 
     void process(uint64_t tick, const std::vector<char>& data_bytes)
     {
-        simdb::DatabaseEntry entry;
+        simdb::DatabaseEntry<> entry;
         entry.bytes = data_bytes;
         entry.tick = tick;
         sink_.push(std::move(entry));
@@ -137,7 +137,7 @@ private:
     }
 
     void endOfPipeline_(simdb::DatabaseManager* db_mgr,
-                        simdb::DatabaseEntry&& entry)
+                        simdb::DatabaseEntry<>&& entry)
     {
         // We are using 1 compression thread, so make sure it was compressed.
         if (!entry.compressed)
