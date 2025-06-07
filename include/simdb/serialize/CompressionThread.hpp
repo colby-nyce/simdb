@@ -11,6 +11,10 @@ namespace simdb
 /// One or more of these threads work on the ThreadedSink's queue of pending
 /// DatabaseEntry objects. Each of these threads can have its own compression
 /// level, and compression can also be disabled and re-enabled at runtime.
+///
+/// Users typically do not need to create these threads directly, as they are
+/// created by the ThreadedSink which is the class to use for creating database
+/// pipelines.
 class CompressionThread : public Thread
 {
 public:
