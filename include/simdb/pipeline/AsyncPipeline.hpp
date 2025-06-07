@@ -25,6 +25,12 @@ public:
                  size_t num_compression_threads = 0)
         : db_thread_(end_of_pipeline_callback)
     {
+        // TODO cnyce: Fix remaining issues seen when using more than one compression thread.
+        if (num_compression_threads > 1)
+        {
+            throw DBException("AsyncPipeline currently only supports 1 compression thread.");
+        }
+
         for (size_t i = 0; i < num_compression_threads; ++i)
         {
             auto thread = std::make_unique<CompressionThread>(compression_queue_, db_thread_);
