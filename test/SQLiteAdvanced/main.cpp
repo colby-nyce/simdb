@@ -8,7 +8,7 @@
 
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
-#include "simdb/pipeline/ThreadedSink.hpp"
+#include "simdb/pipeline/AsyncPipeline.hpp"
 #include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
@@ -92,8 +92,8 @@ void TestDatabasePipeline(size_t compression_threads)
             SQL_VALUES(entry.tick, blob, entry.compressed ? 1 : 0));
     };
 
-    // Create a ThreadedSink to build the pipeline.
-    simdb::ThreadedSink sink(end_of_pipeline_callback, compression_threads);
+    // Create a AsyncPipeline to build the pipeline.
+    simdb::AsyncPipeline sink(end_of_pipeline_callback, compression_threads);
 
     // Send a blob down the pipeline.
     std::vector<char> alphabet;

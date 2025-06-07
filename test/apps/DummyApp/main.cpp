@@ -7,7 +7,7 @@
 
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/pipeline/ThreadedSink.hpp"
+#include "simdb/pipeline/AsyncPipeline.hpp"
 #include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
@@ -96,7 +96,7 @@ public:
 
     void teardown() override
     {
-        // If your app uses resources like ThreadedSink, now is the time to
+        // If your app uses resources like AsyncPipeline, now is the time to
         // call its teardown method.
         sink_.teardown();
     }
@@ -192,7 +192,7 @@ private:
     std::string sim_cmdline_;
     std::string sim_start_time_;
     std::string sim_end_time_;
-    simdb::ThreadedSink sink_;
+    simdb::AsyncPipeline sink_;
     size_t num_blobs_written_ = 0;
 };
 

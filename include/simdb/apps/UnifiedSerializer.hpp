@@ -18,7 +18,7 @@
 
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/pipeline/ThreadedSink.hpp"
+#include "simdb/pipeline/AsyncPipeline.hpp"
 #include "simdb/schema/Blob.hpp"
 
 namespace simdb {
@@ -195,7 +195,7 @@ private:
 
     DatabaseManager* db_mgr_;
     bool compression_enabled_;
-    ThreadedSink sink_;
+    AsyncPipeline sink_;
 };
 
 } // namespace simdb

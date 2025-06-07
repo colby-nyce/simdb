@@ -18,10 +18,10 @@ namespace simdb
 ///
 /// All that to say that the total number of threads is the number of
 /// CompressionThreads plus the DatabaseThread.
-class ThreadedSink
+class AsyncPipeline
 {
 public:
-    ThreadedSink(EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
+    AsyncPipeline(EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
                  size_t num_compression_threads = 0)
         : db_thread_(end_of_pipeline_callback)
     {

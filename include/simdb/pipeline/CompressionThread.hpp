@@ -8,12 +8,12 @@
 namespace simdb
 {
 
-/// One or more of these threads work on the ThreadedSink's queue of pending
+/// One or more of these threads work on the AsyncPipeline's queue of pending
 /// DatabaseEntry objects. Each of these threads can have its own compression
 /// level, and compression can also be disabled and re-enabled at runtime.
 ///
 /// Users typically do not need to create these threads directly, as they are
-/// created by the ThreadedSink which is the class to use for creating database
+/// created by the AsyncPipeline which is the class to use for creating database
 /// pipelines.
 class CompressionThread : public Thread
 {
@@ -47,7 +47,7 @@ public:
 private:
     /// Called every 500ms. Flush whatever we can from the queue, compress it,
     /// and send it to the database thread. Remember that this queue is a shared
-    /// reference across all CompressionThread objects (and is owned by the ThreadedSink).
+    /// reference across all CompressionThread objects (and is owned by the AsyncPipeline).
     void onInterval_() override
     {
         DatabaseEntry entry;

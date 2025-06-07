@@ -70,7 +70,7 @@ public:
 
     /// Before creating the apps, you can override the number of compression
     /// threads for a specific app. Your app constructor takes this argument
-    /// and gives it to its ThreadedSink ctor.
+    /// and gives it to its AsyncPipeline ctor.
     ///
     /// Note that the default is 0. You can also call enableDefaultCompression()
     /// to set the number of compression threads for all apps to 1.
