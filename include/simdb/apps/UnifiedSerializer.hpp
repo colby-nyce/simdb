@@ -50,7 +50,7 @@ public:
         blob_tbl.addColumn("Tick", dt::int64_t);
         blob_tbl.addColumn("DataBlob", dt::blob_t);
         blob_tbl.addColumn("IsCompressed", dt::int32_t);
-        blob_tbl.createCompoundIndexOn(SQL_COLUMNS("AppID", "Tick"));
+        blob_tbl.createCompoundIndexOn({"AppID", "Tick"});
 
         auto& meta_tbl = schema.addTable("UnifiedCollectorByteLayouts");
         meta_tbl.addColumn("AppID", dt::int32_t);

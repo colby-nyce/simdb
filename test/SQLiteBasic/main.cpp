@@ -81,7 +81,7 @@ int main()
         .addColumn("SomeInt32", dt::int32_t)
         .addColumn("SomeDouble", dt::double_t)
         .addColumn("SomeString", dt::string_t)
-        .createCompoundIndexOn(SQL_COLUMNS("SomeInt32", "SomeDouble", "SomeString"));
+        .createCompoundIndexOn({"SomeInt32", "SomeDouble", "SomeString"});
 
     schema.addTable("NonIndexedColumns")
         .addColumn("SomeInt32", dt::int32_t)
@@ -143,6 +143,15 @@ int main()
 
     record5->setPropertyBlob("SomeBlob", TEST_BLOB2.data_ptr, TEST_BLOB2.num_bytes);
     EXPECT_EQUAL(record5->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR2);
+
+    simdb::SqlBlob blob(TEST_VECTOR);
+    {
+        auto record6 = db_mgr.INSERT(SQL_TABLE("BlobTypes"),
+                                    SQL_COLUMNS("SomeBlob"),
+                                    SQL_VALUES(blob));
+
+        EXPECT_EQUAL(record6->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR);
+    }
 
     // Verify that bug is fixed: SQL_VALUES(..., <blob column>, ...)
     // would not compile when a blob (or vector) value was used in the

@@ -3,11 +3,11 @@
 #pragma once
 
 #include "simdb/Exceptions.hpp"
-#include "simdb/sqlite/SQLiteTable.hpp"
 
 #include <algorithm>
 #include <deque>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -280,14 +280,13 @@ public:
     /// CREATE INDEX IndexName ON TableName(ColumnName)
     Table& createIndexOn(const std::string& col_name)
     {
-        return createCompoundIndexOn(SQL_COLUMNS(col_name.c_str()));
+        return createCompoundIndexOn({col_name});
     }
 
     /// Index this table's records on the given columns.
     /// CREATE INDEX IndexName ON TableName(ColA,ColB,ColC)
-    Table& createCompoundIndexOn(const SqlColumns& cols)
+    Table& createCompoundIndexOn(const std::initializer_list<std::string>& col_names)
     {
-        const auto& col_names = cols.getColNames();
         for (const auto& col_name : col_names)
         {
             if (columns_by_name_.find(col_name) == columns_by_name_.end())
