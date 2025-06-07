@@ -18,7 +18,7 @@ namespace simdb
 class CompressionThread : public Thread
 {
 public:
-    CompressionThread(ConcurrentQueue<DatabaseEntry>& queue, DatabaseThread<DatabaseEntry>& db_thread,
+    CompressionThread(ConcurrentQueue<DatabaseEntry>& queue, DatabaseThread<>& db_thread,
                       CompressionLevel compression_level = CompressionLevel::DEFAULT)
         : Thread(500)
         , queue_(queue)
@@ -74,7 +74,7 @@ private:
     }
 
     ConcurrentQueue<DatabaseEntry>& queue_;
-    DatabaseThread<DatabaseEntry>& db_thread_;
+    DatabaseThread<>& db_thread_;
     std::vector<char> compressed_bytes_;
     CompressionLevel compression_level_;
 };

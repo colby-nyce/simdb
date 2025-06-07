@@ -172,7 +172,7 @@ private:
     }
 
     ConcurrentQueue<DatabaseEntry> compression_queue_;
-    DatabaseThread<DatabaseEntry> db_thread_;
+    DatabaseThread<> db_thread_;
     std::vector<std::unique_ptr<CompressionThread>> sink_threads_;
     bool threads_running_ = false;
 };
