@@ -1,6 +1,6 @@
 #pragma once
 
-#include "simdb/serialize/CompressionThread.hpp"
+#include "simdb/pipeline/CompressionThread.hpp"
 
 namespace simdb
 {

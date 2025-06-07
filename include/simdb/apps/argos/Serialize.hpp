@@ -3,7 +3,7 @@
 #pragma once
 
 #include "simdb/Exceptions.hpp"
-#include "simdb/serialize/CollectionBuffer.hpp"
+#include "simdb/pipeline/CollectionBuffer.hpp"
 #include "simdb/utils/MetaStructs.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 

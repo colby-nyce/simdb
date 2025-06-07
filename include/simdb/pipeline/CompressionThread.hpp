@@ -1,6 +1,6 @@
 #pragma once
 
-#include "simdb/serialize/DatabaseThread.hpp"
+#include "simdb/pipeline/DatabaseThread.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/serialize/Serialize.hpp"
+#include "simdb/pipeline/Serialize.hpp"
 
 #include <stdint.h>
 #include <cassert>

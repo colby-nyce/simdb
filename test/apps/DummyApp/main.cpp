@@ -7,7 +7,7 @@
 
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/serialize/ThreadedSink.hpp"
+#include "simdb/pipeline/ThreadedSink.hpp"
 #include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
