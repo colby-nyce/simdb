@@ -1,77 +1,9 @@
 #pragma once
 
-#include "simdb/serialize/DatabaseThread.hpp"
-#include "simdb/utils/Compress.hpp"
-#include "simdb/utils/ConcurrentQueue.hpp"
-#include "simdb/utils/Thread.hpp"
+#include "simdb/serialize/CompressionThread.hpp"
 
 namespace simdb
 {
-
-/// One or more of these threads work on the ThreadedSink's queue of pending
-/// DatabaseEntry objects. Each of these threads can have its own compression
-/// level, and compression can also be disabled and re-enabled at runtime.
-class SinkThread : public Thread
-{
-public:
-    SinkThread(ConcurrentQueue<DatabaseEntry>& queue, DatabaseThread<DatabaseEntry>& db_thread,
-               CompressionLevel compression_level = CompressionLevel::DEFAULT)
-        : Thread(500)
-        , queue_(queue)
-        , db_thread_(db_thread)
-    {
-    }
-
-    /// Reconfigure the compression level for this thread.
-    void setCompressionLevel(CompressionLevel level)
-    {
-        compression_level_ = level;
-    }
-
-    /// Disable compression for this thread.
-    void disableCompression()
-    {
-        setCompressionLevel(CompressionLevel::DISABLED);
-    }
-
-    /// Enable compression for this thread.
-    void enableCompression(CompressionLevel compression_level = CompressionLevel::DEFAULT)
-    {
-        setCompressionLevel(compression_level);
-    }
-
-private:
-    /// Called every 500ms. Flush whatever we can from the queue, compress it,
-    /// and send it to the database thread. Remember that this queue is a shared
-    /// reference across all SinkThread objects (and is owned by the ThreadedSink).
-    void onInterval_() override
-    {
-        DatabaseEntry entry;
-        while (queue_.try_pop(entry))
-        {
-            compress_(entry);
-            db_thread_.push(std::move(entry));
-        }
-    }
-
-    /// Compress the entry if we are able.
-    void compress_(DatabaseEntry& entry)
-    {
-        if (entry.compressed)
-        {
-            return;
-        }
-
-        compressDataVec(entry.bytes, compressed_bytes_, compression_level_);
-        std::swap(entry.bytes, compressed_bytes_);
-        entry.compressed = true;
-    }
-
-    ConcurrentQueue<DatabaseEntry>& queue_;
-    DatabaseThread<DatabaseEntry>& db_thread_;
-    std::vector<char> compressed_bytes_;
-    CompressionLevel compression_level_;
-};
 
 /// This class holds onto a configurable number of threads that work on
 /// the ever-growing queue of DatabaseEntry objects given to us. These
@@ -85,7 +17,7 @@ private:
 /// in the main thread.
 ///
 /// All that to say that the total number of threads is the number of
-/// SinkThreads plus the DatabaseThread.
+/// CompressionThreads plus the DatabaseThread.
 template <typename PipelineDataT = DatabaseEntry>
 class ThreadedSink
 {
@@ -97,7 +29,7 @@ public:
     {
         for (size_t i = 0; i < num_compression_threads; ++i)
         {
-            auto thread = std::make_unique<SinkThread>(compression_queue_, db_thread_);
+            auto thread = std::make_unique<CompressionThread>(compression_queue_, db_thread_);
             sink_threads_.emplace_back(std::move(thread));
         }
     }
@@ -196,7 +128,7 @@ private:
 
     ConcurrentQueue<PipelineDataT> compression_queue_;
     DatabaseThread<PipelineDataT> db_thread_;
-    std::vector<std::unique_ptr<SinkThread>> sink_threads_;
+    std::vector<std::unique_ptr<CompressionThread>> sink_threads_;
     bool threads_running_ = false;
 };
 
