@@ -24,8 +24,6 @@ struct DatabaseEntry
 
 class DatabaseManager;
 
-using AnyDatabaseWork = std::function<void(DatabaseManager*)>;
-
 /// This class serves as the last stage in a database pipeline.
 template <typename PipelineDataT>
 class DatabaseThread : public Thread
@@ -50,11 +48,6 @@ public:
         stopThreadLoop();
     }
 
-    void queueWork(const AnyDatabaseWork& work)
-    {
-        work_queue_.emplace(work);
-    }
-
     void flush()
     {
         db_mgr_->safeTransaction(
@@ -65,13 +58,6 @@ public:
                 {
                     end_of_pipeline_callback_(db_mgr_, std::move(entry));
                 }
-
-                AnyDatabaseWork work;
-                while (work_queue_.try_pop(work))
-                {
-                    work(db_mgr_);
-                }
-
                 return true;
             });
     }
@@ -83,7 +69,6 @@ private:
     }
 
     ConcurrentQueue<PipelineDataT> queue_;
-    ConcurrentQueue<AnyDatabaseWork> work_queue_;
     DatabaseManager* db_mgr_;
     EndOfPipelineCallback<PipelineDataT> end_of_pipeline_callback_;
 };

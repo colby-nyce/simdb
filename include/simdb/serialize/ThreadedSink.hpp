@@ -118,13 +118,6 @@ public:
         startThreads_();
     }
 
-    /// Queue arbitrary work to be done on the database thread. This will be
-    /// executed inside a BEGIN/COMMIT TRANSACTION block.
-    void queueWork(const AnyDatabaseWork& work)
-    {
-        db_thread_.queueWork(work);
-    }
-
     /// Flush the pipeline, allowing all threads to finish their work. This
     /// occurs periodically on the background thread even if you do not call
     /// this method explicitly.
