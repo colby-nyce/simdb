@@ -32,13 +32,20 @@
 ///   - preSim:        called before the simulation loop starts
 ///   - postSim:       called after the simulation loop ends
 ///   - teardown:      called after the simulation ends, for resource cleanup tasks
+///
+/// The general paradigm is that your simulator has a single output database,
+/// with 1-to-many apps that are all writing to it with their own custom schemas
+/// and logic.
 
 namespace simdb
 {
 
 class DatabaseManager;
 
-/// Base class for SimDB applications.
+/// Base class for SimDB applications. Note that app subclasses are given
+/// the DatabaseManager instance as a constructor argument, so they can
+/// access the database and perform operations like appending schemas,
+/// inserting records, etc.)
 class App
 {
 public:
