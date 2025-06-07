@@ -34,30 +34,78 @@ public:
         }
     }
 
-    /// Reconfigure the compression level for this thread.
-    void setCompressionLevel(CompressionLevel level)
+    /// How many compression threads are running?
+    size_t numCompressionThreads() const
     {
-        for (auto& thread : sink_threads_)
+        return sink_threads_.size();
+    }
+
+    /// Reconfigure the compression level for this thread. Optionally specify which
+    /// compression thread ("stage"), or -1 for all threads.
+    void setCompressionLevel(CompressionLevel level, int stage = -1)
+    {
+        if (stage >= static_cast<int>(sink_threads_.size()))
         {
-            thread->setCompressionLevel(level);
+            throw std::out_of_range("Invalid compression thread stage: " + std::to_string(stage));
+        }
+
+        for (int idx = 0; idx < static_cast<int>(sink_threads_.size()); ++idx)
+        {
+            if (stage != -1 && idx != stage)
+            {
+                continue; // Skip this thread if we're not setting it.
+            }
+            sink_threads_[idx]->setCompressionLevel(level);
+            if (stage != -1)
+            {
+                break; // Only set the level for the specified thread.
+            }
         }
     }
 
-    /// Disable compression for this thread.
-    void disableCompression()
+    /// Disable compression for this thread. Optionally specify which
+    /// compression thread ("stage"), or -1 for all threads.
+    void disableCompression(int stage = -1)
     {
-        for (auto& thread : sink_threads_)
+        if (stage >= static_cast<int>(sink_threads_.size()))
         {
-            thread->disableCompression();
+            throw std::out_of_range("Invalid compression thread stage: " + std::to_string(stage));
+        }
+
+        for (int idx = 0; idx < static_cast<int>(sink_threads_.size()); ++idx)
+        {
+            if (stage != -1 && idx != stage)
+            {
+                continue; // Skip this thread if we're not setting it.
+            }
+            sink_threads_[idx]->disableCompression();
+            if (stage != -1)
+            {
+                break; // Only set the level for the specified thread.
+            }
         }
     }
 
-    /// Enable compression for this thread.
-    void enableCompression(CompressionLevel compression_level = CompressionLevel::DEFAULT)
+    /// Enable compression for this thread. Optionally specify which
+    /// compression thread ("stage"), or -1 for all threads.
+    void enableCompression(CompressionLevel level = CompressionLevel::DEFAULT, int stage = -1)
     {
-        for (auto& thread : sink_threads_)
+        if (stage >= static_cast<int>(sink_threads_.size()))
         {
-            thread->enableCompression(compression_level);
+            throw std::out_of_range("Invalid compression thread stage: " + std::to_string(stage));
+        }
+
+        for (int idx = 0; idx < static_cast<int>(sink_threads_.size()); ++idx)
+        {
+            if (stage != -1 && idx != stage)
+            {
+                continue; // Skip this thread if we're not setting it.
+            }
+            sink_threads_[idx]->enableCompression(level);
+            if (stage != -1)
+            {
+                break; // Only set the level for the specified thread.
+            }
         }
     }
 
