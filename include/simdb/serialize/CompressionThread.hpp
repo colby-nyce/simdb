@@ -15,12 +15,9 @@ namespace simdb
 /// Users typically do not need to create these threads directly, as they are
 /// created by the ThreadedSink which is the class to use for creating database
 /// pipelines.
-template <typename RawDataT=char>
 class CompressionThread : public Thread
 {
 public:
-    using DatabaseEntry = simdb::DatabaseEntry<RawDataT>;
-
     CompressionThread(ConcurrentQueue<DatabaseEntry>& queue, DatabaseThread<DatabaseEntry>& db_thread,
                       CompressionLevel compression_level = CompressionLevel::DEFAULT)
         : Thread(500)
@@ -76,7 +73,7 @@ private:
 
     ConcurrentQueue<DatabaseEntry>& queue_;
     DatabaseThread<DatabaseEntry>& db_thread_;
-    std::vector<RawDataT> compressed_bytes_;
+    std::vector<char> compressed_bytes_;
     CompressionLevel compression_level_;
 };
 

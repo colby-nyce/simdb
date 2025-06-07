@@ -41,13 +41,13 @@ TEST_INIT;
 //   2c. simdb_export --exporter stats-report --outfile data.h5 --format hdf5 sim.db
 //   2d. simdb_export --exporter stats-report --format html --browser /usr/bin/firefox sim.db
 
-class StatsCollector : public simdb::UnifiedSerializer<double>
+class StatsCollector : public simdb::UnifiedSerializer
 {
 public:
     static constexpr auto NAME = "StatsCollector";
 
     StatsCollector(simdb::DatabaseManager* db_mgr)
-        : simdb::UnifiedSerializer<double>(db_mgr, true)
+        : simdb::UnifiedSerializer(db_mgr, true)
     {
     }
 
@@ -60,16 +60,24 @@ public:
         stat_names_.push_back(name);
     }
 
-    using simdb::UnifiedSerializer<double>::process;
+    using simdb::UnifiedSerializer::process;
 
-    void process(uint64_t tick, std::vector<double>&& stats)
+    void process(uint64_t tick, const std::vector<double>& stats)
     {
         if (stats.size() != stat_names_.size())
         {
             throw simdb::DBException("StatsCollector: Mismatched stats size.");
         }
 
-        process(tick, stats);
+        std::vector<char> data;
+        data.reserve(stats.size() * sizeof(double));
+        for (const auto& stat : stats)
+        {
+            data.insert(data.end(), reinterpret_cast<const char*>(&stat),
+                        reinterpret_cast<const char*>(&stat) + sizeof(double));
+        }
+
+        process(tick, std::move(data));
     }
 
 private:

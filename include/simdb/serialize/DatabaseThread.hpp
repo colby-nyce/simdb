@@ -14,10 +14,9 @@ using EndOfPipelineCallback = std::function<void(DatabaseManager*, PipelineDataT
     std::bind(&ApplicationType::method_name, dynamic_cast<ApplicationType*>(__this__), \
               std::placeholders::_1, std::placeholders::_2)
 
-template <typename T=char>
 struct DatabaseEntry
 {
-    std::vector<T> bytes;
+    std::vector<char> bytes;
     bool compressed = false;
     uint64_t tick = 0;
 };

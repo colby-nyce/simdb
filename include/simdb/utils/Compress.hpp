@@ -27,17 +27,9 @@ enum class CompressionLevel
 };
 
 /// Perform zlib compression.
-template <typename InVectorT, typename OutVectorT>
-inline void compressDataVec(const std::vector<InVectorT>& in,
-                            std::vector<OutVectorT>& out,
-                            CompressionLevel compression_level = CompressionLevel::DEFAULT)
+template <typename T>
+inline void compressDataVec(const std::vector<T>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
-    static_assert(std::is_trivial_v<InVectorT> && std::is_trivial_v<OutVectorT>,
-                  "InVectorT and OutVectorT must be trivial types for zlib compression.");
-
-    static_assert(std::is_standard_layout_v<InVectorT> && std::is_standard_layout_v<OutVectorT>,
-                  "InVectorT and OutVectorT must be standard layout types for zlib compression.");
-
     if (in.empty())
     {
         out.clear();
@@ -49,7 +41,7 @@ inline void compressDataVec(const std::vector<InVectorT>& in,
     defstream.zfree = Z_NULL;
     defstream.opaque = Z_NULL;
 
-    auto num_bytes_before = in.size() * sizeof(InVectorT);
+    auto num_bytes_before = in.size() * sizeof(T);
     defstream.avail_in = (uInt)(num_bytes_before);
     defstream.next_in = (Bytef*)(in.data());
 
@@ -72,31 +64,25 @@ inline void compressDataVec(const std::vector<InVectorT>& in,
     deflateEnd(&defstream);
 
     auto num_bytes_after = (int)defstream.total_out;
-    out.resize(num_bytes_after / sizeof(OutVectorT));
+    out.resize(num_bytes_after);
 }
 
 /// Perform zlib decompression.
-template <typename InVectorT, typename OutVectorT>
-inline void decompressDataVec(const std::vector<InVectorT>& in, std::vector<OutVectorT>& out)
+template <typename T>
+inline void decompressDataVec(const std::vector<char>& in, std::vector<T>& out)
 {
-    static_assert(std::is_trivial_v<InVectorT> && std::is_trivial_v<OutVectorT>,
-                  "InVectorT and OutVectorT must be trivial types for zlib compression.");
-
-    static_assert(std::is_standard_layout_v<InVectorT> && std::is_standard_layout_v<OutVectorT>,
-                  "InVectorT and OutVectorT must be standard layout types for zlib compression.");
-
     if (in.empty()) {
         out.clear();
         return;
     }
 
     constexpr size_t CHUNK_SIZE = 1024 * 64;
-    out.clear();
-    out.reserve(CHUNK_SIZE); // Reserve space for decompressed data
+    std::vector<char> decompressed_buffer;
+    decompressed_buffer.reserve(CHUNK_SIZE);
 
     z_stream stream{};
-    stream.next_in = (Bytef*)(in.data());
-    stream.avail_in = static_cast<uInt>(in.size() * sizeof(InVectorT));
+    stream.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(in.data()));
+    stream.avail_in = static_cast<uInt>(in.size());
 
     if (inflateInit(&stream) != Z_OK)
     {
@@ -105,10 +91,10 @@ inline void decompressDataVec(const std::vector<InVectorT>& in, std::vector<OutV
 
     do
     {
-        size_t current_size = out.size();
-        out.resize(current_size + CHUNK_SIZE);
-        stream.next_out = (Bytef*)(&out[current_size]);
-        stream.avail_out = CHUNK_SIZE * sizeof(OutVectorT);
+        size_t current_size = decompressed_buffer.size();
+        decompressed_buffer.resize(current_size + CHUNK_SIZE);
+        stream.next_out = reinterpret_cast<Bytef*>(&decompressed_buffer[current_size]);
+        stream.avail_out = CHUNK_SIZE;
 
         int ret = inflate(&stream, Z_NO_FLUSH);
 
@@ -120,9 +106,20 @@ inline void decompressDataVec(const std::vector<InVectorT>& in, std::vector<OutV
     } while (stream.avail_out == 0);
 
     // Adjust actual used size
-    size_t current_size = out.size();
-    out.resize(current_size - stream.avail_out / sizeof(OutVectorT));
+    size_t current_size = decompressed_buffer.size();
+    decompressed_buffer.resize(current_size - stream.avail_out);
     inflateEnd(&stream);
+
+    // Convert decompressed bytes to std::vector<T>
+    size_t byte_count = decompressed_buffer.size();
+    if (byte_count % sizeof(T) != 0)
+    {
+        throw DBException("Decompressed data size is not aligned with type T.");
+    }
+
+    size_t elem_count = byte_count / sizeof(T);
+    out.resize(elem_count);
+    std::memcpy(out.data(), decompressed_buffer.data(), byte_count);
 }
 
 } // namespace simdb
