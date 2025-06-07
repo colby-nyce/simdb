@@ -8,6 +8,7 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/serialize/ThreadedSink.hpp"
+#include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
 #include <chrono>
@@ -102,11 +103,13 @@ public:
         sink_.teardown();
     }
 
-    void process(uint64_t tick, const std::vector<char>& data_bytes)
+    void process(uint64_t tick, std::vector<char>&& data_bytes)
     {
         simdb::DatabaseEntry entry;
-        entry.bytes = data_bytes;
         entry.tick = tick;
+        entry.data_ptr = data_bytes.data();
+        entry.num_bytes = data_bytes.size();
+        entry.container = data_bytes;
         sink_.push(std::move(entry));
 
         ++num_blobs_written_;
@@ -145,10 +148,14 @@ private:
             throw simdb::DBException("Data was not compressed in DummyApp.");
         }
 
+        simdb::SqlBlob blob;
+        blob.data_ptr = entry.data_ptr;
+        blob.num_bytes = entry.num_bytes;
+
         db_mgr->INSERT(
             SQL_TABLE("BlobData"),
             SQL_COLUMNS("Tick", "Data"),
-            SQL_VALUES(entry.tick, entry.bytes));
+            SQL_VALUES(entry.tick, blob));
     }
 
     void validateMetadata_()
@@ -181,7 +188,7 @@ private:
     std::string sim_cmdline_;
     std::string sim_start_time_;
     std::string sim_end_time_;
-    simdb::ThreadedSink<> sink_;
+    simdb::ThreadedSink sink_;
     size_t num_blobs_written_ = 0;
 };
 
@@ -208,7 +215,7 @@ int main(int argc, char** argv)
     for (uint64_t tick = 0; tick < 1000; ++tick)
     {
         auto data_bytes = generateRandomBytes(256);
-        dummy_app->process(tick, data_bytes);
+        dummy_app->process(tick, std::move(data_bytes));
     }
 
     // Finish...

@@ -9,6 +9,7 @@
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 #include "simdb/serialize/ThreadedSink.hpp"
+#include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
 TEST_INIT;
@@ -81,14 +82,18 @@ void TestDatabasePipeline(size_t compression_threads)
     // End-of-pipeline callback to write the data to the database.
     auto end_of_pipeline_callback = [](simdb::DatabaseManager* db_mgr, simdb::DatabaseEntry&& entry)
     {
+        simdb::SqlBlob blob;
+        blob.data_ptr = entry.data_ptr;
+        blob.num_bytes = entry.num_bytes;
+
         db_mgr->INSERT(
             SQL_TABLE("DataBlobs"),
             SQL_COLUMNS("Tick", "DataBlob", "IsCompressed"),
-            SQL_VALUES(entry.tick, entry.bytes, entry.compressed ? 1 : 0));
+            SQL_VALUES(entry.tick, blob, entry.compressed ? 1 : 0));
     };
 
     // Create a ThreadedSink to build the pipeline.
-    simdb::ThreadedSink<> sink(&db_mgr, end_of_pipeline_callback, compression_threads);
+    simdb::ThreadedSink sink(&db_mgr, end_of_pipeline_callback, compression_threads);
 
     // Send a blob down the pipeline.
     std::vector<char> alphabet;
@@ -98,8 +103,10 @@ void TestDatabasePipeline(size_t compression_threads)
     }
 
     simdb::DatabaseEntry entry;
-    entry.bytes = alphabet;
     entry.tick = 12345;
+    entry.data_ptr = alphabet.data();
+    entry.num_bytes = alphabet.size();
+    entry.container = alphabet;
     sink.push(std::move(entry));
 
     // Let the pipeline finish processing.

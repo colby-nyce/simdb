@@ -60,24 +60,14 @@ public:
         stat_names_.push_back(name);
     }
 
-    using simdb::UnifiedSerializer::process;
-
-    void process(uint64_t tick, const std::vector<double>& stats)
+    void process(uint64_t tick, std::vector<double>&& stats)
     {
         if (stats.size() != stat_names_.size())
         {
             throw simdb::DBException("StatsCollector: Mismatched stats size.");
         }
 
-        std::vector<char> data;
-        data.reserve(stats.size() * sizeof(double));
-        for (const auto& stat : stats)
-        {
-            data.insert(data.end(), reinterpret_cast<const char*>(&stat),
-                        reinterpret_cast<const char*>(&stat) + sizeof(double));
-        }
-
-        process(tick, std::move(data));
+        simdb::UnifiedSerializer::process(tick, std::move(stats));
     }
 
 private:

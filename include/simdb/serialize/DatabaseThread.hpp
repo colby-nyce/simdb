@@ -3,6 +3,7 @@
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"
+#include <any>
 
 namespace simdb
 {
@@ -16,9 +17,14 @@ using EndOfPipelineCallback = std::function<void(DatabaseManager*, PipelineDataT
 
 struct DatabaseEntry
 {
-    std::vector<char> bytes;
-    bool compressed = false;
     uint64_t tick = 0;
+    const void* data_ptr = nullptr;
+    size_t num_bytes = 0;
+    bool compressed = false;
+
+    // This can hold any type of contiguous data, such as
+    // std::vector<char> or std::array<T, N>.
+    std::any container;
 };
 
 class DatabaseManager;

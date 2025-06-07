@@ -66,8 +66,10 @@ private:
             return;
         }
 
-        compressDataVec(entry.bytes, compressed_bytes_, compression_level_);
-        std::swap(entry.bytes, compressed_bytes_);
+        compressDataVec(entry.data_ptr, entry.num_bytes, compressed_bytes_, compression_level_);
+        entry.container = compressed_bytes_;
+        entry.data_ptr = compressed_bytes_.data();
+        entry.num_bytes = compressed_bytes_.size();
         entry.compressed = true;
     }
 

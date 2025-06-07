@@ -3,6 +3,7 @@
 #pragma once
 
 #include <zlib.h>
+#include <array>
 #include <vector>
 #include <cstring>
 #include "simdb/Exceptions.hpp"
@@ -27,10 +28,9 @@ enum class CompressionLevel
 };
 
 /// Perform zlib compression.
-template <typename T>
-inline void compressDataVec(const std::vector<T>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
+inline void compressDataVec(const void * data_ptr, size_t num_bytes, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
-    if (in.empty())
+    if (num_bytes == 0)
     {
         out.clear();
         return;
@@ -41,15 +41,14 @@ inline void compressDataVec(const std::vector<T>& in, std::vector<char>& out, Co
     defstream.zfree = Z_NULL;
     defstream.opaque = Z_NULL;
 
-    auto num_bytes_before = in.size() * sizeof(T);
-    defstream.avail_in = (uInt)(num_bytes_before);
-    defstream.next_in = (Bytef*)(in.data());
+    defstream.avail_in = (uInt)num_bytes;
+    defstream.next_in = (Bytef*)data_ptr;
 
     // Compression can technically result in a larger output, although it is not
     // likely except for possibly very small input vectors. There is no deterministic
     // value for the maximum number of bytes after decompression, but we can choose
     // a very safe minimum.
-    auto max_bytes_after = num_bytes_before * 2;
+    auto max_bytes_after = num_bytes * 2;
     if (max_bytes_after < 1000)
     {
         max_bytes_after = 1000;
@@ -65,6 +64,24 @@ inline void compressDataVec(const std::vector<T>& in, std::vector<char>& out, Co
 
     auto num_bytes_after = (int)defstream.total_out;
     out.resize(num_bytes_after);
+}
+
+/// Perform zlib compression on a vector.
+template <typename T>
+inline void compressDataVec(const std::vector<T>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
+{
+    const void* data_ptr = in.data();
+    size_t num_bytes = in.size() * sizeof(T);
+    compressDataVec(data_ptr, num_bytes, out, compression_level);
+}
+
+/// Perform zlib compression on an array.
+template <typename T, size_t N>
+inline void compressDataVec(const std::array<T, N>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
+{
+    const void* data_ptr = in.data();
+    size_t num_bytes = in.size() * sizeof(T);
+    compressDataVec(data_ptr, num_bytes, out, compression_level);
 }
 
 /// Perform zlib decompression.

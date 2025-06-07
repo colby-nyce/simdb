@@ -19,17 +19,18 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/serialize/ThreadedSink.hpp"
+#include "simdb/schema/Blob.hpp"
 
 namespace simdb {
 
-class UnifiedSerializer : public simdb::App
+class UnifiedSerializer : public App
 {
 public:
     // Note that we do not provide a name for this app, as it is not intended to be
     // run directly. Instead, it is used as a base class for other applications that
     // want to use a unified std::vector<char> collector with a specific byte layout.
 
-    UnifiedSerializer(simdb::DatabaseManager* db_mgr, bool compression_enabled = true)
+    UnifiedSerializer(DatabaseManager* db_mgr, bool compression_enabled = true)
         : db_mgr_(db_mgr)
         , compression_enabled_(compression_enabled)
         , sink_(db_mgr,
@@ -42,8 +43,8 @@ public:
 
     void appendSchema() override final
     {
-        simdb::Schema schema;
-        using dt = simdb::SqlDataType;
+        Schema schema;
+        using dt = SqlDataType;
 
         auto& blob_tbl = schema.addTable("UnifiedCollectorBlobs");
         blob_tbl.addColumn("AppID", dt::int32_t);
@@ -88,73 +89,107 @@ public:
 
     void useFastestCompression()
     {
-        setCompressionLevel_(simdb::CompressionLevel::FASTEST);
+        setCompressionLevel_(CompressionLevel::FASTEST);
     }
 
     void useHighestCompression()
     {
-        setCompressionLevel_(simdb::CompressionLevel::HIGHEST);
+        setCompressionLevel_(CompressionLevel::HIGHEST);
     }
 
     void disableCompression()
     {
-        setCompressionLevel_(simdb::CompressionLevel::DISABLED);
+        setCompressionLevel_(CompressionLevel::DISABLED);
     }
 
-    void process(uint64_t tick, const std::vector<char>& data)
+    template <typename T>
+    void process(uint64_t tick, const std::vector<T>& data)
     {
-        simdb::DatabaseEntry entry;
-        entry.tick = tick;
-        entry.bytes = data;
-        sink_.push(std::move(entry));
+        process_(tick, data.data(), data.size() * sizeof(T), data);
     }
 
-    void process(uint64_t tick, std::vector<char>&& data)
+    template <typename T>
+    void process(uint64_t tick, std::vector<T>&& data)
     {
-        simdb::DatabaseEntry entry;
-        entry.tick = tick;
-        entry.bytes = std::move(data);
-        sink_.push(std::move(entry));
+        process_(tick, data.data(), data.size() * sizeof(T), std::move(data));
+    }
+
+    template <typename T, size_t N>
+    void process(uint64_t tick, const std::array<T, N>& data)
+    {
+        process_(tick, data.data(), data.size() * sizeof(T), data);
+    }
+
+    template <typename T, size_t N>
+    void process(uint64_t tick, std::array<T, N>&& data)
+    {
+        process_(tick, data.data(), data.size() * sizeof(T), std::move(data));
     }
 
 private:
-    void endOfPipeline_(simdb::DatabaseManager* db_mgr,
-                        simdb::DatabaseEntry&& entry)
+    template <typename BytesContainer>
+    void process_(uint64_t tick, const void* data_ptr, size_t num_bytes, const BytesContainer& container)
     {
+        DatabaseEntry entry;
+        entry.tick = tick;
+        entry.data_ptr = data_ptr;
+        entry.num_bytes = num_bytes;
+        entry.container = container;
+        sink_.push(std::move(entry));
+    }
+
+    template <typename BytesContainer>
+    void process_(uint64_t tick, const void* data_ptr, size_t num_bytes, BytesContainer&& container)
+    {
+        DatabaseEntry entry;
+        entry.tick = tick;
+        entry.data_ptr = data_ptr;
+        entry.num_bytes = num_bytes;
+        entry.container = std::move(container);
+        sink_.push(std::move(entry));
+    }
+
+    void endOfPipeline_(DatabaseManager* db_mgr,
+                        DatabaseEntry&& entry)
+    {
+        SqlBlob blob;
+        blob.data_ptr = entry.data_ptr;
+        blob.num_bytes = entry.num_bytes;
+
         db_mgr->INSERT(
             SQL_TABLE("UnifiedCollectorBlobs"),
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
-            SQL_VALUES(getAppID_(), entry.tick, std::move(entry.bytes), entry.compressed));
+            SQL_VALUES(getAppID_(), entry.tick, blob, entry.compressed));
     }
 
-    void setCompressionLevel_(simdb::CompressionLevel level)
+    void setCompressionLevel_(CompressionLevel level)
     {
-        if (!compression_enabled_ && level != simdb::CompressionLevel::DISABLED)
+        if (!compression_enabled_ && level != CompressionLevel::DISABLED)
         {
-            throw simdb::DBException("Compression is disabled for this application.");
+            throw DBException("Compression is disabled for this application.");
         }
         sink_.setCompressionLevel(level);
     }
 
-    virtual void appendSchema_(simdb::DatabaseManager*, simdb::Schema&) {}
+    virtual void appendSchema_(DatabaseManager*, Schema&) {}
 
-    virtual void preInit_(simdb::DatabaseManager*, int argc, char** argv)
+    virtual void preInit_(DatabaseManager*, int argc, char** argv)
     {
         (void)argc;   // Unused parameter
         (void)argv;   // Unused parameter
     }
 
-    virtual void preSim_(simdb::DatabaseManager*) {}
+    virtual void preSim_(DatabaseManager*) {}
 
-    virtual void postSim_(simdb::DatabaseManager*) {}
+    virtual void postSim_(DatabaseManager*) {}
 
-    virtual void postTeardown_(simdb::DatabaseManager*) {}
+    virtual void postTeardown_(DatabaseManager*) {}
 
     virtual std::string getByteLayoutYAML_() const = 0;
 
-    simdb::DatabaseManager* db_mgr_;
+    DatabaseManager* db_mgr_;
     bool compression_enabled_;
-    simdb::ThreadedSink<> sink_;
+    ThreadedSink sink_;
 };
 
 } // namespace simdb

@@ -18,12 +18,11 @@ namespace simdb
 ///
 /// All that to say that the total number of threads is the number of
 /// CompressionThreads plus the DatabaseThread.
-template <typename PipelineDataT = DatabaseEntry>
 class ThreadedSink
 {
 public:
     ThreadedSink(DatabaseManager* db_mgr,
-                 EndOfPipelineCallback<PipelineDataT> end_of_pipeline_callback,
+                 EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
                  size_t num_compression_threads = 0)
         : db_thread_(db_mgr, end_of_pipeline_callback)
     {
@@ -110,7 +109,7 @@ public:
     }
 
     /// Send a new packet down the pipeline. 
-    void push(PipelineDataT&& entry)
+    void push(DatabaseEntry&& entry)
     {
         compression_queue_.emplace(std::move(entry));
         startThreads_();
@@ -132,7 +131,7 @@ public:
         else
         {
             // Send uncompressed data directly to the database thread.
-            PipelineDataT entry;
+            DatabaseEntry entry;
             while (compression_queue_.try_pop(entry))
             {
                 db_thread_.push(std::move(entry));
@@ -167,8 +166,8 @@ private:
         }
     }
 
-    ConcurrentQueue<PipelineDataT> compression_queue_;
-    DatabaseThread<PipelineDataT> db_thread_;
+    ConcurrentQueue<DatabaseEntry> compression_queue_;
+    DatabaseThread<DatabaseEntry> db_thread_;
     std::vector<std::unique_ptr<CompressionThread>> sink_threads_;
     bool threads_running_ = false;
 };
