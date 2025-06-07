@@ -68,6 +68,36 @@ public:
         return apps_.find(app_name) != apps_.end();
     }
 
+    /// Before creating the apps, you can override the number of compression
+    /// threads for a specific app. Your app constructor takes this argument
+    /// and gives it to its ThreadedSink ctor.
+    ///
+    /// Note that the default is 0. You can also call enableDefaultCompression()
+    /// to set the number of compression threads for all apps to 1.
+    void setNumCompressionThreads(const std::string& app_name, size_t num_threads)
+    {
+        auto it = app_factories_.find(app_name);
+        if (it != app_factories_.end())
+        {
+            it->second->setNumCompressionThreads(num_threads);
+        }
+        else
+        {
+            throw DBException("App not found: ") << app_name;
+        }
+    }
+
+    /// Enable default compression for all apps. This sets the number of compression
+    /// threads to 1 for all registered apps, and must be called prior to instantiating
+    /// the apps with createEnabledApps().
+    void enableDefaultCompression()
+    {
+        for (auto& [name, factory] : app_factories_)
+        {
+            factory->setNumCompressionThreads(1);
+        }
+    }
+
     /// Call after command line args and config files are parsed.
     bool createEnabledApps(DatabaseManager* db_mgr)
     {
@@ -125,7 +155,7 @@ public:
                         SQL_COLUMNS("AppName"),
                         SQL_VALUES(name));
 
-                    app->setAppID_(record->getId());
+                    app->app_id_ = record->getId();
                     app->appendSchema();
                 }
             });

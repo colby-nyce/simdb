@@ -38,14 +38,13 @@ class DummyApp : public simdb::App
 {
 public:
     static constexpr auto NAME = "DummyApp";
-    static constexpr auto NUM_COMPRESSION_THREADS = 1;
 
     // App constructors must have this signature.
-    DummyApp(simdb::DatabaseManager* db_mgr)
+    DummyApp(simdb::DatabaseManager* db_mgr, size_t num_compression_threads)
         : db_mgr_(db_mgr)
         , sink_(db_mgr,
                 END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_),
-                NUM_COMPRESSION_THREADS)
+                num_compression_threads)
     {
     }
 
@@ -205,6 +204,7 @@ int main(int argc, char** argv)
     simdb::DatabaseManager db_mgr("test.db");
 
     // Setup...
+    app_mgr.enableDefaultCompression();
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);
     app_mgr.preInit(&db_mgr, argc, argv);

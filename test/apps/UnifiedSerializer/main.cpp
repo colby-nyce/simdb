@@ -46,8 +46,8 @@ class StatsCollector : public simdb::UnifiedSerializer
 public:
     static constexpr auto NAME = "StatsCollector";
 
-    StatsCollector(simdb::DatabaseManager* db_mgr)
-        : simdb::UnifiedSerializer(db_mgr, true)
+    StatsCollector(simdb::DatabaseManager* db_mgr, size_t num_compression_threads)
+        : simdb::UnifiedSerializer(db_mgr, num_compression_threads)
     {
     }
 

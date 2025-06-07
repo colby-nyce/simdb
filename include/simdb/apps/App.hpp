@@ -1,5 +1,7 @@
 #pragma once
 
+#include "simdb/Exceptions.hpp"
+
 /// Aside from its core SQLite functionality, SimDB provides a framework for
 /// creating "apps" which get selectively enabled based on your simulation
 /// configuration (e.g. command line options, config file, etc).
@@ -55,7 +57,6 @@ protected:
     App *const __this__ = this;
 
 private:
-    void setAppID_(int app_id) { app_id_ = app_id; }
     int app_id_ = 0;
 
     // Allow AppManager to set the app ID
@@ -66,17 +67,32 @@ class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
-    virtual App* createApp(DatabaseManager* db_mgr) const = 0;
+    virtual void setNumCompressionThreads(size_t num_threads) = 0;
+    virtual App* createApp(DatabaseManager* db_mgr) = 0;
 };
 
 template <typename AppT>
 class AppFactory : public AppFactoryBase
 {
 public:
-    App* createApp(DatabaseManager* db_mgr) const override
+    void setNumCompressionThreads(size_t num_threads) override
     {
-        return new AppT(db_mgr);
+        if (created_)
+        {
+            throw DBException("Cannot change number of compression threads after app creation.");
+        }
+        num_compression_threads_ = num_threads;
     }
+
+    App* createApp(DatabaseManager* db_mgr) override
+    {
+        created_ = true;
+        return new AppT(db_mgr, num_compression_threads_);
+    }
+
+private:
+    size_t num_compression_threads_ = 0;
+    bool created_ = false;
 };
 
 } // namespace simdb

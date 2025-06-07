@@ -30,12 +30,12 @@ public:
     // run directly. Instead, it is used as a base class for other applications that
     // want to use a unified std::vector<char> collector with a specific byte layout.
 
-    UnifiedSerializer(DatabaseManager* db_mgr, bool compression_enabled = true)
+    UnifiedSerializer(DatabaseManager* db_mgr, size_t num_compression_threads)
         : db_mgr_(db_mgr)
-        , compression_enabled_(compression_enabled)
+        , compression_enabled_(num_compression_threads > 0)
         , sink_(db_mgr,
                 END_OF_PIPELINE_CALLBACK(UnifiedSerializer, endOfPipeline_),
-                compression_enabled ? 1 : 0)
+                num_compression_threads)
     {
     }
 
