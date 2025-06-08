@@ -46,8 +46,9 @@ class StatsCollector : public simdb::UnifiedSerializer
 public:
     static constexpr auto NAME = "StatsCollector";
 
-    StatsCollector(simdb::DatabaseManager* db_mgr, size_t num_compression_threads)
-        : simdb::UnifiedSerializer(db_mgr, num_compression_threads)
+    StatsCollector(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline,
+                   simdb::AppPipelineMode pipeline_mode)
+        : simdb::UnifiedSerializer(db_mgr, async_pipeline, pipeline_mode)
     {
     }
 
@@ -139,16 +140,18 @@ int main(int argc, char** argv)
     simdb::DatabaseManager db_mgr("test.db");
 
     // Setup...
+    auto mode = simdb::AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD;
+    app_mgr.configureAppPipeline(StatsCollector::NAME, &db_mgr, mode);
+    app_mgr.finalizeAppPipeline();
     app_mgr.createEnabledApps(&db_mgr);
-    auto stats_collector = app_mgr.getApp<StatsCollector>();
+    app_mgr.createSchemas(&db_mgr);
+    app_mgr.preInit(&db_mgr, argc, argv);
 
+    auto stats_collector = app_mgr.getApp<StatsCollector>(&db_mgr);
     stats_collector->appendStat("Foo");
     stats_collector->appendStat("Bar");
     stats_collector->appendStat("Fiz");
     stats_collector->appendStat("Buz");
-
-    app_mgr.createSchemas(&db_mgr);
-    app_mgr.preInit(&db_mgr, argc, argv);
     app_mgr.preSim(&db_mgr);
 
     // Cannot add more stats at this point.

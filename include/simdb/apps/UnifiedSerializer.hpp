@@ -30,11 +30,11 @@ public:
     // run directly. Instead, it is used as a base class for other applications that
     // want to use a unified std::vector<char> collector with a specific byte layout.
 
-    UnifiedSerializer(DatabaseManager* db_mgr, size_t num_compression_threads)
+    UnifiedSerializer(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline,
+                      AppPipelineMode pipeline_mode)
         : db_mgr_(db_mgr)
-        , compression_enabled_(num_compression_threads > 0)
-        , sink_(END_OF_PIPELINE_CALLBACK(UnifiedSerializer, endOfPipeline_),
-                num_compression_threads)
+        , pipeline_(async_pipeline, pipeline_mode,
+                    END_OF_PIPELINE_CALLBACK(UnifiedSerializer, endOfPipeline_))
     {
     }
 
@@ -82,23 +82,8 @@ public:
 
     void teardown() override final
     {
-        sink_.teardown();
+        pipeline_.teardown();
         postTeardown_(db_mgr_);
-    }
-
-    void useFastestCompression()
-    {
-        setCompressionLevel_(CompressionLevel::FASTEST);
-    }
-
-    void useHighestCompression()
-    {
-        setCompressionLevel_(CompressionLevel::HIGHEST);
-    }
-
-    void disableCompression()
-    {
-        setCompressionLevel_(CompressionLevel::DISABLED);
     }
 
     template <typename T>
@@ -135,7 +120,7 @@ private:
         entry.data_ptr = data_ptr;
         entry.num_bytes = num_bytes;
         entry.container = container;
-        sink_.process(std::move(entry));
+        pipeline_.process(std::move(entry));
     }
 
     template <typename BytesContainer>
@@ -147,7 +132,7 @@ private:
         entry.data_ptr = data_ptr;
         entry.num_bytes = num_bytes;
         entry.container = std::move(container);
-        sink_.process(std::move(entry));
+        pipeline_.process(std::move(entry));
     }
 
     void endOfPipeline_(DatabaseEntry&& entry)
@@ -168,15 +153,6 @@ private:
             SQL_VALUES(getAppID_(), entry.tick, blob, entry.compressed));
     }
 
-    void setCompressionLevel_(CompressionLevel level)
-    {
-        if (!compression_enabled_ && level != CompressionLevel::DISABLED)
-        {
-            throw DBException("Compression is disabled for this application.");
-        }
-        sink_.setCompressionLevel(level);
-    }
-
     virtual void appendSchema_(DatabaseManager*, Schema&) {}
 
     virtual void preInit_(DatabaseManager*, int argc, char** argv)
@@ -195,7 +171,7 @@ private:
 
     DatabaseManager* db_mgr_;
     bool compression_enabled_;
-    AsyncPipeline sink_;
+    AppPipeline pipeline_;
 };
 
 } // namespace simdb

@@ -63,61 +63,90 @@ public:
     }
 
     /// Check if your app is instantiated (enabled and created).
-    bool instantiated(const std::string& app_name) const
+    bool instantiated(const std::string& app_name, const DatabaseManager* db_mgr) const
     {
-        return apps_.find(app_name) != apps_.end();
+        return instantiated(app_name, db_mgr->getDatabaseFilePath());
     }
 
-    /// Before creating the apps, you can override the number of compression
-    /// threads for a specific app. Your app constructor takes this argument
-    /// and gives it to its AsyncPipeline ctor.
-    ///
-    /// Note that the default is 0. You can also call enableDefaultCompression()
-    /// to set the number of compression threads for all apps to 1.
-    void setNumCompressionThreads(const std::string& app_name, size_t num_threads)
+    /// Check if your app is instantiated (enabled and created).
+    bool instantiated(const std::string& app_name, const std::string& db_file) const
+    {
+        const auto key = app_name + "_" + db_file;
+        return apps_.find(key) != apps_.end();
+    }
+
+    /// Optionally reconfigure the pipeline mode for an app.
+    void configureAppPipeline(const std::string& app_name, const DatabaseManager* db_mgr, AppPipelineMode mode)
+    {
+        configureAppPipeline(app_name, db_mgr->getDatabaseFilePath(), mode);
+    }
+
+    /// Optionally reconfigure the pipeline mode for an app.
+    void configureAppPipeline(const std::string& app_name, const std::string& db_file, AppPipelineMode mode)
     {
         auto it = app_factories_.find(app_name);
-        if (it != app_factories_.end())
+        if (it == app_factories_.end())
         {
-            it->second->setNumCompressionThreads(num_threads);
+            throw DBException("App not registered: ") << app_name;
         }
-        else
-        {
-            throw DBException("App not found: ") << app_name;
-        }
+
+        it->second->setPipelineMode(mode);
     }
 
-    /// Enable default compression for all apps. This sets the number of compression
-    /// threads to 1 for all registered apps, and must be called prior to instantiating
-    /// the apps with createEnabledApps().
-    void enableDefaultCompression()
+    /// Finalize the app pipeline. Cannot be called twice. Must be called before createEnabledApps().
+    void finalizeAppPipeline()
     {
-        for (auto& [name, factory] : app_factories_)
+        if (async_pipeline_)
         {
-            factory->setNumCompressionThreads(1);
+            throw DBException("App pipeline already finalized.");
         }
+
+        bool async_compression_enabled = false;
+        for (const auto& [name, factory] : app_factories_)
+        {
+            auto mode = factory->getPipelineMode();
+            if (mode == AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD)
+            {
+                async_compression_enabled = true;
+                break;
+            }
+        }
+
+        async_pipeline_ = std::make_unique<AsyncPipeline>(async_compression_enabled);
     }
 
     /// Call after command line args and config files are parsed.
-    bool createEnabledApps(DatabaseManager* db_mgr)
+    void createEnabledApps(DatabaseManager* db_mgr)
     {
-        for (const auto& app_name : enabled_apps_)
+        if (!async_pipeline_)
         {
-            App* app = app_factories_[app_name]->createApp(db_mgr);
-            apps_[app_name] = std::unique_ptr<App>(app);
+            throw DBException("App pipeline must be finalized before creating enabled apps.");
         }
 
-        return !apps_.empty();
+        for (const auto& app_name : enabled_apps_)
+        {
+            App* app = app_factories_[app_name]->createApp(db_mgr, *async_pipeline_);
+            const auto key = app_name + "_" + db_mgr->getDatabaseFilePath();
+            apps_[key] = std::unique_ptr<App>(app);
+        }
     }
 
     /// Get an instantiated app. Throws if not found.
     template <typename AppT>
-    AppT* getApp(bool must_exist = true)
+    AppT* getApp(DatabaseManager* db_mgr, bool must_exist = true)
+    {
+        return getApp<AppT>(db_mgr->getDatabaseFilePath(), must_exist);
+    }
+
+    /// Get an instantiated app. Throws if not found.
+    template <typename AppT>
+    AppT* getApp(const std::string& db_file, bool must_exist = true)
     {
         static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
 
         const auto app_name = AppT::NAME;
-        auto it = apps_.find(app_name);
+        const auto key = app_name + ("_" + db_file);
+        auto it = apps_.find(key);
         if (it != apps_.end())
         {
             auto app = dynamic_cast<AppT*>(it->second.get());
@@ -148,12 +177,29 @@ public:
                 tbl.addColumn("AppName", dt::string_t);
                 db_mgr->appendSchema(schema);
 
-                for (const auto& [name, app] : apps_)
+                for (const auto& [key, app] : apps_)
                 {
+                    // The key is formatted as "<AppName>_<db_file>"
+                    auto pos = key.find("_" + db_mgr->getDatabaseFilePath());
+                    if (pos == std::string::npos)
+                    {
+                        throw DBException("App key does not match database file: ") << key;
+                    }
+
+                    auto app_name = key.substr(0, pos);
+
+                    // Ensure no duplicates
+                    auto query = db_mgr->createQuery("RegisteredApps");
+                    query->addConstraintForString("AppName", Constraints::EQUAL, app_name);
+                    if (query->count() > 0)
+                    {
+                        throw DBException("App already registered: ") << app_name;
+                    }
+
                     auto record = db_mgr->INSERT(
                         SQL_TABLE("RegisteredApps"),
                         SQL_COLUMNS("AppName"),
-                        SQL_VALUES(name));
+                        SQL_VALUES(app_name));
 
                     app->app_id_ = record->getId();
                     app->appendSchema();
@@ -215,11 +261,33 @@ public:
     /// Delete all instantiated apps. This may be needed since AppManager
     /// is a singleton and your simulator might want to call app destructors
     /// before the AppManager itself is destroyed on program exit.
-    void deleteApps()
+    ///
+    /// Optionally pass in the DatabaseManager if you want to only delete
+    /// those apps that are associated with that specific database. Else
+    /// all apps will be deleted.
+    void deleteApps(DatabaseManager* db_mgr = nullptr)
     {
-        apps_.clear();
-        enabled_apps_.clear();
-        app_factories_.clear();
+        if (db_mgr)
+        {
+            const auto s = "_" + db_mgr->getDatabaseFilePath();
+            std::vector<std::string> delete_keys;
+            for (const auto& [key, app] : apps_)
+            {
+                if (key.find(s) != std::string::npos)
+                {
+                    delete_keys.push_back(key);
+                }
+            }
+
+            for (const auto& key : delete_keys)
+            {
+                apps_.erase(key);
+            }
+        }
+        else
+        {
+            apps_.clear();
+        }
     }
 
 private:
@@ -233,6 +301,9 @@ private:
 
     /// Enabled apps (may or may not be instantiated).
     std::set<std::string> enabled_apps_;
+
+    /// One AsyncPipeline for all apps to share, even if they write to different databases.
+    std::unique_ptr<AsyncPipeline> async_pipeline_;
 };
 
 } // namespace simdb

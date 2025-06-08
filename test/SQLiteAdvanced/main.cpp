@@ -93,7 +93,7 @@ void TestDatabasePipeline(size_t compression_threads)
     };
 
     // Create a AsyncPipeline to build the pipeline.
-    simdb::AsyncPipeline sink(end_of_pipeline_callback, compression_threads);
+    simdb::AsyncPipeline sink(compression_threads);
 
     // Send a blob down the pipeline.
     std::vector<char> alphabet;
@@ -108,6 +108,7 @@ void TestDatabasePipeline(size_t compression_threads)
     entry.data_ptr = alphabet.data();
     entry.num_bytes = alphabet.size();
     entry.container = alphabet;
+    entry.end_of_pipeline_callback = end_of_pipeline_callback;
     sink.process(std::move(entry));
 
     // Let the pipeline finish processing.
@@ -166,7 +167,7 @@ void TestTwoDatabases()
             SQL_VALUES(entry.tick, blob));
     };
 
-    simdb::DatabaseThread db_thread(end_of_pipeline_callback);
+    simdb::DatabaseThread db_thread;
 
     for (uint64_t tick = 1; tick <= 10; ++tick)
     {
@@ -179,6 +180,7 @@ void TestTwoDatabases()
         entry1.data_ptr = data1.data();
         entry1.num_bytes = data1.size() * sizeof(double);
         entry1.container = data1;
+        entry1.end_of_pipeline_callback = end_of_pipeline_callback;
 
         simdb::DatabaseEntry entry2;
         entry2.db_mgr = &db_mgr2;
@@ -186,6 +188,7 @@ void TestTwoDatabases()
         entry2.data_ptr = data2.data();
         entry2.num_bytes = data2.size() * sizeof(double);
         entry2.container = data2;
+        entry2.end_of_pipeline_callback = end_of_pipeline_callback;
 
         // Send the entries to the database thread.
         db_thread.process(std::move(entry1));

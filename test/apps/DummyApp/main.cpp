@@ -40,10 +40,11 @@ public:
     static constexpr auto NAME = "DummyApp";
 
     // App constructors must have this signature.
-    DummyApp(simdb::DatabaseManager* db_mgr, size_t num_compression_threads)
+    DummyApp(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline,
+             simdb::AppPipelineMode pipeline_mode)
         : db_mgr_(db_mgr)
-        , sink_(END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_),
-                num_compression_threads)
+        , pipeline_(async_pipeline, pipeline_mode,
+                    END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_))
     {
     }
 
@@ -96,9 +97,7 @@ public:
 
     void teardown() override
     {
-        // If your app uses resources like AsyncPipeline, now is the time to
-        // call its teardown method.
-        sink_.teardown();
+        pipeline_.teardown();
     }
 
     void process(uint64_t tick, std::vector<char>&& data_bytes)
@@ -109,7 +108,7 @@ public:
         entry.data_ptr = data_bytes.data();
         entry.num_bytes = data_bytes.size();
         entry.container = data_bytes;
-        sink_.process(std::move(entry));
+        pipeline_.process(std::move(entry));
 
         ++num_blobs_written_;
     }
@@ -192,7 +191,7 @@ private:
     std::string sim_cmdline_;
     std::string sim_start_time_;
     std::string sim_end_time_;
-    simdb::AsyncPipeline sink_;
+    simdb::AppPipeline pipeline_;
     size_t num_blobs_written_ = 0;
 };
 
@@ -209,14 +208,16 @@ int main(int argc, char** argv)
     simdb::DatabaseManager db_mgr("test.db");
 
     // Setup...
-    app_mgr.enableDefaultCompression();
+    auto mode = simdb::AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD;
+    app_mgr.configureAppPipeline(DummyApp::NAME, &db_mgr, mode);
+    app_mgr.finalizeAppPipeline();
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);
     app_mgr.preInit(&db_mgr, argc, argv);
     app_mgr.preSim(&db_mgr);
 
     // Simulate...
-    auto dummy_app = app_mgr.getApp<DummyApp>();
+    auto dummy_app = app_mgr.getApp<DummyApp>(&db_mgr);
     for (uint64_t tick = 0; tick < 1000; ++tick)
     {
         auto data_bytes = generateRandomBytes(256);

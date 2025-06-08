@@ -3,10 +3,19 @@
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"
+#include "simdb/utils/Compress.hpp"
 #include <any>
 
 namespace simdb
 {
+
+struct DatabaseEntry;
+
+using EndOfPipelineCallback = std::function<void(DatabaseEntry&&)>;
+
+#define END_OF_PIPELINE_CALLBACK(Class, Method) \
+    std::bind(&Class::Method, dynamic_cast<Class*>(__this__), std::placeholders::_1)
+
 
 struct DatabaseEntry
 {
@@ -14,6 +23,7 @@ struct DatabaseEntry
     const void* data_ptr = nullptr;
     size_t num_bytes = 0;
     bool compressed = false;
+    bool requires_compression = false;
     DatabaseManager* db_mgr = nullptr;
 
     // This can hold any type of contiguous data, such as
@@ -27,27 +37,19 @@ struct DatabaseEntry
     // this callback will be called with the DatabaseManager
     // that was originally set in the DatabaseEntry.
     std::function<void(DatabaseManager* db_mgr)> rerouted_callback = nullptr;
+
+    // Allow applications to set the end-of-pipeline callback.
+    EndOfPipelineCallback end_of_pipeline_callback = nullptr;
 };
-
-using EndOfPipelineCallback = std::function<void(DatabaseEntry&&)>;
-
-#define END_OF_PIPELINE_CALLBACK(Class, Method) \
-    std::bind(&Class::Method, dynamic_cast<Class*>(__this__), std::placeholders::_1)
 
 class DatabaseManager;
 
 /// Use this class to send data to the database in a separate thread.
-/// DatabaseThread does not make assumptions about what you want to
-/// do with the data (e.g. it doesn't know about specific tables) so
-/// you need to provide a callback that will be called on the background
-/// thread.
 class DatabaseThread : public Thread
 {
 public:
-    DatabaseThread(EndOfPipelineCallback end_of_pipeline_callback,
-                   const double interval_seconds = 0.5)
+    DatabaseThread(const double interval_seconds = 0.5)
         : Thread(interval_seconds * 1000)
-        , end_of_pipeline_callback_(end_of_pipeline_callback)
     {
     }
 
@@ -116,13 +118,19 @@ private:
     {
         auto process_entry = [&](DatabaseEntry& entry)
         {
+            if (!entry.compressed && entry.requires_compression)
+            {
+                compress_(entry);
+            }
+
             if (entry.rerouted_callback)
             {
                 entry.rerouted_callback(entry.db_mgr);
             }
-            else if (end_of_pipeline_callback_)
+            else if (entry.end_of_pipeline_callback)
             {
-                end_of_pipeline_callback_(std::move(entry));
+                auto callback = entry.end_of_pipeline_callback;
+                callback(std::move(entry));
             }
         };
 
@@ -146,8 +154,29 @@ private:
         }
     }
 
+    void compress_(DatabaseEntry& entry)
+    {
+        if (entry.compressed)
+        {
+            entry.requires_compression = false;
+            return;
+        }
+
+        if (entry.data_ptr == nullptr || entry.num_bytes == 0)
+        {
+            throw DBException("Cannot compress empty data.");
+        }
+
+        compressDataVec(entry.data_ptr, entry.num_bytes, compressed_data_);
+        entry.data_ptr = compressed_data_.data();
+        entry.num_bytes = compressed_data_.size();
+        entry.container = std::move(compressed_data_);
+        entry.compressed = true;
+    }
+
     ConcurrentQueue<DatabaseEntry> queue_;
-    EndOfPipelineCallback end_of_pipeline_callback_;
+    std::vector<char> compressed_data_;
+    //EndOfPipelineCallback end_of_pipeline_callback_;
 };
 
 } // namespace simdb

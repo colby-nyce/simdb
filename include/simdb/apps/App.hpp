@@ -1,6 +1,6 @@
 #pragma once
 
-#include "simdb/Exceptions.hpp"
+#include "simdb/apps/AppPipeline.hpp"
 
 /// Aside from its core SQLite functionality, SimDB provides a framework for
 /// creating "apps" which get selectively enabled based on your simulation
@@ -67,31 +67,37 @@ class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
-    virtual void setNumCompressionThreads(size_t num_threads) = 0;
-    virtual App* createApp(DatabaseManager* db_mgr) = 0;
+    virtual void setPipelineMode(AppPipelineMode mode) = 0;
+    virtual AppPipelineMode getPipelineMode() const = 0;
+    virtual App* createApp(DatabaseManager*, AsyncPipeline&) = 0;
 };
 
 template <typename AppT>
 class AppFactory : public AppFactoryBase
 {
 public:
-    void setNumCompressionThreads(size_t num_threads) override
+    void setPipelineMode(AppPipelineMode mode) override
     {
         if (created_)
         {
-            throw DBException("Cannot change number of compression threads after app creation.");
+            throw DBException("Cannot change pipeline mode after app creation.");
         }
-        num_compression_threads_ = num_threads;
+        mode_ = mode;
     }
 
-    App* createApp(DatabaseManager* db_mgr) override
+    AppPipelineMode getPipelineMode() const override
+    {
+        return mode_;
+    }
+
+    App* createApp(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline) override
     {
         created_ = true;
-        return new AppT(db_mgr, num_compression_threads_);
+        return new AppT(db_mgr, async_pipeline, mode_);
     }
 
 private:
-    size_t num_compression_threads_ = 0;
+    AppPipelineMode mode_ = AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION;
     bool created_ = false;
 };
 

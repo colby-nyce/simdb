@@ -21,95 +21,11 @@ namespace simdb
 class AsyncPipeline
 {
 public:
-    AsyncPipeline(EndOfPipelineCallback end_of_pipeline_callback,
-                 size_t num_compression_threads = 0)
-        : db_thread_(end_of_pipeline_callback)
+    AsyncPipeline(bool compression_enabled = false)
     {
-        // TODO cnyce: Fix remaining issues seen when using more than one compression thread.
-        if (num_compression_threads > 1)
+        if (compression_enabled)
         {
-            throw DBException("AsyncPipeline currently only supports 1 compression thread.");
-        }
-
-        for (size_t i = 0; i < num_compression_threads; ++i)
-        {
-            auto thread = std::make_unique<CompressionThread>(compression_queue_, db_thread_);
-            sink_threads_.emplace_back(std::move(thread));
-        }
-    }
-
-    /// How many compression threads are running?
-    size_t numCompressionThreads() const
-    {
-        return sink_threads_.size();
-    }
-
-    /// Reconfigure the compression level for this thread. Optionally specify which
-    /// compression thread ("stage"), or -1 for all threads.
-    void setCompressionLevel(CompressionLevel level, int stage = -1)
-    {
-        if (stage >= static_cast<int>(sink_threads_.size()))
-        {
-            throw std::out_of_range("Invalid compression thread stage: " + std::to_string(stage));
-        }
-
-        for (int idx = 0; idx < static_cast<int>(sink_threads_.size()); ++idx)
-        {
-            if (stage != -1 && idx != stage)
-            {
-                continue; // Skip this thread if we're not setting it.
-            }
-            sink_threads_[idx]->setCompressionLevel(level);
-            if (stage != -1)
-            {
-                break; // Only set the level for the specified thread.
-            }
-        }
-    }
-
-    /// Disable compression for this thread. Optionally specify which
-    /// compression thread ("stage"), or -1 for all threads.
-    void disableCompression(int stage = -1)
-    {
-        if (stage >= static_cast<int>(sink_threads_.size()))
-        {
-            throw std::out_of_range("Invalid compression thread stage: " + std::to_string(stage));
-        }
-
-        for (int idx = 0; idx < static_cast<int>(sink_threads_.size()); ++idx)
-        {
-            if (stage != -1 && idx != stage)
-            {
-                continue; // Skip this thread if we're not setting it.
-            }
-            sink_threads_[idx]->disableCompression();
-            if (stage != -1)
-            {
-                break; // Only set the level for the specified thread.
-            }
-        }
-    }
-
-    /// Enable compression for this thread. Optionally specify which
-    /// compression thread ("stage"), or -1 for all threads.
-    void enableCompression(CompressionLevel level = CompressionLevel::DEFAULT, int stage = -1)
-    {
-        if (stage >= static_cast<int>(sink_threads_.size()))
-        {
-            throw std::out_of_range("Invalid compression thread stage: " + std::to_string(stage));
-        }
-
-        for (int idx = 0; idx < static_cast<int>(sink_threads_.size()); ++idx)
-        {
-            if (stage != -1 && idx != stage)
-            {
-                continue; // Skip this thread if we're not setting it.
-            }
-            sink_threads_[idx]->enableCompression(level);
-            if (stage != -1)
-            {
-                break; // Only set the level for the specified thread.
-            }
+            compression_thread_ = std::make_unique<CompressionThread>(compression_queue_, db_thread_);
         }
     }
 
@@ -125,7 +41,7 @@ public:
     /// this method explicitly.
     void flush()
     {
-        if (!sink_threads_.empty())
+        if (compression_thread_)
         {
             // Allow the threads to finish their work.
             while (!compression_queue_.empty())
@@ -152,7 +68,7 @@ public:
         flush();
 
         // Stop the compression threads.
-        sink_threads_.clear();
+        compression_thread_.reset();
 
         // Flush and stop the database thread.
         db_thread_.teardown();
@@ -163,9 +79,9 @@ private:
     {
         if (!threads_running_)
         {
-            for (auto& thread : sink_threads_)
+            if (compression_thread_)
             {
-                thread->startThreadLoop();
+                compression_thread_->startThreadLoop();
             }
             threads_running_ = true;
         }
@@ -173,7 +89,7 @@ private:
 
     ConcurrentQueue<DatabaseEntry> compression_queue_;
     DatabaseThread db_thread_;
-    std::vector<std::unique_ptr<CompressionThread>> sink_threads_;
+    std::unique_ptr<CompressionThread> compression_thread_;
     bool threads_running_ = false;
 };
 
