@@ -50,10 +50,7 @@ public:
     ///   simdb::AppManager::getInstance().enableApp(MyApp::NAME);
     void enableApp(const std::string& app_name)
     {
-        if (!enabled_apps_.insert(app_name).second)
-        {
-            throw DBException("App already enabled: ") << app_name;
-        }
+        enabled_apps_.insert(app_name);
     }
 
     /// Check if your app is enabled (might not be instantiated yet).
@@ -96,10 +93,7 @@ public:
     /// Finalize the app pipeline. Cannot be called twice. Must be called before createEnabledApps().
     void finalizeAppPipeline()
     {
-        if (async_pipeline_)
-        {
-            throw DBException("App pipeline already finalized.");
-        }
+        async_pipeline_.reset();
 
         bool async_compression_enabled = false;
         for (const auto& [name, factory] : app_factories_)
@@ -183,7 +177,7 @@ public:
                     auto pos = key.find("_" + db_mgr->getDatabaseFilePath());
                     if (pos == std::string::npos)
                     {
-                        throw DBException("App key does not match database file: ") << key;
+                        continue; // App is associated with a different database
                     }
 
                     auto app_name = key.substr(0, pos);
@@ -287,6 +281,11 @@ public:
         else
         {
             apps_.clear();
+        }
+
+        if (apps_.empty())
+        {
+            async_pipeline_.reset();
         }
     }
 

@@ -78,10 +78,6 @@ class AppFactory : public AppFactoryBase
 public:
     void setPipelineMode(AppPipelineMode mode) override
     {
-        if (created_)
-        {
-            throw DBException("Cannot change pipeline mode after app creation.");
-        }
         mode_ = mode;
     }
 
@@ -92,7 +88,6 @@ public:
 
     App* createApp(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline) override
     {
-        created_ = true;
         return new AppT(db_mgr, async_pipeline, mode_);
     }
 

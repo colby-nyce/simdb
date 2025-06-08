@@ -49,6 +49,8 @@ public:
     StatsCollector(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline,
                    simdb::AppPipelineMode pipeline_mode)
         : simdb::UnifiedSerializer(db_mgr, async_pipeline, pipeline_mode)
+        , pipeline_mode_(pipeline_mode)
+        , db_mgr_(db_mgr)
     {
     }
 
@@ -69,6 +71,15 @@ public:
         }
 
         simdb::UnifiedSerializer::process(tick, std::move(stats));
+        ++num_blobs_written_;
+    }
+
+    void validate()
+    {
+        auto query = db_mgr_->createQuery("UnifiedCollectorBlobs");
+        bool expect_compressed = (pipeline_mode_ != simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION);
+        query->addConstraintForInt("IsCompressed", simdb::Constraints::EQUAL, expect_compressed ? 1 : 0);
+        EXPECT_EQUAL(query->count(), num_blobs_written_);
     }
 
 private:
@@ -114,6 +125,9 @@ private:
 
     std::vector<std::string> stat_names_;
     bool finalized_ = false;
+    simdb::AppPipelineMode pipeline_mode_;
+    simdb::DatabaseManager* db_mgr_ = nullptr;
+    size_t num_blobs_written_ = 0;
 };
 
 REGISTER_SIMDB_APPLICATION(StatsCollector);
@@ -129,7 +143,7 @@ std::vector<double> generateRandomStats(size_t count)
     return stats;
 }
 
-int main(int argc, char** argv)
+void TestOneApp(int argc, char** argv)
 {
     DB_INIT;
 
@@ -167,6 +181,87 @@ int main(int argc, char** argv)
     // Finish...
     app_mgr.postSim(&db_mgr);
     app_mgr.teardown(&db_mgr);
+
+    // Validate...
+    stats_collector->validate();
+
+    // Prepare for the next test.
+    app_mgr.deleteApps();
+}
+
+void TestTwoApps(int argc, char** argv)
+{
+    DB_INIT;
+
+    auto& app_mgr = simdb::AppManager::getInstance();
+    app_mgr.enableApp(StatsCollector::NAME);
+    EXPECT_TRUE(app_mgr.enabled(StatsCollector::NAME));
+
+    simdb::DatabaseManager db_mgr1("test.db");
+    simdb::DatabaseManager db_mgr2("test2.db");
+
+    // Setup...
+    auto mode1 = simdb::AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD;
+    auto mode2 = simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION;
+
+    app_mgr.configureAppPipeline(StatsCollector::NAME, &db_mgr1, mode1);
+    app_mgr.configureAppPipeline(StatsCollector::NAME, &db_mgr2, mode2);
+
+    app_mgr.finalizeAppPipeline();
+
+    app_mgr.createEnabledApps(&db_mgr1);
+    app_mgr.createEnabledApps(&db_mgr2);
+
+    app_mgr.createSchemas(&db_mgr1);
+    app_mgr.createSchemas(&db_mgr2);
+
+    app_mgr.preInit(&db_mgr1, argc, argv);
+    app_mgr.preInit(&db_mgr2, argc, argv);
+
+    auto stats_collector1 = app_mgr.getApp<StatsCollector>(&db_mgr1);
+    stats_collector1->appendStat("Foo");
+    stats_collector1->appendStat("Bar");
+
+    auto stats_collector2 = app_mgr.getApp<StatsCollector>(&db_mgr2);
+    stats_collector2->appendStat("Fiz");
+    stats_collector2->appendStat("Buz");
+
+    app_mgr.preSim(&db_mgr1);
+    app_mgr.preSim(&db_mgr2);
+
+    // Cannot add more stats at this point.
+    EXPECT_THROW(stats_collector1->appendStat("Nope"));
+    EXPECT_THROW(stats_collector2->appendStat("Nope"));
+
+    // Simulate...
+    for (uint64_t tick = 0; tick < 1000; ++tick)
+    {
+        auto stats1 = generateRandomStats(2);
+        stats_collector1->process(tick, std::move(stats1));
+
+        auto stats2 = generateRandomStats(2);
+        stats_collector2->process(tick, std::move(stats2));
+    }
+
+    // Finish...
+    app_mgr.postSim(&db_mgr1);
+    app_mgr.postSim(&db_mgr2);
+
+    app_mgr.teardown(&db_mgr1);
+    app_mgr.teardown(&db_mgr2);
+
+    // Validate...
+    stats_collector1->validate();
+    stats_collector2->validate();
+
+    // Prepare for the next test.
+    app_mgr.deleteApps();
+}
+
+int main(int argc, char** argv)
+{
+    TestOneApp(argc, argv);
+    TestTwoApps(argc, argv);
 
     // This MUST be put at the end of unit test files' main() function.
     ENSURE_ALL_REACHED(0);
