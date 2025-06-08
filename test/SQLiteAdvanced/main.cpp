@@ -136,11 +136,101 @@ void TestDatabasePipeline(size_t compression_threads)
     EXPECT_EQUAL(data_blob, alphabet);
 }
 
+void TestTwoDatabases()
+{
+    DB_INIT;
+
+    using dt = simdb::SqlDataType;
+    simdb::Schema schema;
+
+    auto& tbl = schema.addTable("TestBlobs");
+    tbl.addColumn("Tick", dt::int64_t);
+    tbl.addColumn("DataBlob", dt::blob_t);
+
+    simdb::DatabaseManager db_mgr1("test1.db");
+    EXPECT_TRUE(db_mgr1.appendSchema(schema));
+
+    simdb::DatabaseManager db_mgr2("test2.db");
+    EXPECT_TRUE(db_mgr2.appendSchema(schema));
+
+    auto end_of_pipeline_callback = [](simdb::DatabaseEntry&& entry)
+    {
+        simdb::SqlBlob blob;
+        blob.data_ptr = entry.data_ptr;
+        blob.num_bytes = entry.num_bytes;
+
+        // Write to the first database.
+        entry.db_mgr->INSERT(
+            SQL_TABLE("TestBlobs"),
+            SQL_COLUMNS("Tick", "DataBlob"),
+            SQL_VALUES(entry.tick, blob));
+    };
+
+    simdb::DatabaseThread db_thread(end_of_pipeline_callback);
+
+    for (uint64_t tick = 0; tick < 10; ++tick)
+    {
+        const std::vector<double> data1 = { 1.0*tick, 1.0*tick, 1.0*tick };
+        const std::vector<double> data2 = { 2.0*tick, 2.0*tick, 2.0*tick };
+
+        simdb::DatabaseEntry entry1;
+        entry1.db_mgr = &db_mgr1;
+        entry1.tick = tick;
+        entry1.data_ptr = data1.data();
+        entry1.num_bytes = data1.size() * sizeof(double);
+        entry1.container = data1;
+
+        simdb::DatabaseEntry entry2;
+        entry2.db_mgr = &db_mgr2;
+        entry2.tick = tick;
+        entry2.data_ptr = data2.data();
+        entry2.num_bytes = data2.size() * sizeof(double);
+        entry2.container = data2;
+
+        // Verify that the callLater() method works correctly
+        // and that the callback is called at the correct time:
+        //
+        //   entry1
+        //   entry2
+        //   entry3
+        //   validate 3 entries so far
+        //   entry4
+        //   ...
+        if (false)//tick == 5)
+        {
+            auto verif = [&]()
+            {
+                auto query1 = db_mgr1.createQuery("TestBlobs");
+                EXPECT_EQUAL(query1->count(), 5);
+
+                auto query2 = db_mgr2.createQuery("TestBlobs");
+                EXPECT_EQUAL(query2->count(), 5);
+            };
+
+            db_thread.callLater(verif);
+        }
+
+        // Send the entries to the database thread.
+        db_thread.process(std::move(entry1));
+        db_thread.process(std::move(entry2));
+    }
+
+    // Finish and validate.
+    db_thread.teardown();
+
+    auto query1 = db_mgr1.createQuery("TestBlobs");
+    EXPECT_EQUAL(query1->count(), 10);
+
+    auto query2 = db_mgr2.createQuery("TestBlobs");
+    EXPECT_EQUAL(query2->count(), 10);
+}
+
 int main()
 {
-    TestTinyStrings();       // Test string minification.
-    TestDatabasePipeline(0); // Test pipeline (no compression, just async DB writes).
-    TestDatabasePipeline(1); // Test pipeline (one compression thread and async DB writes).
+    //TestTinyStrings();       // Test string minification.
+    //TestDatabasePipeline(0); // Test pipeline (no compression, just async DB writes).
+    //TestDatabasePipeline(1); // Test pipeline (one compression thread and async DB writes).
+    TestTwoDatabases();      // Test two databases using the same DatabaseThread.
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

@@ -21,7 +21,7 @@ namespace simdb
 class AsyncPipeline
 {
 public:
-    AsyncPipeline(EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
+    AsyncPipeline(EndOfPipelineCallback end_of_pipeline_callback,
                  size_t num_compression_threads = 0)
         : db_thread_(end_of_pipeline_callback)
     {
@@ -143,7 +143,7 @@ public:
             }
         }
 
-        db_thread_.flush();
+        db_thread_.waitUntilFlushed();
     }
 
     /// Stop all threads and flush the pipeline.
@@ -172,7 +172,7 @@ private:
     }
 
     ConcurrentQueue<DatabaseEntry> compression_queue_;
-    DatabaseThread<> db_thread_;
+    DatabaseThread db_thread_;
     std::vector<std::unique_ptr<CompressionThread>> sink_threads_;
     bool threads_running_ = false;
 };

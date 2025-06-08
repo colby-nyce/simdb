@@ -8,13 +8,6 @@
 namespace simdb
 {
 
-template <typename PipelineDataT>
-using EndOfPipelineCallback = std::function<void(PipelineDataT&&)>;
-
-#define END_OF_PIPELINE_CALLBACK(ApplicationType, method_name) \
-    std::bind(&ApplicationType::method_name, dynamic_cast<ApplicationType*>(__this__), \
-              std::placeholders::_1)
-
 struct DatabaseEntry
 {
     uint64_t tick = 0;
@@ -36,6 +29,11 @@ struct DatabaseEntry
     std::function<void(DatabaseManager* db_mgr)> rerouted_callback = nullptr;
 };
 
+using EndOfPipelineCallback = std::function<void(DatabaseEntry&&)>;
+
+#define END_OF_PIPELINE_CALLBACK(Class, Method) \
+    std::bind(&Class::Method, dynamic_cast<Class*>(__this__), std::placeholders::_1)
+
 class DatabaseManager;
 
 /// Use this class to send data to the database in a separate thread.
@@ -43,17 +41,10 @@ class DatabaseManager;
 /// do with the data (e.g. it doesn't know about specific tables) so
 /// you need to provide a callback that will be called on the background
 /// thread.
-///
-/// The "ProcessInTransaction" template parameter allows you to control
-/// whether the data will be processed in a BEGIN/COMMIT TRANSACTION block.
-/// If your callback intends to write data to the database, it is strongly
-/// recommended to set this to true, as it will ensure that the data is
-/// written atomically, which is important for performance and data integrity.
-template <bool ProcessInTransaction = true>
 class DatabaseThread : public Thread
 {
 public:
-    DatabaseThread(EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback,
+    DatabaseThread(EndOfPipelineCallback end_of_pipeline_callback,
                    const double interval_seconds = 0.5)
         : Thread(interval_seconds * 1000)
         , end_of_pipeline_callback_(end_of_pipeline_callback)
@@ -81,7 +72,7 @@ public:
     /// help keep the asynchronous nature of the pipeline deterministic.
     void callLater(std::function<void()> callback)
     {
-        auto f = [callback](DatabaseManager*)
+        auto f = [callback, this](DatabaseManager*)
         {
             callback();
         };
@@ -95,69 +86,16 @@ public:
     /// Flush the pipeline and stop the thread.
     void teardown()
     {
-        flush();
+        waitUntilFlushed();
         stopThreadLoop();
     }
 
-    /// Flush the pipeline.
-    void flush()
+    /// Wait for the pipeline to be flushed.
+    void waitUntilFlushed()
     {
-        if constexpr (ProcessInTransaction)
+        while (!queue_.empty())
         {
-            // Since there is only one DatabaseThread which can serve more than one
-            // DatabaseManager, we need to ensure that we call safeTransaction() on
-            // the appropriate database, and only forward the data that belongs to
-            // that database.
-            std::unordered_map<DatabaseManager*, std::queue<DatabaseEntry>> db_queues;
-            DatabaseEntry entry;
-            while (queue_.try_pop(entry))
-            {
-                db_queues[entry.db_mgr].emplace(std::move(entry));
-            }
-
-            auto process_entries = [this](std::queue<DatabaseEntry>& entries)
-            {
-                while (!entries.empty())
-                {
-                    auto& entry = entries.front();
-                    if (entry.rerouted_callback)
-                    {
-                        entry.rerouted_callback(entry.db_mgr);
-                    }
-                    else
-                    {
-                        end_of_pipeline_callback_(std::move(entry));
-                    }
-                    entries.pop();
-                }
-            };
-
-            for (auto& [db_mgr, entries] : db_queues)
-            {
-                if (db_mgr)
-                {
-                    db_mgr->safeTransaction([&]() { process_entries(entries); });
-                }
-                else
-                {
-                    process_entries(entries);
-                }
-            }
-        }
-        else
-        {
-            DatabaseEntry entry;
-            while (queue_.try_pop(entry))
-            {
-                if (entry.rerouted_callback)
-                {
-                    entry.rerouted_callback(entry.db_mgr);
-                }
-                else
-                {
-                    end_of_pipeline_callback_(std::move(entry));
-                }
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 
@@ -165,11 +103,51 @@ private:
     /// Called periodically on the background thread to flush all pending data.
     void onInterval_() override
     {
-        flush();
+        // Since there is only one DatabaseThread which can serve more than one
+        // DatabaseManager, we need to ensure that we call safeTransaction() on
+        // the appropriate database, and only forward the data that belongs to
+        // that database.
+        std::vector<DatabaseManager*> db_managers;
+        flush_(db_managers);
+    }
+
+    /// Flush the queue and process all entries. 
+    void flush_(std::vector<DatabaseManager*>& db_managers)
+    {
+        auto process_entry = [&](DatabaseEntry& entry)
+        {
+            if (entry.rerouted_callback)
+            {
+                entry.rerouted_callback(entry.db_mgr);
+            }
+            else if (end_of_pipeline_callback_)
+            {
+                end_of_pipeline_callback_(std::move(entry));
+            }
+        };
+
+        DatabaseEntry entry;
+        while (queue_.try_pop(entry))
+        {
+            auto db_mgr = entry.db_mgr;
+            if (db_mgr && std::find(db_managers.begin(), db_managers.end(), db_mgr) == db_managers.end())
+            {
+                db_mgr->safeTransaction([&]()
+                {
+                    process_entry(entry);
+                    db_managers.push_back(db_mgr);
+                    flush_(db_managers);
+                });
+            }
+            else
+            {
+                process_entry(entry);
+            }
+        }
     }
 
     ConcurrentQueue<DatabaseEntry> queue_;
-    EndOfPipelineCallback<DatabaseEntry> end_of_pipeline_callback_;
+    EndOfPipelineCallback end_of_pipeline_callback_;
 };
 
 } // namespace simdb
