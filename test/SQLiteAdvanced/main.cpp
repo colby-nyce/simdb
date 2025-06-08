@@ -168,7 +168,7 @@ void TestTwoDatabases()
 
     simdb::DatabaseThread db_thread(end_of_pipeline_callback);
 
-    for (uint64_t tick = 0; tick < 10; ++tick)
+    for (uint64_t tick = 1; tick <= 10; ++tick)
     {
         const std::vector<double> data1 = { 1.0*tick, 1.0*tick, 1.0*tick };
         const std::vector<double> data2 = { 2.0*tick, 2.0*tick, 2.0*tick };
@@ -187,6 +187,10 @@ void TestTwoDatabases()
         entry2.num_bytes = data2.size() * sizeof(double);
         entry2.container = data2;
 
+        // Send the entries to the database thread.
+        db_thread.process(std::move(entry1));
+        db_thread.process(std::move(entry2));
+
         // Verify that the callLater() method works correctly
         // and that the callback is called at the correct time:
         //
@@ -196,23 +200,19 @@ void TestTwoDatabases()
         //   validate 3 entries so far
         //   entry4
         //   ...
-        if (false)//tick == 5)
+        if (tick == 4)
         {
             auto verif = [&]()
             {
                 auto query1 = db_mgr1.createQuery("TestBlobs");
-                EXPECT_EQUAL(query1->count(), 5);
+                EXPECT_EQUAL(query1->count(), 4);
 
                 auto query2 = db_mgr2.createQuery("TestBlobs");
-                EXPECT_EQUAL(query2->count(), 5);
+                EXPECT_EQUAL(query2->count(), 4);
             };
 
             db_thread.callLater(verif);
         }
-
-        // Send the entries to the database thread.
-        db_thread.process(std::move(entry1));
-        db_thread.process(std::move(entry2));
     }
 
     // Finish and validate.

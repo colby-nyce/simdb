@@ -72,7 +72,7 @@ public:
     /// help keep the asynchronous nature of the pipeline deterministic.
     void callLater(std::function<void()> callback)
     {
-        auto f = [callback, this](DatabaseManager*)
+        auto f = [callback](DatabaseManager*)
         {
             callback();
         };
