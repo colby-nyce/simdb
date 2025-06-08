@@ -87,62 +87,42 @@ public:
     }
 
     template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data)
+    void process(uint64_t tick, const std::vector<T>& data, bool already_compressed = false)
     {
-        process_(tick, data.data(), data.size() * sizeof(T), data);
+        auto must_compress = !already_compressed && compression_enabled_;
+        DatabaseEntry entry(tick, data, already_compressed, must_compress, db_mgr_);
+        pipeline_.process(std::move(entry));
     }
 
     template <typename T>
-    void process(uint64_t tick, std::vector<T>&& data)
+    void process(uint64_t tick, std::vector<T>&& data, bool already_compressed = false)
     {
-        process_(tick, data.data(), data.size() * sizeof(T), std::move(data));
+        auto must_compress = !already_compressed && compression_enabled_;
+        DatabaseEntry entry(tick, std::move(data), already_compressed, must_compress, db_mgr_);
+        pipeline_.process(std::move(entry));
     }
 
     template <typename T, size_t N>
-    void process(uint64_t tick, const std::array<T, N>& data)
+    void process(uint64_t tick, const std::array<T, N>& data, bool already_compressed = false)
     {
-        process_(tick, data.data(), data.size() * sizeof(T), data);
+        auto must_compress = !already_compressed && compression_enabled_;
+        DatabaseEntry entry(tick, data, already_compressed, must_compress, db_mgr_);
+        pipeline_.process(std::move(entry));
     }
 
     template <typename T, size_t N>
-    void process(uint64_t tick, std::array<T, N>&& data)
+    void process(uint64_t tick, std::array<T, N>&& data, bool already_compressed = false)
     {
-        process_(tick, data.data(), data.size() * sizeof(T), std::move(data));
+        auto must_compress = !already_compressed && compression_enabled_;
+        DatabaseEntry entry(tick, std::move(data), already_compressed, must_compress, db_mgr_);
+        pipeline_.process(std::move(entry));
     }
 
 private:
-    template <typename BytesContainer>
-    void process_(uint64_t tick, const void* data_ptr, size_t num_bytes, const BytesContainer& container)
-    {
-        DatabaseEntry entry;
-        entry.db_mgr = db_mgr_;
-        entry.tick = tick;
-        entry.data_ptr = data_ptr;
-        entry.num_bytes = num_bytes;
-        entry.container = container;
-        pipeline_.process(std::move(entry));
-    }
-
-    template <typename BytesContainer>
-    void process_(uint64_t tick, const void* data_ptr, size_t num_bytes, BytesContainer&& container)
-    {
-        DatabaseEntry entry;
-        entry.db_mgr = db_mgr_;
-        entry.tick = tick;
-        entry.data_ptr = data_ptr;
-        entry.num_bytes = num_bytes;
-        entry.container = std::move(container);
-        pipeline_.process(std::move(entry));
-    }
-
     void endOfPipeline_(DatabaseEntry&& entry)
     {
-        SqlBlob blob;
-        blob.data_ptr = entry.data_ptr;
-        blob.num_bytes = entry.num_bytes;
-
         // Sanity check that the DatabaseEntry has our DatabaseManager.
-        if (entry.db_mgr != db_mgr_)
+        if (entry.getDatabaseManager() != db_mgr_)
         {
             throw DBException("DatabaseEntry's db_mgr does not match UnifiedSerializer's db_mgr.");
         }
@@ -150,7 +130,7 @@ private:
         db_mgr_->INSERT(
             SQL_TABLE("UnifiedCollectorBlobs"),
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
-            SQL_VALUES(getAppID_(), entry.tick, blob, entry.compressed));
+            SQL_VALUES(getAppID_(), entry.getTick(), entry.getBlob(), entry.compressed()));
     }
 
     virtual void appendSchema_(DatabaseManager*, Schema&) {}

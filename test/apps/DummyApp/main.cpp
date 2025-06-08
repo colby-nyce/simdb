@@ -45,6 +45,7 @@ public:
         : db_mgr_(db_mgr)
         , pipeline_(async_pipeline, pipeline_mode,
                     END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_))
+        , compression_enabled_(pipeline_mode != simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION)
     {
     }
 
@@ -102,14 +103,8 @@ public:
 
     void process(uint64_t tick, std::vector<char>&& data_bytes)
     {
-        simdb::DatabaseEntry entry;
-        entry.db_mgr = db_mgr_;
-        entry.tick = tick;
-        entry.data_ptr = data_bytes.data();
-        entry.num_bytes = data_bytes.size();
-        entry.container = data_bytes;
+        simdb::DatabaseEntry entry(tick, std::move(data_bytes), false, compression_enabled_, db_mgr_);
         pipeline_.process(std::move(entry));
-
         ++num_blobs_written_;
     }
 
@@ -140,17 +135,13 @@ private:
     void endOfPipeline_(simdb::DatabaseEntry&& entry)
     {
         // We are using 1 compression thread, so make sure it was compressed.
-        if (!entry.compressed)
+        if (!entry.compressed())
         {
             throw simdb::DBException("Data was not compressed in DummyApp.");
         }
 
-        simdb::SqlBlob blob;
-        blob.data_ptr = entry.data_ptr;
-        blob.num_bytes = entry.num_bytes;
-
         // Sanity check that the DatabaseEntry has our DatabaseManager.
-        if (entry.db_mgr != db_mgr_)
+        if (entry.getDatabaseManager() != db_mgr_)
         {
             throw simdb::DBException("DatabaseEntry's db_mgr does not match DummyApp's db_mgr.");
         }
@@ -158,7 +149,7 @@ private:
         db_mgr_->INSERT(
             SQL_TABLE("BlobData"),
             SQL_COLUMNS("Tick", "Data"),
-            SQL_VALUES(entry.tick, blob));
+            SQL_VALUES(entry.getTick(), entry.getBlob()));
     }
 
     void validateMetadata_()
@@ -193,6 +184,7 @@ private:
     std::string sim_end_time_;
     simdb::AppPipeline pipeline_;
     size_t num_blobs_written_ = 0;
+    bool compression_enabled_;
 };
 
 REGISTER_SIMDB_APPLICATION(DummyApp);

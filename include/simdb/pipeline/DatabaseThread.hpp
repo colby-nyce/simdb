@@ -4,45 +4,11 @@
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Thread.hpp"
 #include "simdb/utils/Compress.hpp"
+#include "simdb/pipeline/DatabaseEntry.hpp"
 #include <any>
 
 namespace simdb
 {
-
-struct DatabaseEntry;
-
-using EndOfPipelineCallback = std::function<void(DatabaseEntry&&)>;
-
-#define END_OF_PIPELINE_CALLBACK(Class, Method) \
-    std::bind(&Class::Method, dynamic_cast<Class*>(__this__), std::placeholders::_1)
-
-
-struct DatabaseEntry
-{
-    uint64_t tick = 0;
-    const void* data_ptr = nullptr;
-    size_t num_bytes = 0;
-    bool compressed = false;
-    bool requires_compression = false;
-    DatabaseManager* db_mgr = nullptr;
-
-    // This can hold any type of contiguous data, such as
-    // std::vector<char> or std::array<T, N>.
-    std::any container;
-
-    // By default, the DatabaseThread will send the data entry
-    // to the user-provided callback to handle the data. Some
-    // users may want to selectively override this behavior
-    // and reroute the data to a different callback. If provided,
-    // this callback will be called with the DatabaseManager
-    // that was originally set in the DatabaseEntry.
-    std::function<void(DatabaseManager* db_mgr)> rerouted_callback = nullptr;
-
-    // Allow applications to set the end-of-pipeline callback.
-    EndOfPipelineCallback end_of_pipeline_callback = nullptr;
-};
-
-class DatabaseManager;
 
 /// Use this class to send data to the database in a separate thread.
 class DatabaseThread : public Thread
@@ -80,8 +46,7 @@ public:
         };
 
         DatabaseEntry entry;
-        entry.db_mgr = nullptr;
-        entry.rerouted_callback = f;
+        entry.redirect(f);
         process(std::move(entry));
     }
 
@@ -118,26 +83,22 @@ private:
     {
         auto process_entry = [&](DatabaseEntry& entry)
         {
-            if (!entry.compressed && entry.requires_compression)
-            {
-                compress_(entry);
-            }
+            entry.compress();
 
-            if (entry.rerouted_callback)
+            if (auto cb = entry.getReroutedCallback())
             {
-                entry.rerouted_callback(entry.db_mgr);
+                cb(entry.getDatabaseManager());
             }
-            else if (entry.end_of_pipeline_callback)
+            else if (auto cb = entry.getEndOfPipelineCallback())
             {
-                auto callback = entry.end_of_pipeline_callback;
-                callback(std::move(entry));
+                cb(std::move(entry));
             }
         };
 
         DatabaseEntry entry;
         while (queue_.try_pop(entry))
         {
-            auto db_mgr = entry.db_mgr;
+            auto db_mgr = entry.getDatabaseManager();
             if (db_mgr && std::find(db_managers.begin(), db_managers.end(), db_mgr) == db_managers.end())
             {
                 db_mgr->safeTransaction([&]()
@@ -154,29 +115,8 @@ private:
         }
     }
 
-    void compress_(DatabaseEntry& entry)
-    {
-        if (entry.compressed)
-        {
-            entry.requires_compression = false;
-            return;
-        }
-
-        if (entry.data_ptr == nullptr || entry.num_bytes == 0)
-        {
-            throw DBException("Cannot compress empty data.");
-        }
-
-        compressDataVec(entry.data_ptr, entry.num_bytes, compressed_data_);
-        entry.data_ptr = compressed_data_.data();
-        entry.num_bytes = compressed_data_.size();
-        entry.container = std::move(compressed_data_);
-        entry.compressed = true;
-    }
-
     ConcurrentQueue<DatabaseEntry> queue_;
     std::vector<char> compressed_data_;
-    //EndOfPipelineCallback end_of_pipeline_callback_;
 };
 
 } // namespace simdb

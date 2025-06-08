@@ -53,24 +53,9 @@ private:
         DatabaseEntry entry;
         while (queue_.try_pop(entry))
         {
-            compress_(entry);
+            entry.compress();
             db_thread_.process(std::move(entry));
         }
-    }
-
-    /// Compress the entry if we are able.
-    void compress_(DatabaseEntry& entry)
-    {
-        if (entry.compressed)
-        {
-            return;
-        }
-
-        compressDataVec(entry.data_ptr, entry.num_bytes, compressed_bytes_, compression_level_);
-        entry.container = compressed_bytes_;
-        entry.data_ptr = compressed_bytes_.data();
-        entry.num_bytes = compressed_bytes_.size();
-        entry.compressed = true;
     }
 
     ConcurrentQueue<DatabaseEntry>& queue_;

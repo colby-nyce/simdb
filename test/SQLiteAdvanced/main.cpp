@@ -82,14 +82,10 @@ void TestDatabasePipeline(size_t compression_threads)
     // End-of-pipeline callback to write the data to the database.
     auto end_of_pipeline_callback = [](simdb::DatabaseEntry&& entry)
     {
-        simdb::SqlBlob blob;
-        blob.data_ptr = entry.data_ptr;
-        blob.num_bytes = entry.num_bytes;
-
-        entry.db_mgr->INSERT(
+        entry.getDatabaseManager()->INSERT(
             SQL_TABLE("DataBlobs"),
             SQL_COLUMNS("Tick", "DataBlob", "IsCompressed"),
-            SQL_VALUES(entry.tick, blob, entry.compressed ? 1 : 0));
+            SQL_VALUES(entry.getTick(), entry.getBlob(), entry.compressed() ? 1 : 0));
     };
 
     // Create a AsyncPipeline to build the pipeline.
@@ -102,13 +98,8 @@ void TestDatabasePipeline(size_t compression_threads)
         alphabet.push_back(static_cast<char>(letter));
     }
 
-    simdb::DatabaseEntry entry;
-    entry.db_mgr = &db_mgr;
-    entry.tick = 12345;
-    entry.data_ptr = alphabet.data();
-    entry.num_bytes = alphabet.size();
-    entry.container = alphabet;
-    entry.end_of_pipeline_callback = end_of_pipeline_callback;
+    simdb::DatabaseEntry entry(12345, alphabet, false, true, &db_mgr);
+    entry.redirect(end_of_pipeline_callback);
     sink.process(std::move(entry));
 
     // Let the pipeline finish processing.
@@ -156,15 +147,10 @@ void TestTwoDatabases()
 
     auto end_of_pipeline_callback = [](simdb::DatabaseEntry&& entry)
     {
-        simdb::SqlBlob blob;
-        blob.data_ptr = entry.data_ptr;
-        blob.num_bytes = entry.num_bytes;
-
-        // Write to the first database.
-        entry.db_mgr->INSERT(
+        entry.getDatabaseManager()->INSERT(
             SQL_TABLE("TestBlobs"),
             SQL_COLUMNS("Tick", "DataBlob"),
-            SQL_VALUES(entry.tick, blob));
+            SQL_VALUES(entry.getTick(), entry.getBlob()));
     };
 
     simdb::DatabaseThread db_thread;
@@ -174,21 +160,11 @@ void TestTwoDatabases()
         const std::vector<double> data1 = { 1.0*tick, 1.0*tick, 1.0*tick };
         const std::vector<double> data2 = { 2.0*tick, 2.0*tick, 2.0*tick };
 
-        simdb::DatabaseEntry entry1;
-        entry1.db_mgr = &db_mgr1;
-        entry1.tick = tick;
-        entry1.data_ptr = data1.data();
-        entry1.num_bytes = data1.size() * sizeof(double);
-        entry1.container = data1;
-        entry1.end_of_pipeline_callback = end_of_pipeline_callback;
+        simdb::DatabaseEntry entry1(tick, data1, false, true, &db_mgr1);
+        entry1.redirect(end_of_pipeline_callback);
 
-        simdb::DatabaseEntry entry2;
-        entry2.db_mgr = &db_mgr2;
-        entry2.tick = tick;
-        entry2.data_ptr = data2.data();
-        entry2.num_bytes = data2.size() * sizeof(double);
-        entry2.container = data2;
-        entry2.end_of_pipeline_callback = end_of_pipeline_callback;
+        simdb::DatabaseEntry entry2(tick, data2, false, true, &db_mgr2);
+        entry2.redirect(end_of_pipeline_callback);
 
         // Send the entries to the database thread.
         db_thread.process(std::move(entry1));

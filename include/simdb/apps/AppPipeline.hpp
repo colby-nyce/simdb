@@ -1,7 +1,6 @@
 #pragma once
 
 #include "simdb/pipeline/AsyncPipeline.hpp"
-#include "simdb/utils/Compress.hpp"
 
 namespace simdb
 {
@@ -39,23 +38,23 @@ public:
         switch (mode_)
         {
             case AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION:
-                entry.requires_compression = false;
+                entry.unrequireCompression();
                 break;
 
             case AppPipelineMode::DB_THREAD_ONLY_WITH_COMPRESSION:
-                entry.requires_compression = !entry.compressed;
+                entry.requireCompression(!entry.compressed());
                 break;
 
             case AppPipelineMode::COMPRESS_MAIN_THREAD_THEN_WRITE_DB_THREAD:
-                compress_(entry);
+                entry.compress();
                 break;
 
             case AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD:
-                entry.requires_compression = !entry.compressed;
+                entry.requireCompression(!entry.compressed());
                 break;
         }
 
-        entry.end_of_pipeline_callback = end_of_pipeline_callback_;
+        entry.redirect(end_of_pipeline_callback_);
         async_pipeline_.process(std::move(entry));
     }
 
@@ -65,27 +64,6 @@ public:
     }
 
 private:
-    void compress_(DatabaseEntry& entry)
-    {
-        if (entry.compressed)
-        {
-            entry.requires_compression = false;
-            return;
-        }
-
-        if (entry.data_ptr == nullptr || entry.num_bytes == 0)
-        {
-            throw DBException("Cannot compress empty data.");
-        }
-
-        compressDataVec(entry.data_ptr, entry.num_bytes, compressed_data_);
-        entry.data_ptr = compressed_data_.data();
-        entry.num_bytes = compressed_data_.size();
-        entry.container = std::move(compressed_data_);
-        entry.compressed = true;
-        entry.requires_compression = false;
-    }
-
     AsyncPipeline& async_pipeline_;
     AppPipelineMode mode_;
     EndOfPipelineCallback end_of_pipeline_callback_;

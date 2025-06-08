@@ -46,6 +46,7 @@ class StatsCollector : public simdb::UnifiedSerializer
 public:
     static constexpr auto NAME = "StatsCollector";
 
+    // App constructors must have this signature.
     StatsCollector(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline,
                    simdb::AppPipelineMode pipeline_mode)
         : simdb::UnifiedSerializer(db_mgr, async_pipeline, pipeline_mode)
