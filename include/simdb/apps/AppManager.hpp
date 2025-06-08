@@ -31,6 +31,11 @@ public:
     template <typename AppT>
     void registerApp()
     {
+        auto it = app_factories_.find(AppT::NAME);
+        if (it != app_factories_.end())
+        {
+            throw DBException("App already registered: ") << AppT::NAME;
+        }
         app_factories_[AppT::NAME] = std::make_unique<AppFactory<AppT>>();
     }
 
@@ -202,28 +207,14 @@ public:
     }
 
     /// Call this after command line args and config files are parsed.
-    void preInit(DatabaseManager* db_mgr, int argc, char** argv)
+    void postInit(DatabaseManager* db_mgr, int argc, char** argv)
     {
         db_mgr->safeTransaction(
             [&]()
             {
                 for (const auto& [name, app] : apps_)
                 {
-                    app->preInit(argc, argv);
-                }
-            });
-    }
-
-    /// Call this before the simulation loop starts, but after
-    /// the simulator is fully initialized.
-    void preSim(DatabaseManager* db_mgr)
-    {
-        db_mgr->safeTransaction(
-            [&]()
-            {
-                for (const auto& [name, app] : apps_)
-                {
-                    app->preSim();
+                    app->postInit(argc, argv);
                 }
             });
     }

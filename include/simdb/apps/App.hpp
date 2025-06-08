@@ -23,8 +23,7 @@
 /// are initialized and run in a consistent manner.
 ///
 ///   - appendSchema:  first hook after command line args / config files are parsed
-///   - preInit:       called before the simulation starts, after command line parsing
-///   - preSim:        called before the simulation loop starts
+///   - postInit:      called before the simulation starts, after command line parsing
 ///   - postSim:       called after the simulation loop ends
 ///   - teardown:      called after the simulation ends, for resource cleanup tasks
 ///
@@ -46,8 +45,7 @@ class App
 public:
     virtual ~App() = default;
     virtual void appendSchema() {}
-    virtual void preInit(int argc, char** argv) { (void)argc; (void)argv; }
-    virtual void preSim() {}
+    virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual void postSim() {}
     virtual void teardown() {}
 

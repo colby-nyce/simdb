@@ -66,7 +66,7 @@ public:
         db_mgr_->appendSchema(schema);
     }
 
-    void preInit(int argc, char** argv) override
+    void postInit(int argc, char** argv) override
     {
         std::ostringstream oss;
         for (int i = 0; i < argc; ++i)
@@ -79,10 +79,6 @@ public:
         }
 
         sim_cmdline_ = oss.str();
-    }
-
-    void preSim() override
-    {
         sim_start_time_ = getFormattedCurrentTime_();
     }
 
@@ -205,8 +201,7 @@ int main(int argc, char** argv)
     app_mgr.finalizeAppPipeline();
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);
-    app_mgr.preInit(&db_mgr, argc, argv);
-    app_mgr.preSim(&db_mgr);
+    app_mgr.postInit(&db_mgr, argc, argv);
 
     // Simulate...
     auto dummy_app = app_mgr.getApp<DummyApp>(&db_mgr);

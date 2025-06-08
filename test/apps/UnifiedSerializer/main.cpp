@@ -59,7 +59,7 @@ public:
     {
         if (finalized_)
         {
-            throw simdb::DBException("StatsCollector: Cannot append stats after preSim() has been called.");
+            throw simdb::DBException("StatsCollector: Cannot append stats after postSim() has been called.");
         }
         stat_names_.push_back(name);
     }
@@ -94,7 +94,7 @@ private:
         stats_tbl.createIndexOn("AppID");
     }
 
-    void preSim_(simdb::DatabaseManager* db_mgr) override final
+    void postInit_(simdb::DatabaseManager* db_mgr, int argc, char** argv) override final
     {
         for (const auto& name : stat_names_)
         {
@@ -160,14 +160,14 @@ void TestOneApp(int argc, char** argv)
     app_mgr.finalizeAppPipeline();
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);
-    app_mgr.preInit(&db_mgr, argc, argv);
 
     auto stats_collector = app_mgr.getApp<StatsCollector>(&db_mgr);
     stats_collector->appendStat("Foo");
     stats_collector->appendStat("Bar");
     stats_collector->appendStat("Fiz");
     stats_collector->appendStat("Buz");
-    app_mgr.preSim(&db_mgr);
+
+    app_mgr.postInit(&db_mgr, argc, argv);
 
     // Cannot add more stats at this point.
     EXPECT_THROW(stats_collector->appendStat("Nope"));
@@ -216,9 +216,6 @@ void TestTwoApps(int argc, char** argv)
     app_mgr.createSchemas(&db_mgr1);
     app_mgr.createSchemas(&db_mgr2);
 
-    app_mgr.preInit(&db_mgr1, argc, argv);
-    app_mgr.preInit(&db_mgr2, argc, argv);
-
     auto stats_collector1 = app_mgr.getApp<StatsCollector>(&db_mgr1);
     stats_collector1->appendStat("Foo");
     stats_collector1->appendStat("Bar");
@@ -227,8 +224,8 @@ void TestTwoApps(int argc, char** argv)
     stats_collector2->appendStat("Fiz");
     stats_collector2->appendStat("Buz");
 
-    app_mgr.preSim(&db_mgr1);
-    app_mgr.preSim(&db_mgr2);
+    app_mgr.postInit(&db_mgr1, argc, argv);
+    app_mgr.postInit(&db_mgr2, argc, argv);
 
     // Cannot add more stats at this point.
     EXPECT_THROW(stats_collector1->appendStat("Nope"));

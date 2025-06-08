@@ -60,19 +60,14 @@ public:
         db_mgr_->appendSchema(schema);
     }
 
-    void preInit(int argc, char** argv) override final
-    {
-        preInit_(db_mgr_, argc, argv);
-    }
-
-    void preSim() override final
+    void postInit(int argc, char** argv) override final
     {
         db_mgr_->INSERT(
             SQL_TABLE("UnifiedCollectorByteLayouts"),
             SQL_COLUMNS("AppID", "ByteLayoutYAML"),
             SQL_VALUES(getAppID_(), getByteLayoutYAML_()));
 
-        preSim_(db_mgr_);
+        postInit_(db_mgr_, argc, argv);
     }
 
     void postSim() override final
@@ -135,13 +130,11 @@ private:
 
     virtual void appendSchema_(DatabaseManager*, Schema&) {}
 
-    virtual void preInit_(DatabaseManager*, int argc, char** argv)
+    virtual void postInit_(DatabaseManager*, int argc, char** argv)
     {
         (void)argc;   // Unused parameter
         (void)argv;   // Unused parameter
     }
-
-    virtual void preSim_(DatabaseManager*) {}
 
     virtual void postSim_(DatabaseManager*) {}
 
