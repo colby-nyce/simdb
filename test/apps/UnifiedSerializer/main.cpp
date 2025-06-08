@@ -181,7 +181,7 @@ void TestOneApp(int argc, char** argv)
 
     // Finish...
     app_mgr.postSim(&db_mgr);
-    app_mgr.teardown(&db_mgr);
+    app_mgr.teardown();
 
     // Validate...
     stats_collector->validate();
@@ -244,9 +244,7 @@ void TestTwoApps(int argc, char** argv)
     // Finish...
     app_mgr.postSim(&db_mgr1);
     app_mgr.postSim(&db_mgr2);
-
-    app_mgr.teardown(&db_mgr1);
-    app_mgr.teardown(&db_mgr2);
+    app_mgr.teardown();
 
     // Validate...
     stats_collector1->validate();

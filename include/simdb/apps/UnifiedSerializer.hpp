@@ -113,6 +113,11 @@ public:
         pipeline_.process(std::move(entry));
     }
 
+    void callLater(std::function<void()> callback)
+    {
+        pipeline_.callLater(callback);
+    }
+
 private:
     void endOfPipeline_(DatabaseEntry&& entry)
     {

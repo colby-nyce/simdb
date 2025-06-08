@@ -36,6 +36,11 @@ public:
         startThreads_();
     }
 
+    void callLater(std::function<void()> callback)
+    {
+        db_thread_.callLater(callback);
+    }
+
     /// Flush the pipeline, allowing all threads to finish their work. This
     /// occurs periodically on the background thread even if you do not call
     /// this method explicitly.

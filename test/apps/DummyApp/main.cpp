@@ -213,7 +213,7 @@ int main(int argc, char** argv)
 
     // Finish...
     app_mgr.postSim(&db_mgr);
-    app_mgr.teardown(&db_mgr);
+    app_mgr.teardown();
 
     // Validate...
     dummy_app->validate();

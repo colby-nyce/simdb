@@ -235,7 +235,7 @@ public:
     /// Call this after the simulation ends for resource cleanup tasks
     /// such as closing files, releasing memory, flushing/shutting down
     /// background threads, etc.
-    void teardown(DatabaseManager* db_mgr)
+    void teardown()
     {
         for (const auto& [name, app] : apps_)
         {

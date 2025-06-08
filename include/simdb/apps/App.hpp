@@ -90,7 +90,7 @@ public:
     }
 
 private:
-    AppPipelineMode mode_ = AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION;
+    AppPipelineMode mode_ = DEFAULT_APP_PIPELINE_MODE;
     bool created_ = false;
 };
 
