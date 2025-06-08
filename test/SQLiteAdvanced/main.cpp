@@ -227,10 +227,10 @@ void TestTwoDatabases()
 
 int main()
 {
-    //TestTinyStrings();       // Test string minification.
-    //TestDatabasePipeline(0); // Test pipeline (no compression, just async DB writes).
-    //TestDatabasePipeline(1); // Test pipeline (one compression thread and async DB writes).
-    TestTwoDatabases();      // Test two databases using the same DatabaseThread.
+    TestTinyStrings();           // Test string minification.
+    TestDatabasePipeline(0);     // Test pipeline (no compression, just async DB writes).
+    TestDatabasePipeline(1);     // Test pipeline (one compression thread and async DB writes).
+    TestTwoDatabases();          // Test two databases using the same DatabaseThread.
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;
