@@ -75,12 +75,6 @@ public:
         postSim_(db_mgr_);
     }
 
-    void teardown() override final
-    {
-        pipeline_.teardown();
-        postTeardown_(db_mgr_);
-    }
-
     template <typename T>
     void process(uint64_t tick, const std::vector<T>& data, bool already_compressed = false)
     {
@@ -113,9 +107,25 @@ public:
         pipeline_.process(std::move(entry));
     }
 
+    void process(DatabaseEntry&& entry)
+    {
+        if (entry.getDatabaseManager() != db_mgr_)
+        {
+            throw DBException("DatabaseEntry's db_mgr does not match UnifiedSerializer's db_mgr.");
+        }
+
+        pipeline_.process(std::move(entry));
+    }
+
     void callLater(std::function<void()> callback)
     {
         pipeline_.callLater(callback);
+    }
+
+    void teardown() override final
+    {
+        pipeline_.teardown();
+        postTeardown_(db_mgr_);
     }
 
 private:
@@ -127,10 +137,12 @@ private:
             throw DBException("DatabaseEntry's db_mgr does not match UnifiedSerializer's db_mgr.");
         }
 
-        db_mgr_->INSERT(
+        auto record = db_mgr_->INSERT(
             SQL_TABLE("UnifiedCollectorBlobs"),
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
             SQL_VALUES(getAppID_(), entry.getTick(), entry.getBlob(), entry.compressed()));
+
+        entry.onCommit(record->getId());
     }
 
     virtual void appendSchema_(DatabaseManager*, Schema&) {}

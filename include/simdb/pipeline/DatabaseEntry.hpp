@@ -111,6 +111,10 @@ public:
         end_of_pipeline_callback_ = nullptr;
     }
 
+    void setOnCommitCallback(std::function<void(const int datablob_db_id, const uint64_t tick)> callback) {
+        on_commit_callback_ = callback;
+    }
+
     EndOfPipelineCallback getEndOfPipelineCallback() const
     {
         return end_of_pipeline_callback_;
@@ -145,6 +149,14 @@ public:
 
         compressed_ = true;
         requires_compression_ = false;
+    }
+
+    void onCommit(const int datablob_db_id)
+    {
+        if (on_commit_callback_)
+        {
+            on_commit_callback_(datablob_db_id, tick_);
+        }
     }
 
 private:
@@ -209,6 +221,9 @@ private:
 
     // Allow applications to set the end-of-pipeline callback.
     EndOfPipelineCallback end_of_pipeline_callback_ = nullptr;
+
+    // Let users react to the commit of this entry.
+    std::function<void(const int datablob_db_id, const uint64_t tick)> on_commit_callback_;
 };
 
 } // namespace simdb
