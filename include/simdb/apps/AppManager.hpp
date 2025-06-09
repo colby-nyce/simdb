@@ -77,41 +77,12 @@ public:
         return apps_.find(key) != apps_.end();
     }
 
-    /// Optionally reconfigure the pipeline mode for an app.
-    void configureAppPipeline(const std::string& app_name, const DatabaseManager* db_mgr, AppPipelineMode mode)
-    {
-        configureAppPipeline(app_name, db_mgr->getDatabaseFilePath(), mode);
-    }
-
-    /// Optionally reconfigure the pipeline mode for an app.
-    void configureAppPipeline(const std::string& app_name, const std::string& db_file, AppPipelineMode mode)
-    {
-        auto it = app_factories_.find(app_name);
-        if (it == app_factories_.end())
-        {
-            throw DBException("App not registered: ") << app_name;
-        }
-
-        it->second->setPipelineMode(mode);
-    }
-
     /// Finalize the app pipeline. Cannot be called twice. Must be called before createEnabledApps().
-    void finalizeAppPipeline()
+    void finalizeAppPipeline(AppPipelineMode mode = DEFAULT_APP_PIPELINE_MODE)
     {
-        async_pipeline_.reset();
-
-        bool async_compression_enabled = false;
-        for (const auto& [name, factory] : app_factories_)
-        {
-            auto mode = factory->getPipelineMode();
-            if (mode == AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD)
-            {
-                async_compression_enabled = true;
-                break;
-            }
-        }
-
-        async_pipeline_ = std::make_unique<AsyncPipeline>(async_compression_enabled);
+        auto num_stages = getNumStages(mode);
+        auto ensure_compressed = ensureCompressed(mode);
+        async_pipeline_ = std::make_unique<AsyncPipeline>(num_stages, ensure_compressed);
     }
 
     /// Call after command line args and config files are parsed.

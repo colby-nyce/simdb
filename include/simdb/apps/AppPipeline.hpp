@@ -8,53 +8,69 @@ namespace simdb
 /// App pipelines are preconfigured before instantiating your app.
 enum class AppPipelineMode
 {
+    // Synchronous mode with compression.
+    ZERO_STAGES_COMPRESSED,
+
+    // Synchronous mode without compression.
+    ZERO_STAGES_UNCOMPRESSED,
+
     // Use a single background thread for compression and DB writes.
-    DB_THREAD_ONLY_WITH_COMPRESSION,
+    ONE_STAGE_COMPRESED,
 
     // Use a single background thread for DB writes, no compression.
-    DB_THREAD_ONLY_WITHOUT_COMPRESSION,
+    ONE_STAGE_UNCOMPRESSED,
 
-    // Use a single background thread for DB writes, but compress on the main thread.
-    COMPRESS_MAIN_THREAD_THEN_WRITE_DB_THREAD,
-
-    // Use two background threads: one for compression, and another for DB writes.
-    COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD
+    // Use a thread for compression and a thread for DB writes.
+    TWO_STAGES_COMPRESSED
 };
 
-inline constexpr auto DEFAULT_APP_PIPELINE_MODE = AppPipelineMode::DB_THREAD_ONLY_WITH_COMPRESSION;
+/// Optimize performance by using two background threads with compression enabled by default.
+inline constexpr auto DEFAULT_APP_PIPELINE_MODE = AppPipelineMode::TWO_STAGES_COMPRESSED;
+
+inline size_t getNumStages(AppPipelineMode mode)
+{
+    switch (mode)
+    {
+        case AppPipelineMode::ZERO_STAGES_COMPRESSED:
+        case AppPipelineMode::ZERO_STAGES_UNCOMPRESSED:
+            return 0;
+        case AppPipelineMode::ONE_STAGE_COMPRESED:
+        case AppPipelineMode::ONE_STAGE_UNCOMPRESSED:
+            return 1;
+        case AppPipelineMode::TWO_STAGES_COMPRESSED:
+            return 2;
+        default:
+            throw DBException("Invalid AppPipelineMode: " + std::to_string(static_cast<int>(mode)));
+    }
+}
+
+inline bool ensureCompressed(AppPipelineMode mode)
+{
+    switch (mode)
+    {
+        case AppPipelineMode::ZERO_STAGES_COMPRESSED:
+        case AppPipelineMode::ONE_STAGE_COMPRESED:
+        case AppPipelineMode::TWO_STAGES_COMPRESSED:
+            return true;
+        case AppPipelineMode::ZERO_STAGES_UNCOMPRESSED:
+        case AppPipelineMode::ONE_STAGE_UNCOMPRESSED:
+            return false;
+        default:
+            throw DBException("Invalid AppPipelineMode: " + std::to_string(static_cast<int>(mode)));
+    }
+}
 
 class AppPipeline
 {
 public:
-    AppPipeline(AsyncPipeline& async_pipeline, AppPipelineMode mode,
-                EndOfPipelineCallback end_of_pipeline_callback)
+    AppPipeline(AsyncPipeline& async_pipeline, EndOfPipelineCallback end_of_pipeline_callback)
         : async_pipeline_(async_pipeline)
-        , mode_(mode)
         , end_of_pipeline_callback_(end_of_pipeline_callback)
     {
     }
 
     void process(DatabaseEntry&& entry)
     {
-        switch (mode_)
-        {
-            case AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION:
-                entry.unrequireCompression();
-                break;
-
-            case AppPipelineMode::DB_THREAD_ONLY_WITH_COMPRESSION:
-                entry.requireCompression(!entry.compressed());
-                break;
-
-            case AppPipelineMode::COMPRESS_MAIN_THREAD_THEN_WRITE_DB_THREAD:
-                entry.compress();
-                break;
-
-            case AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD:
-                entry.requireCompression(!entry.compressed());
-                break;
-        }
-
         entry.redirect(end_of_pipeline_callback_);
         async_pipeline_.process(std::move(entry));
     }
@@ -71,7 +87,6 @@ public:
 
 private:
     AsyncPipeline& async_pipeline_;
-    AppPipelineMode mode_;
     EndOfPipelineCallback end_of_pipeline_callback_;
     std::vector<char> compressed_data_;
 };

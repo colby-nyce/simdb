@@ -19,11 +19,37 @@ public:
     {
     }
 
+    /// Do not open threads and just process data synchronously.
+    void useSynchronousMode()
+    {
+        teardown();
+        synchronous_ = true;
+    }
+
+    /// Perform compression ourselves if the data is not already compressed.
+    void ensureCompressed(bool ensure)
+    {
+        ensure_compressed_ = ensure;
+    }
+
+    /// Will the packets be guaranteed to be compressed?
+    bool isEnsuredCompressed() const
+    {
+        return ensure_compressed_;
+    }
+
     /// Send a new packet down the pipeline.
     void process(DatabaseEntry&& entry)
     {
         queue_.emplace(std::move(entry));
-        startThreadLoop();
+        if (synchronous_)
+        {
+            flush_();
+        }
+        else
+        {
+            startThreadLoop();
+        }
     }
 
     /// Put any work that needs to be done later in the pipeline.
@@ -60,15 +86,28 @@ public:
     /// Wait for the pipeline to be flushed.
     void waitUntilFlushed()
     {
-        while (!queue_.empty())
+        if (synchronous_)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            flush_();
+        }
+        else
+        {
+            while (!queue_.empty())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
     }
 
 private:
     /// Called periodically on the background thread to flush all pending data.
     void onInterval_() override
+    {
+        flush_();
+    }
+
+    /// Flush the queue and process all entries.
+    void flush_()
     {
         // Since there is only one DatabaseThread which can serve more than one
         // DatabaseManager, we need to ensure that we call safeTransaction() on
@@ -83,7 +122,10 @@ private:
     {
         auto process_entry = [&](DatabaseEntry& entry)
         {
-            entry.compress();
+            if (ensure_compressed_ && !entry.compressed())
+            {
+                entry.compress();
+            }
 
             if (auto cb = entry.getReroutedCallback())
             {
@@ -117,6 +159,8 @@ private:
 
     ConcurrentQueue<DatabaseEntry> queue_;
     std::vector<char> compressed_data_;
+    bool synchronous_ = false;
+    bool ensure_compressed_ = true;
 };
 
 } // namespace simdb

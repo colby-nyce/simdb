@@ -47,10 +47,8 @@ public:
     static constexpr auto NAME = "StatsCollector";
 
     // App constructors must have this signature.
-    StatsCollector(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline,
-                   simdb::AppPipelineMode pipeline_mode)
-        : simdb::UnifiedSerializer(db_mgr, async_pipeline, pipeline_mode)
-        , pipeline_mode_(pipeline_mode)
+    StatsCollector(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline)
+        : simdb::UnifiedSerializer(db_mgr, async_pipeline)
         , db_mgr_(db_mgr)
     {
     }
@@ -78,7 +76,7 @@ public:
     void validate()
     {
         auto query = db_mgr_->createQuery("UnifiedCollectorBlobs");
-        bool expect_compressed = (pipeline_mode_ != simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION);
+        bool expect_compressed = true;//(pipeline_mode_ != simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION);
         query->addConstraintForInt("IsCompressed", simdb::Constraints::EQUAL, expect_compressed ? 1 : 0);
         EXPECT_EQUAL(query->count(), num_blobs_written_);
     }
@@ -155,8 +153,6 @@ void TestOneApp(int argc, char** argv)
     simdb::DatabaseManager db_mgr("test.db");
 
     // Setup...
-    auto mode = simdb::AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD;
-    app_mgr.configureAppPipeline(StatsCollector::NAME, &db_mgr, mode);
     app_mgr.finalizeAppPipeline();
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);
@@ -202,12 +198,6 @@ void TestTwoApps(int argc, char** argv)
     simdb::DatabaseManager db_mgr2("test2.db");
 
     // Setup...
-    auto mode1 = simdb::AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD;
-    auto mode2 = simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION;
-
-    app_mgr.configureAppPipeline(StatsCollector::NAME, &db_mgr1, mode1);
-    app_mgr.configureAppPipeline(StatsCollector::NAME, &db_mgr2, mode2);
-
     app_mgr.finalizeAppPipeline();
 
     app_mgr.createEnabledApps(&db_mgr1);

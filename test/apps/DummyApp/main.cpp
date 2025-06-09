@@ -40,12 +40,11 @@ public:
     static constexpr auto NAME = "DummyApp";
 
     // App constructors must have this signature.
-    DummyApp(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline,
-             simdb::AppPipelineMode pipeline_mode)
+    DummyApp(simdb::DatabaseManager* db_mgr, simdb::AsyncPipeline& async_pipeline)
         : db_mgr_(db_mgr)
-        , pipeline_(async_pipeline, pipeline_mode,
+        , pipeline_(async_pipeline,
                     END_OF_PIPELINE_CALLBACK(DummyApp, endOfPipeline_))
-        , compression_enabled_(pipeline_mode != simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION)
+        , compression_enabled_(async_pipeline.isEnsuredCompressed())
     {
     }
 
@@ -99,7 +98,7 @@ public:
 
     void process(uint64_t tick, std::vector<char>&& data_bytes)
     {
-        simdb::DatabaseEntry entry(tick, std::move(data_bytes), false, compression_enabled_, db_mgr_);
+        simdb::DatabaseEntry entry(tick, std::move(data_bytes), db_mgr_);
         pipeline_.process(std::move(entry));
         ++num_blobs_written_;
     }
@@ -196,8 +195,6 @@ int main(int argc, char** argv)
     simdb::DatabaseManager db_mgr("test.db");
 
     // Setup...
-    auto mode = simdb::AppPipelineMode::COMPRESS_SEPARATE_THREAD_THEN_WRITE_DB_THREAD;
-    app_mgr.configureAppPipeline(DummyApp::NAME, &db_mgr, mode);
     app_mgr.finalizeAppPipeline();
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);

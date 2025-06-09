@@ -62,7 +62,7 @@ void TestTinyStrings()
 /// TestDatabasePipeline demonstrates how to build a database pipeline for async
 /// processing of data, with optional compression performed across a configurable
 /// number of threads.
-void TestDatabasePipeline(size_t compression_threads)
+void TestDatabasePipeline(size_t num_stages, bool ensure_compressed)
 {
     DB_INIT;
 
@@ -89,7 +89,7 @@ void TestDatabasePipeline(size_t compression_threads)
     };
 
     // Create a AsyncPipeline to build the pipeline.
-    simdb::AsyncPipeline sink(compression_threads);
+    simdb::AsyncPipeline sink(num_stages, ensure_compressed);
 
     // Send a blob down the pipeline.
     std::vector<char> alphabet;
@@ -98,7 +98,7 @@ void TestDatabasePipeline(size_t compression_threads)
         alphabet.push_back(static_cast<char>(letter));
     }
 
-    simdb::DatabaseEntry entry(12345, alphabet, false, true, &db_mgr);
+    simdb::DatabaseEntry entry(12345, alphabet, &db_mgr);
     entry.redirect(end_of_pipeline_callback);
     sink.process(std::move(entry));
 
@@ -160,10 +160,10 @@ void TestTwoDatabases()
         const std::vector<double> data1 = { 1.0*tick, 1.0*tick, 1.0*tick };
         const std::vector<double> data2 = { 2.0*tick, 2.0*tick, 2.0*tick };
 
-        simdb::DatabaseEntry entry1(tick, data1, false, true, &db_mgr1);
+        simdb::DatabaseEntry entry1(tick, data1, &db_mgr1);
         entry1.redirect(end_of_pipeline_callback);
 
-        simdb::DatabaseEntry entry2(tick, data2, false, true, &db_mgr2);
+        simdb::DatabaseEntry entry2(tick, data2, &db_mgr2);
         entry2.redirect(end_of_pipeline_callback);
 
         // Send the entries to the database thread.
@@ -206,10 +206,13 @@ void TestTwoDatabases()
 
 int main()
 {
-    TestTinyStrings();           // Test string minification.
-    TestDatabasePipeline(0);     // Test pipeline (no compression, just async DB writes).
-    TestDatabasePipeline(1);     // Test pipeline (one compression thread and async DB writes).
-    TestTwoDatabases();          // Test two databases using the same DatabaseThread.
+    TestTinyStrings();                  // Test string minification.
+    TestDatabasePipeline(0, true);      // Test pipeline (synchronous mode with compression).
+    TestDatabasePipeline(0, false);     // Test pipeline (synchronous mode without compression).
+    TestDatabasePipeline(1, false);     // Test pipeline (no compression, just async DB writes).
+    TestDatabasePipeline(1, true);      // Test pipeline (compress and write on the DB thread).
+    TestDatabasePipeline(2, true);      // Test pipeline (one compression thread and async DB writes).
+    TestTwoDatabases();                 // Test two databases using the same DatabaseThread.
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

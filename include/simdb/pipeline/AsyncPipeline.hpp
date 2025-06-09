@@ -21,23 +21,63 @@ namespace simdb
 class AsyncPipeline
 {
 public:
-    AsyncPipeline(bool compression_enabled = false)
+    // Create a pipeline with 0, 1, or 2 stages:
+    //   0 stages: Synchronous mode
+    //   1 stage:  DB thread only
+    //   2 stages: DB thread + CompressionThread
+    //
+    // Examples:
+    //   - 0 stages compressed
+    //     --> compress main thread and process immediately
+    //   - 1 stage compressed
+    //     --> compress and write on DB thread
+    //   - 2 stages compressed
+    //     --> compress on CompressionThread and write on DB thread
+    AsyncPipeline(size_t num_stages = 1, bool ensure_compressed = true)
     {
-        if (compression_enabled)
+        if (num_stages == 2 && !ensure_compressed)
+        {
+            throw DBException("AsyncPipeline with 2 stages must ensure compression.");
+        }
+        else if (num_stages == 2)
         {
             compression_thread_ = std::make_unique<CompressionThread>(compression_queue_, db_thread_);
         }
+        else if (num_stages == 0)
+        {
+            db_thread_.useSynchronousMode();
+        }
+        else if (num_stages != 1)
+        {
+            throw DBException("Invalid number of stages in AsyncPipeline (max 2): " + std::to_string(num_stages));
+        }
+
+        db_thread_.ensureCompressed(ensure_compressed);
+    }
+
+    /// Check if packets are guaranteed to be compressed.
+    bool isEnsuredCompressed() const
+    {
+        return db_thread_.isEnsuredCompressed();
     }
 
     /// Send a new packet down the pipeline.
     void process(DatabaseEntry&& entry)
     {
-        compression_queue_.emplace(std::move(entry));
-        startThreads_();
+        if (compression_thread_)
+        {
+            compression_queue_.emplace(std::move(entry));
+            startThreads_();
+        }
+        else
+        {
+            db_thread_.process(std::move(entry));
+        }
     }
 
     void callLater(std::function<void()> callback)
     {
+        // TODO cnyce: Look into whether it should be queued in stage 1
         db_thread_.callLater(callback);
     }
 
@@ -52,15 +92,6 @@ public:
             while (!compression_queue_.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-        }
-        else
-        {
-            // Send uncompressed data directly to the database thread.
-            DatabaseEntry entry;
-            while (compression_queue_.try_pop(entry))
-            {
-                db_thread_.process(std::move(entry));
             }
         }
 
@@ -82,12 +113,9 @@ public:
 private:
     void startThreads_()
     {
-        if (!threads_running_)
+        if (!threads_running_ && compression_thread_)
         {
-            if (compression_thread_)
-            {
-                compression_thread_->startThreadLoop();
-            }
+            compression_thread_->startThreadLoop();
             threads_running_ = true;
         }
     }

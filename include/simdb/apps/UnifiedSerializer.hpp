@@ -30,10 +30,9 @@ public:
     // run directly. Instead, it is used as a base class for other applications that
     // want to use a unified std::vector<char> collector with a specific byte layout.
 
-    UnifiedSerializer(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline,
-                      AppPipelineMode pipeline_mode)
+    UnifiedSerializer(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline)
         : db_mgr_(db_mgr)
-        , pipeline_(async_pipeline, pipeline_mode,
+        , pipeline_(async_pipeline,
                     END_OF_PIPELINE_CALLBACK(UnifiedSerializer, endOfPipeline_))
     {
     }
@@ -76,34 +75,30 @@ public:
     }
 
     template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data, bool already_compressed = false)
+    void process(uint64_t tick, const std::vector<T>& data)
     {
-        auto must_compress = !already_compressed && compression_enabled_;
-        DatabaseEntry entry(tick, data, already_compressed, must_compress, db_mgr_);
+        DatabaseEntry entry(tick, data, db_mgr_);
         pipeline_.process(std::move(entry));
     }
 
     template <typename T>
-    void process(uint64_t tick, std::vector<T>&& data, bool already_compressed = false)
+    void process(uint64_t tick, std::vector<T>&& data)
     {
-        auto must_compress = !already_compressed && compression_enabled_;
-        DatabaseEntry entry(tick, std::move(data), already_compressed, must_compress, db_mgr_);
+        DatabaseEntry entry(tick, std::move(data), db_mgr_);
         pipeline_.process(std::move(entry));
     }
 
     template <typename T, size_t N>
-    void process(uint64_t tick, const std::array<T, N>& data, bool already_compressed = false)
+    void process(uint64_t tick, const std::array<T, N>& data)
     {
-        auto must_compress = !already_compressed && compression_enabled_;
-        DatabaseEntry entry(tick, data, already_compressed, must_compress, db_mgr_);
+        DatabaseEntry entry(tick, data, db_mgr_);
         pipeline_.process(std::move(entry));
     }
 
     template <typename T, size_t N>
-    void process(uint64_t tick, std::array<T, N>&& data, bool already_compressed = false)
+    void process(uint64_t tick, std::array<T, N>&& data)
     {
-        auto must_compress = !already_compressed && compression_enabled_;
-        DatabaseEntry entry(tick, std::move(data), already_compressed, must_compress, db_mgr_);
+        DatabaseEntry entry(tick, std::move(data), db_mgr_);
         pipeline_.process(std::move(entry));
     }
 

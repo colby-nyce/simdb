@@ -65,8 +65,6 @@ class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
-    virtual void setPipelineMode(AppPipelineMode mode) = 0;
-    virtual AppPipelineMode getPipelineMode() const = 0;
     virtual App* createApp(DatabaseManager*, AsyncPipeline&) = 0;
 };
 
@@ -74,24 +72,10 @@ template <typename AppT>
 class AppFactory : public AppFactoryBase
 {
 public:
-    void setPipelineMode(AppPipelineMode mode) override
-    {
-        mode_ = mode;
-    }
-
-    AppPipelineMode getPipelineMode() const override
-    {
-        return mode_;
-    }
-
     App* createApp(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline) override
     {
-        return new AppT(db_mgr, async_pipeline, mode_);
+        return new AppT(db_mgr, async_pipeline);
     }
-
-private:
-    AppPipelineMode mode_ = DEFAULT_APP_PIPELINE_MODE;
-    bool created_ = false;
 };
 
 } // namespace simdb

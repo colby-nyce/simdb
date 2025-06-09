@@ -24,39 +24,35 @@ class DatabaseEntry
 {
 public:
     template <typename T>
-    DatabaseEntry(uint64_t tick, std::vector<T>&& data,
-                  bool already_compressed, bool must_compress,
-                  DatabaseManager* db_mgr)
-        : DatabaseEntry(tick, already_compressed, must_compress, db_mgr)
+    DatabaseEntry(uint64_t tick, const std::vector<T>& data, DatabaseManager* db_mgr,
+                  bool already_compressed = false)
+        : DatabaseEntry(tick, db_mgr)
     {
-        accept_(std::move(data));
+        accept_(data);
     }
 
     template <typename T, size_t N>
-    DatabaseEntry(uint64_t tick, std::array<T,N>&& data,
-                  bool already_compressed, bool must_compress,
-                  DatabaseManager* db_mgr)
-        : DatabaseEntry(tick, already_compressed, must_compress, db_mgr)
+    DatabaseEntry(uint64_t tick, const std::array<T,N>& data, DatabaseManager* db_mgr,
+                  bool already_compressed = false)
+        : DatabaseEntry(tick, db_mgr)
     {
-        accept_(std::move(data));
+        accept_(data);
     }
 
     template <typename T>
-    DatabaseEntry(uint64_t tick, const std::vector<T>& data,
-                  bool already_compressed, bool must_compress,
-                  DatabaseManager* db_mgr)
-        : DatabaseEntry(tick, already_compressed, must_compress, db_mgr)
+    DatabaseEntry(uint64_t tick, std::vector<T>&& data, DatabaseManager* db_mgr,
+                  bool already_compressed = false)
+        : DatabaseEntry(tick, db_mgr)
     {
-        accept_(data);
+        accept_(std::move(data));
     }
 
     template <typename T, size_t N>
-    DatabaseEntry(uint64_t tick, const std::array<T,N>& data,
-                  bool already_compressed, bool must_compress,
-                  DatabaseManager* db_mgr)
-        : DatabaseEntry(tick, already_compressed, must_compress, db_mgr)
+    DatabaseEntry(uint64_t tick, std::array<T,N>&& data, DatabaseManager* db_mgr,
+                  bool already_compressed = false)
+        : DatabaseEntry(tick, db_mgr)
     {
-        accept_(data);
+        accept_(std::move(data));
     }
 
     DatabaseEntry() = default;
@@ -77,26 +73,6 @@ public:
         blob.data_ptr = data_ptr_;
         blob.num_bytes = num_bytes_;
         return blob;
-    }
-
-    bool compressed() const
-    {
-        return compressed_;
-    }
-
-    bool requiresCompression() const
-    {
-        return requires_compression_;
-    }
-
-    void requireCompression(bool require = true)
-    {
-        requires_compression_ = require;
-    }
-
-    void unrequireCompression()
-    {
-        requires_compression_ = false;
     }
 
     void redirect(EndOfPipelineCallback end_of_pipeline_callback)
@@ -125,22 +101,16 @@ public:
         return rerouted_callback_;
     }
 
+    bool compressed() const
+    {
+        return compressed_;
+    }
+
     void compress()
     {
-        if (compressed_)
-        {
-            requires_compression_ = false;
-            return;
-        }
-
-        if (!requires_compression_)
+        if (compressed_ || data_ptr_ == nullptr || num_bytes_ == 0)
         {
             return;
-        }
-
-        if (data_ptr_ == nullptr || num_bytes_ == 0)
-        {
-            throw DBException("Cannot compress empty data.");
         }
 
         std::vector<char> compressed_data;
@@ -148,7 +118,6 @@ public:
         accept_(std::move(compressed_data));
 
         compressed_ = true;
-        requires_compression_ = false;
     }
 
     void onCommit(const int datablob_db_id)
@@ -160,10 +129,9 @@ public:
     }
 
 private:
-    DatabaseEntry(uint64_t tick, bool already_compressed, bool must_compress, DatabaseManager* db_mgr)
+    DatabaseEntry(uint64_t tick, DatabaseManager* db_mgr, bool already_compressed = false)
         : tick_(tick)
         , compressed_(already_compressed)
-        , requires_compression_(must_compress && !already_compressed)
         , db_mgr_(db_mgr)
     {
     }
@@ -204,7 +172,6 @@ private:
     const void* data_ptr_ = nullptr;
     size_t num_bytes_ = 0;
     bool compressed_ = false;
-    bool requires_compression_ = false;
     DatabaseManager* db_mgr_ = nullptr;
 
     // This can hold any type of contiguous data, such as
