@@ -69,20 +69,25 @@ public:
     {
     }
 
+    const AsyncPipeline& getAsyncPipeline() const
+    {
+        return async_pipeline_;
+    }
+
     void process(DatabaseEntry&& entry)
     {
-        entry.redirect(end_of_pipeline_callback_);
+        entry.setEndOfPipelineCallback(end_of_pipeline_callback_);
         async_pipeline_.process(std::move(entry));
+    }
+
+    void enqueue(std::function<void()> callback, bool fifo = true)
+    {
+        async_pipeline_.enqueue(std::move(callback), fifo);
     }
 
     void teardown()
     {
         async_pipeline_.teardown();
-    }
-
-    void callLater(std::function<void()> callback)
-    {
-        async_pipeline_.callLater(callback);
     }
 
 private:

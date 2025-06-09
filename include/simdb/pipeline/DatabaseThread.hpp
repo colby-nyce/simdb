@@ -38,6 +38,12 @@ public:
         return ensure_compressed_;
     }
 
+    /// Check if we are in synchronous mode.
+    bool isSynchronous() const
+    {
+        return synchronous_;
+    }
+
     /// Send a new packet down the pipeline.
     void process(DatabaseEntry&& entry)
     {
@@ -52,28 +58,25 @@ public:
         }
     }
 
-    /// Put any work that needs to be done later in the pipeline.
-    /// This will still be processed on the background thread,
-    /// in the same order as the other entries in the queue.
-    ///
-    ///  Main thread:                                Background thread:
-    ///    process(...data...);                        // (1)
-    ///    process(...data...);                        // (2)
-    ///    callLater([]() { ...do something... });     // (3)
-    ///    process(...data...);                        // (4)
-    ///
-    /// This is done to ensure that everything is processed as FIFO to
-    /// help keep the asynchronous nature of the pipeline deterministic.
-    void callLater(std::function<void()> callback)
+    /// Enqueue a callback to be executed on the background thread.
+    void enqueue(std::function<void()> callback, bool fifo = true)
     {
-        auto f = [callback](DatabaseManager*)
+        if (fifo)
         {
-            callback();
-        };
-
-        DatabaseEntry entry;
-        entry.redirect(f);
-        process(std::move(entry));
+            // Pass a dummy DatabaseEntry down the pipeline with an intermediate
+            // callback which calls the user's callback.
+            DatabaseEntry entry;
+            entry.setEndOfPipelineCallback(
+                [callback](const DatabaseEntry&)
+                {
+                    callback();
+                });
+            process(std::move(entry));
+        }
+        else
+        {
+            priority_work_.emplace(std::move(callback));
+        }
     }
 
     /// Flush the pipeline and stop the thread.
@@ -127,14 +130,7 @@ private:
                 entry.compress();
             }
 
-            if (auto cb = entry.getReroutedCallback())
-            {
-                cb(entry.getDatabaseManager());
-            }
-            else if (auto cb = entry.getEndOfPipelineCallback())
-            {
-                cb(std::move(entry));
-            }
+            entry.retire();
         };
 
         DatabaseEntry entry;
@@ -155,9 +151,16 @@ private:
                 process_entry(entry);
             }
         }
+
+        std::function<void()> work;
+        while (priority_work_.try_pop(work))
+        {
+            work();
+        }
     }
 
     ConcurrentQueue<DatabaseEntry> queue_;
+    ConcurrentQueue<std::function<void()>> priority_work_;
     std::vector<char> compressed_data_;
     bool synchronous_ = false;
     bool ensure_compressed_ = true;

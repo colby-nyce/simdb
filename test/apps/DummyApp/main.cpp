@@ -98,7 +98,7 @@ public:
 
     void process(uint64_t tick, std::vector<char>&& data_bytes)
     {
-        simdb::DatabaseEntry entry(tick, std::move(data_bytes), db_mgr_);
+        simdb::DatabaseEntry entry(tick, std::move(data_bytes), db_mgr_, this);
         pipeline_.process(std::move(entry));
         ++num_blobs_written_;
     }
@@ -127,7 +127,7 @@ private:
         return oss.str();
     }
 
-    void endOfPipeline_(simdb::DatabaseEntry&& entry)
+    void endOfPipeline_(const simdb::DatabaseEntry& entry)
     {
         // We are using 1 compression thread, so make sure it was compressed.
         if (!entry.compressed())

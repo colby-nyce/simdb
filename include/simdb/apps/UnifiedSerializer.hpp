@@ -23,6 +23,8 @@
 
 namespace simdb {
 
+using OnDatabaseEntryCommitCallback = std::function<void(const DatabaseEntry&, int record_id)>;
+
 class UnifiedSerializer : public App
 {
 public:
@@ -38,6 +40,16 @@ public:
     }
 
     virtual ~UnifiedSerializer() = default;
+
+    const AppPipeline& getAppPipeline() const
+    {
+        return pipeline_;
+    }
+
+    simdb::DatabaseManager* getDatabaseManager() const
+    {
+        return db_mgr_;
+    }
 
     void appendSchema() override final
     {
@@ -74,31 +86,36 @@ public:
         postSim_(db_mgr_);
     }
 
-    template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data)
+    void setOnCommitCallback(const void* committer, OnDatabaseEntryCommitCallback callback)
     {
-        DatabaseEntry entry(tick, data, db_mgr_);
+        on_commit_callbacks_[committer] = callback;
+    }
+
+    template <typename T>
+    void process(uint64_t tick, const std::vector<T>& data, const void* committer = nullptr)
+    {
+        DatabaseEntry entry(tick, data, db_mgr_, committer);
         pipeline_.process(std::move(entry));
     }
 
     template <typename T>
-    void process(uint64_t tick, std::vector<T>&& data)
+    void process(uint64_t tick, std::vector<T>&& data, const void* committer = nullptr)
     {
-        DatabaseEntry entry(tick, std::move(data), db_mgr_);
+        DatabaseEntry entry(tick, std::move(data), db_mgr_, committer);
         pipeline_.process(std::move(entry));
     }
 
     template <typename T, size_t N>
-    void process(uint64_t tick, const std::array<T, N>& data)
+    void process(uint64_t tick, const std::array<T, N>& data, const void* committer = nullptr)
     {
-        DatabaseEntry entry(tick, data, db_mgr_);
+        DatabaseEntry entry(tick, data, db_mgr_, committer);
         pipeline_.process(std::move(entry));
     }
 
     template <typename T, size_t N>
-    void process(uint64_t tick, std::array<T, N>&& data)
+    void process(uint64_t tick, std::array<T, N>&& data, const void* committer = nullptr)
     {
-        DatabaseEntry entry(tick, std::move(data), db_mgr_);
+        DatabaseEntry entry(tick, std::move(data), db_mgr_, committer);
         pipeline_.process(std::move(entry));
     }
 
@@ -112,9 +129,9 @@ public:
         pipeline_.process(std::move(entry));
     }
 
-    void callLater(std::function<void()> callback)
+    void enqueue(std::function<void()> callback, bool fifo = true)
     {
-        pipeline_.callLater(callback);
+        pipeline_.enqueue(callback, fifo);
     }
 
     void teardown() override final
@@ -124,7 +141,7 @@ public:
     }
 
 private:
-    void endOfPipeline_(DatabaseEntry&& entry)
+    void endOfPipeline_(const DatabaseEntry& entry)
     {
         // Sanity check that the DatabaseEntry has our DatabaseManager.
         if (entry.getDatabaseManager() != db_mgr_)
@@ -137,7 +154,11 @@ private:
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
             SQL_VALUES(getAppID_(), entry.getTick(), entry.getBlob(), entry.compressed()));
 
-        entry.onCommit(record->getId());
+        auto iter = on_commit_callbacks_.find(entry.getCommitter());
+        if (iter != on_commit_callbacks_.end())
+        {
+            iter->second(entry, record->getId());
+        }
     }
 
     virtual void appendSchema_(DatabaseManager*, Schema&) {}
@@ -157,6 +178,7 @@ private:
     DatabaseManager* db_mgr_;
     bool compression_enabled_;
     AppPipeline pipeline_;
+    std::map<const void*, OnDatabaseEntryCommitCallback> on_commit_callbacks_;
 };
 
 } // namespace simdb

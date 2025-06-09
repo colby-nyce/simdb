@@ -8,7 +8,7 @@
 
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
-#include "simdb/pipeline/AsyncPipeline.hpp"
+#include "simdb/apps/AppPipeline.hpp"
 #include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 
@@ -80,7 +80,7 @@ void TestDatabasePipeline(size_t num_stages, bool ensure_compressed)
     EXPECT_TRUE(db_mgr.appendSchema(schema));
 
     // End-of-pipeline callback to write the data to the database.
-    auto end_of_pipeline_callback = [](simdb::DatabaseEntry&& entry)
+    auto end_of_pipeline_callback = [](const simdb::DatabaseEntry& entry)
     {
         entry.getDatabaseManager()->INSERT(
             SQL_TABLE("DataBlobs"),
@@ -88,8 +88,9 @@ void TestDatabasePipeline(size_t num_stages, bool ensure_compressed)
             SQL_VALUES(entry.getTick(), entry.getBlob(), entry.compressed() ? 1 : 0));
     };
 
-    // Create a AsyncPipeline to build the pipeline.
-    simdb::AsyncPipeline sink(num_stages, ensure_compressed);
+    // Create a AppPipeline to build the pipeline.
+    simdb::AsyncPipeline async_pipeline(num_stages, ensure_compressed);
+    simdb::AppPipeline app_pipeline(async_pipeline, end_of_pipeline_callback);
 
     // Send a blob down the pipeline.
     std::vector<char> alphabet;
@@ -98,12 +99,11 @@ void TestDatabasePipeline(size_t num_stages, bool ensure_compressed)
         alphabet.push_back(static_cast<char>(letter));
     }
 
-    simdb::DatabaseEntry entry(12345, alphabet, &db_mgr);
-    entry.redirect(end_of_pipeline_callback);
-    sink.process(std::move(entry));
+    simdb::DatabaseEntry entry(12345, alphabet, &db_mgr, nullptr);
+    app_pipeline.process(std::move(entry));
 
     // Let the pipeline finish processing.
-    sink.teardown();
+    app_pipeline.teardown();
 
     // Query the data blob and verify.
     auto query = db_mgr.createQuery("DataBlobs");
@@ -145,7 +145,7 @@ void TestTwoDatabases()
     simdb::DatabaseManager db_mgr2("test2.db");
     EXPECT_TRUE(db_mgr2.appendSchema(schema));
 
-    auto end_of_pipeline_callback = [](simdb::DatabaseEntry&& entry)
+    auto end_of_pipeline_callback = [](const simdb::DatabaseEntry& entry)
     {
         entry.getDatabaseManager()->INSERT(
             SQL_TABLE("TestBlobs"),
@@ -160,17 +160,17 @@ void TestTwoDatabases()
         const std::vector<double> data1 = { 1.0*tick, 1.0*tick, 1.0*tick };
         const std::vector<double> data2 = { 2.0*tick, 2.0*tick, 2.0*tick };
 
-        simdb::DatabaseEntry entry1(tick, data1, &db_mgr1);
-        entry1.redirect(end_of_pipeline_callback);
+        simdb::DatabaseEntry entry1(tick, data1, &db_mgr1, nullptr);
+        entry1.setEndOfPipelineCallback(end_of_pipeline_callback);
 
-        simdb::DatabaseEntry entry2(tick, data2, &db_mgr2);
-        entry2.redirect(end_of_pipeline_callback);
+        simdb::DatabaseEntry entry2(tick, data2, &db_mgr2, nullptr);
+        entry2.setEndOfPipelineCallback(end_of_pipeline_callback);
 
         // Send the entries to the database thread.
         db_thread.process(std::move(entry1));
         db_thread.process(std::move(entry2));
 
-        // Verify that the callLater() method works correctly
+        // Verify that the enqueue() method works correctly
         // and that the callback is called at the correct time:
         //
         //   entry1
@@ -190,7 +190,7 @@ void TestTwoDatabases()
                 EXPECT_EQUAL(query2->count(), 4);
             };
 
-            db_thread.callLater(verif);
+            db_thread.enqueue(verif);
         }
     }
 

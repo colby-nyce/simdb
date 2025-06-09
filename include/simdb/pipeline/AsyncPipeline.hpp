@@ -55,6 +55,19 @@ public:
         db_thread_.ensureCompressed(ensure_compressed);
     }
 
+    /// Return the total number of stages in the pipeline:
+    ///   0: synchronous mode
+    ///   1: DB thread only
+    ///   2: DB thread + CompressionThread
+    size_t getNumStages() const
+    {
+        if (!compression_thread_)
+        {
+            return db_thread_.isSynchronous() ? 0 : 1;
+        }
+        return 2;
+    }
+
     /// Check if packets are guaranteed to be compressed.
     bool isEnsuredCompressed() const
     {
@@ -75,10 +88,25 @@ public:
         }
     }
 
-    void callLater(std::function<void()> callback)
+    void enqueue(std::function<void()> callback, bool fifo = true)
     {
-        // TODO cnyce: Look into whether it should be queued in stage 1
-        db_thread_.callLater(callback);
+        if (fifo)
+        {
+            // Pass a dummy DatabaseEntry down the pipeline with an intermediate
+            // callback which calls the user's callback.
+            DatabaseEntry entry;
+            entry.setEndOfPipelineCallback(
+                [callback](const DatabaseEntry&)
+                {
+                    callback();
+                });
+
+            process(std::move(entry));
+        }
+        else
+        {
+            db_thread_.enqueue(std::move(callback), fifo);
+        }
     }
 
     /// Flush the pipeline, allowing all threads to finish their work. This

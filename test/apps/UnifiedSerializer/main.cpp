@@ -76,7 +76,7 @@ public:
     void validate()
     {
         auto query = db_mgr_->createQuery("UnifiedCollectorBlobs");
-        bool expect_compressed = true;//(pipeline_mode_ != simdb::AppPipelineMode::DB_THREAD_ONLY_WITHOUT_COMPRESSION);
+        bool expect_compressed = getAppPipeline().getAsyncPipeline().isEnsuredCompressed();
         query->addConstraintForInt("IsCompressed", simdb::Constraints::EQUAL, expect_compressed ? 1 : 0);
         EXPECT_EQUAL(query->count(), num_blobs_written_);
     }
