@@ -11,6 +11,7 @@
 #include "simdb/apps/AppPipeline.hpp"
 #include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
+#include "simdb/3p/concurrentqueue.h"
 
 TEST_INIT;
 

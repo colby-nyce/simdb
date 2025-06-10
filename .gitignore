@@ -9,3 +9,4 @@ __pycache__/
 build/
 **/*.avf
 **/*.db
+**/3p/**
