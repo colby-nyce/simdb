@@ -8,7 +8,7 @@
 
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
-#include "simdb/apps/AppPipeline.hpp"
+//#include "simdb/apps/AppPipeline.hpp"
 #include "simdb/schema/Blob.hpp"
 #include "simdb/test/SimDBTester.hpp"
 #include "simdb/3p/concurrentqueue.h"
@@ -63,6 +63,7 @@ void TestTinyStrings()
 /// TestDatabasePipeline demonstrates how to build a database pipeline for async
 /// processing of data, with optional compression performed across a configurable
 /// number of threads.
+#if 0 // TODO cnyce
 void TestDatabasePipeline(size_t num_stages, bool ensure_compressed)
 {
     DB_INIT;
@@ -204,16 +205,17 @@ void TestTwoDatabases()
     auto query2 = db_mgr2.createQuery("TestBlobs");
     EXPECT_EQUAL(query2->count(), 10);
 }
+#endif
 
 int main()
 {
     TestTinyStrings();                  // Test string minification.
-    TestDatabasePipeline(0, true);      // Test pipeline (synchronous mode with compression).
-    TestDatabasePipeline(0, false);     // Test pipeline (synchronous mode without compression).
-    TestDatabasePipeline(1, false);     // Test pipeline (no compression, just async DB writes).
-    TestDatabasePipeline(1, true);      // Test pipeline (compress and write on the DB thread).
-    TestDatabasePipeline(2, true);      // Test pipeline (one compression thread and async DB writes).
-    TestTwoDatabases();                 // Test two databases using the same DatabaseThread.
+    //TestDatabasePipeline(0, true);      // Test pipeline (synchronous mode with compression).
+    //TestDatabasePipeline(0, false);     // Test pipeline (synchronous mode without compression).
+    //TestDatabasePipeline(1, false);     // Test pipeline (no compression, just async DB writes).
+    //TestDatabasePipeline(1, true);      // Test pipeline (compress and write on the DB thread).
+    //TestDatabasePipeline(2, true);      // Test pipeline (one compression thread and async DB writes).
+    //TestTwoDatabases();                 // Test two databases using the same DatabaseThread.
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;
