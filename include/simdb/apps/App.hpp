@@ -29,6 +29,8 @@
 /// with 1-to-many apps that are all writing to it with their own custom schemas
 /// and logic.
 
+#include "simdb/apps/AppPipeline.hpp"
+
 namespace simdb
 {
 
@@ -51,8 +53,6 @@ public:
 protected:
     int getAppID_() const { return app_id_; }
 
-    App *const __this__ = this;
-
 private:
     int app_id_ = 0;
 
@@ -64,17 +64,21 @@ class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
-    virtual App* createApp(DatabaseManager*, AsyncPipeline&) = 0;
+    virtual App* createApp(DatabaseManager*) = 0;
 };
 
 template <typename AppT>
 class AppFactory : public AppFactoryBase
 {
 public:
-    App* createApp(DatabaseManager* db_mgr, AsyncPipeline& async_pipeline) override
+    App* createApp(DatabaseManager* db_mgr) override
     {
-        return new AppT(db_mgr, async_pipeline);
+        app_pipeline_ = std::make_unique<AppPipeline>(db_mgr);
+        return new AppT(*app_pipeline_);
     }
+
+private:
+    std::unique_ptr<AppPipeline> app_pipeline_;
 };
 
 } // namespace simdb

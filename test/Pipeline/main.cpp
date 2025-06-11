@@ -1,6 +1,5 @@
-#include "simdb/apps/AppPipeline.hpp"
-#include "simdb/utils/VectorSerializer.hpp"
-#include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/PipelineApp.hpp"
 #include "simdb/test/SimDBTester.hpp"
 #include <iostream>
 #include <random>
@@ -43,11 +42,6 @@ static void UpdateCalledChainLinks(simdb::PipelineEntryBase& entry, const std::s
     }
 }
 
-static void ProcessAppEntry(simdb::PipelineEntryBase& entry)
-{
-    UpdateCalledChainLinks(entry, "ProcessAppEntry");
-}
-
 static void ProcessCollectorEntry(simdb::PipelineEntryBase& entry)
 {
     UpdateCalledChainLinks(entry, "ProcessCollectorEntry");
@@ -63,77 +57,12 @@ void DoExtraStuff(simdb::PipelineEntryBase& entry)
     UpdateCalledChainLinks(entry, "DoExtraStuff");
 }
 
-class App
-{
-public:
-    virtual ~App() = default;
-};
-
 // ------------------------------------------------------------------------
-class PipelineApp : public App
-{
-public:
-    PipelineApp(simdb::AppPipeline& pipeline, simdb::PipelineChain serialization_chain = simdb::PipelineChain())
-        : pipeline_(pipeline)
-        , serialization_chain_(serialization_chain + ProcessAppEntry)
-        , serialization_stage_(pipeline.getSerializationStage())
-    {
-        // Now that we are in the base class, reverse the chain to ensure
-        // that we run the chain links in the correct order. The base class
-        // should be the first link in the chain and on down the class
-        // hierarchy. For instance, a base class might handle writing to
-        // the database, and subclasses will need the DB ID for their
-        // entry processing functions.
-        serialization_chain_.reverse();
-    }
-
-    void process(uint64_t tick, std::vector<char>&& data, simdb::PipelineFunc on_serialized = nullptr)
-    {
-        simdb::PipelineEntryBase entry(tick, pipeline_.getDatabaseManager(), std::move(data));
-        auto& chain = entry.getStageChain(serialization_stage_);
-        chain += serialization_chain_;
-        if (on_serialized)
-        {
-            chain += on_serialized;
-        }
-        pipeline_.processEntry(std::move(entry));
-    }
-
-    template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data, simdb::PipelineFunc on_serialized = nullptr)
-    {
-        simdb::VectorSerializer<T> serializer = createVectorSerializer<T>(&data);
-        process(tick, std::move(serializer), on_serialized);
-    }
-
-    template <typename T>
-    void process(uint64_t tick, simdb::VectorSerializer<T>&& serializer, simdb::PipelineFunc on_serialized = nullptr)
-    {
-        std::vector<char> data = serializer.release();
-        process(tick, std::move(data), on_serialized);
-    }
-
-    template <typename T>
-    simdb::VectorSerializer<T> createVectorSerializer(const std::vector<T>* initial_data = nullptr)
-    {
-        std::vector<char> serialized_data;
-        reusable_buffers_.try_pop(serialized_data);
-        return simdb::VectorSerializer<T>(std::move(serialized_data), initial_data);
-    }
-
-private:
-    simdb::AppPipeline& pipeline_;
-    simdb::PipelineChain serialization_chain_;
-    simdb::ConcurrentQueue<std::vector<char>> reusable_buffers_;
-    simdb::PipelineStage* serialization_stage_ = nullptr;
-};
-
-// ------------------------------------------------------------------------
-class UniformSerializer : public PipelineApp
+class UniformSerializer : public simdb::PipelineApp
 {
 public:
     UniformSerializer(simdb::AppPipeline& pipeline, simdb::PipelineChain serialization_chain = simdb::PipelineChain())
-        : PipelineApp(pipeline, serialization_chain + ProcessCollectorEntry)
+        : simdb::PipelineApp(pipeline, serialization_chain + ProcessCollectorEntry)
     {
     }
 };
@@ -176,9 +105,9 @@ int main()
     for (int tick = 0; tick < NUM_TICKS; ++tick)
     {
         // Since we have a std::vector<double> of data and the PipelineEntryBase
-        // only uses std::vector<char>, we can use a utility from the PipelineApp
+        // only uses std::vector<char>, we can use a utility from the simdb::PipelineApp
         // to convert our vector to a char vector. Converting data through the
-        // PipelineApp has a performance advantage of using a pool of char
+        // simdb::PipelineApp has a performance advantage of using a pool of char
         // vectors under the hood to prevent unnecessary allocations.
         simdb::VectorSerializer<double> vector =
             pipeline_collector->createVectorSerializer<double>();
@@ -189,9 +118,9 @@ int main()
         // to the serialization chain. On the database write thread, these
         // functions will get called:
         //
-        //   ProcessAppEntry()                |-- These came from the PipelineApp
-        //   ProcessCollectorEntry()          |-- class hierarchy and always process
-        //   ProcessPipelineCollectorEntry()  |-- from the base class down.
+        //   ProcessCollectorEntry()          |-- These came from the simdb::PipelineApp
+        //   ProcessPipelineCollectorEntry()  |-- class hierarchy and always process
+        //                                    |-- from the base class down.
         //   DoExtraStuff()
         pipeline_collector->process(tick, std::move(vector), DoExtraStuff);
     }
@@ -215,14 +144,13 @@ int main()
         query->resetConstraints();
         query->addConstraintForInt("Tick", simdb::Constraints::EQUAL, tick);
 
-        // First verify that exactly 4 functions were called
+        // First verify that exactly 3 functions were called
         // in the serialization chain.
-        EXPECT_EQUAL(query->count(), 4);
+        EXPECT_EQUAL(query->count(), 3);
 
         // Now verify that the functions were called in the
         // correct order.
         const char* expected_funcs[] = {
-            "ProcessAppEntry",
             "ProcessCollectorEntry",
             "ProcessPipelineCollectorEntry",
             "DoExtraStuff"
@@ -249,7 +177,7 @@ int main()
             }
 
             // Update the loop index for the next iteration.
-            if (loop_idx == 3)
+            if (loop_idx == 2)
             {
                 db_id = 0;
                 loop_idx = 0;
