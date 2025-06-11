@@ -4,6 +4,8 @@
 #include <iostream>
 #include <random>
 
+// clang-format off
+
 /// This test uses the SimDB pipeline framework to demonstrate how to
 /// create a pipeline application that processes data entries through
 /// a series of stages. Each stage can be customized to perform specific
