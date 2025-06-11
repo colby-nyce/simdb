@@ -207,5 +207,17 @@ template <typename T> struct remove_any_pointer<std::weak_ptr<T> const&>
     */
 template <typename T> using remove_any_pointer_t = typename remove_any_pointer<T>::type;
 
+template <typename T> struct is_contiguous : std::false_type
+{
+};
+
+template <typename T> struct is_contiguous<std::vector<T>> : std::true_type
+{
+};
+
+template <typename T, std::size_t N> struct is_contiguous<std::array<T,N>> : std::true_type
+{
+};
+
 } // namespace meta_utils
 } // namespace simdb

@@ -8,3 +8,4 @@ add_custom_command(
 add_subdirectory(apps)
 add_subdirectory(SQLiteBasic)
 add_subdirectory(SQLiteAdvanced)
+add_subdirectory(Pipeline)

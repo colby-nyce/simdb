@@ -28,7 +28,7 @@ enum class CompressionLevel
 };
 
 /// Perform zlib compression.
-inline void compressDataVec(const void * data_ptr, size_t num_bytes, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
+inline void compressData(const void * data_ptr, size_t num_bytes, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
     if (num_bytes == 0)
     {
@@ -68,25 +68,25 @@ inline void compressDataVec(const void * data_ptr, size_t num_bytes, std::vector
 
 /// Perform zlib compression on a vector.
 template <typename T>
-inline void compressDataVec(const std::vector<T>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
+inline void compressData(const std::vector<T>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
     const void* data_ptr = in.data();
     size_t num_bytes = in.size() * sizeof(T);
-    compressDataVec(data_ptr, num_bytes, out, compression_level);
+    compressData(data_ptr, num_bytes, out, compression_level);
 }
 
 /// Perform zlib compression on an array.
 template <typename T, size_t N>
-inline void compressDataVec(const std::array<T, N>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
+inline void compressData(const std::array<T, N>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
     const void* data_ptr = in.data();
     size_t num_bytes = in.size() * sizeof(T);
-    compressDataVec(data_ptr, num_bytes, out, compression_level);
+    compressData(data_ptr, num_bytes, out, compression_level);
 }
 
 /// Perform zlib decompression.
 template <typename T>
-inline void decompressDataVec(const std::vector<char>& in, std::vector<T>& out)
+inline void decompressData(const std::vector<char>& in, std::vector<T>& out)
 {
     if (in.empty()) {
         out.clear();

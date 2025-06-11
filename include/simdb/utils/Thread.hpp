@@ -39,6 +39,11 @@ public:
         }
     }
 
+    bool isRunning() const
+    {
+        return is_running_;
+    }
+
     void stopThreadLoop() noexcept
     {
         if (is_running_)
