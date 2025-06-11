@@ -19,6 +19,7 @@ public:
     {
         compression_stage_ = pipeline_.addStage(CompressEntry);
         serialization_stage_ = pipeline_.addStage();
+        serialization_stage_->setDatabaseManager(db_mgr_);
         pipeline_.finalize();
     }
 
