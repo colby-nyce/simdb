@@ -9,10 +9,10 @@ namespace simdb
 {
 
 /// Base class for SimDB applications that use a pipeline for processing.
-class PipelineApp : public simdb::App
+class PipelineApp : public App
 {
 public:
-    PipelineApp(simdb::AppPipeline& pipeline, simdb::PipelineChain serialization_chain = simdb::PipelineChain())
+    PipelineApp(AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
         : pipeline_(pipeline)
         , serialization_chain_(serialization_chain)
         , serialization_stage_(pipeline.getSerializationStage())
@@ -31,9 +31,9 @@ public:
         return pipeline_.getDatabaseManager();
     }
 
-    void process(uint64_t tick, std::vector<char>&& data, simdb::PipelineFunc on_serialized = nullptr)
+    void process(uint64_t tick, std::vector<char>&& data, PipelineFunc on_serialized = nullptr)
     {
-        simdb::PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data));
+        PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data));
         entry.setOwningApp(this);
         auto& chain = entry.getStageChain(serialization_stage_);
         chain += serialization_chain_;
@@ -46,25 +46,25 @@ public:
     }
 
     template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data, simdb::PipelineFunc on_serialized = nullptr)
+    void process(uint64_t tick, const std::vector<T>& data, PipelineFunc on_serialized = nullptr)
     {
-        simdb::VectorSerializer<T> serializer = createVectorSerializer<T>(&data);
+        VectorSerializer<T> serializer = createVectorSerializer<T>(&data);
         process(tick, std::move(serializer), on_serialized);
     }
 
     template <typename T>
-    void process(uint64_t tick, simdb::VectorSerializer<T>&& serializer, simdb::PipelineFunc on_serialized = nullptr)
+    void process(uint64_t tick, VectorSerializer<T>&& serializer, PipelineFunc on_serialized = nullptr)
     {
         std::vector<char> data = serializer.release();
         process(tick, std::move(data), on_serialized);
     }
 
     template <typename T>
-    simdb::VectorSerializer<T> createVectorSerializer(const std::vector<T>* initial_data = nullptr)
+    VectorSerializer<T> createVectorSerializer(const std::vector<T>* initial_data = nullptr)
     {
         std::vector<char> serialized_data;
         reusable_buffers_.try_pop(serialized_data);
-        return simdb::VectorSerializer<T>(std::move(serialized_data), initial_data);
+        return VectorSerializer<T>(std::move(serialized_data), initial_data);
     }
 
     void teardown() override final
@@ -78,20 +78,20 @@ private:
     virtual void onPreTeardown_() {}
     virtual void onPostTeardown_() {}
 
-    static void RetireEntry(simdb::PipelineEntry& entry)
+    static void RetireEntry(PipelineEntry& entry)
     {
         static_cast<PipelineApp*>(entry.getOwningApp())->retireEntry(entry);
     }
 
-    void retireEntry(simdb::PipelineEntry& entry)
+    void retireEntry(PipelineEntry& entry)
     {
         entry.retire(reusable_buffers_);
     }
 
-    simdb::AppPipeline& pipeline_;
-    simdb::PipelineChain serialization_chain_;
-    simdb::ConcurrentQueue<std::vector<char>> reusable_buffers_;
-    simdb::PipelineStage* serialization_stage_ = nullptr;
+    AppPipeline& pipeline_;
+    PipelineChain serialization_chain_;
+    ConcurrentQueue<std::vector<char>> reusable_buffers_;
+    PipelineStage* serialization_stage_ = nullptr;
 };
 
 } // namespace simdb
