@@ -50,9 +50,9 @@ static void ProcessCollectorEntry(PipelineEntry& entry)
     UpdateCalledChainLinks(entry, "ProcessCollectorEntry");
 }
 
-static void ProcessPipelineCollectorEntry(PipelineEntry& entry)
+static void ProcessStatsCollectorEntry(PipelineEntry& entry)
 {
-    UpdateCalledChainLinks(entry, "ProcessPipelineCollectorEntry");
+    UpdateCalledChainLinks(entry, "ProcessStatsCollectorEntry");
 }
 
 void DoExtraStuff(PipelineEntry& entry)
@@ -61,23 +61,23 @@ void DoExtraStuff(PipelineEntry& entry)
 }
 
 // ------------------------------------------------------------------------
-class UniformSerializer : public simdb::PipelineApp
+class Collector : public simdb::PipelineApp
 {
 public:
-    UniformSerializer(simdb::AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
+    Collector(simdb::AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
         : simdb::PipelineApp(pipeline, serialization_chain + ProcessCollectorEntry)
     {
     }
 };
 
 // ------------------------------------------------------------------------
-class StatsCollector : public UniformSerializer
+class StatsCollector : public Collector
 {
 public:
     static constexpr auto NAME = "StatsCollector";
 
     StatsCollector(simdb::AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
-        : UniformSerializer(pipeline, serialization_chain + ProcessPipelineCollectorEntry)
+        : Collector(pipeline, serialization_chain + ProcessStatsCollectorEntry)
     {
     }
 
@@ -196,7 +196,7 @@ int main(int argc, char** argv)
         // functions will get called:
         //
         //   ProcessCollectorEntry()          |-- These came from the PipelineApp
-        //   ProcessPipelineCollectorEntry()  |-- class hierarchy and always process
+        //   ProcessStatsCollectorEntry()  |-- class hierarchy and always process
         //                                    |-- from the base class down.
         //   DoExtraStuff()
         pipeline_collector->process(tick, std::move(vector), DoExtraStuff);
@@ -232,7 +232,7 @@ int main(int argc, char** argv)
         // correct order.
         const char* expected_funcs[] = {
             "ProcessCollectorEntry",
-            "ProcessPipelineCollectorEntry",
+            "ProcessStatsCollectorEntry",
             "DoExtraStuff"
         };
 
