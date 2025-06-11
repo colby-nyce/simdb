@@ -31,10 +31,11 @@ public:
         return pipeline_.getDatabaseManager();
     }
 
-    void process(uint64_t tick, std::vector<char>&& data, PipelineFunc on_serialized = nullptr)
+    void process(uint64_t tick, std::vector<char>&& data, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
     {
         PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data));
         entry.setOwningApp(this);
+        entry.setUserData(user_data);
         auto& chain = entry.getStageChain(serialization_stage_);
         chain += serialization_chain_;
         if (on_serialized)
@@ -46,21 +47,21 @@ public:
     }
 
     template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data, PipelineFunc on_serialized = nullptr)
+    void process(uint64_t tick, const std::vector<T>& data, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
     {
         VectorSerializer<T> serializer = createVectorSerializer<T>(&data);
-        process(tick, std::move(serializer), on_serialized);
+        process(tick, std::move(serializer), on_serialized, user_data);
     }
 
     template <typename T>
-    void process(uint64_t tick, VectorSerializer<T>&& serializer, PipelineFunc on_serialized = nullptr)
+    void process(uint64_t tick, VectorSerializer<T>&& serializer, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
     {
         std::vector<char> data = serializer.release();
-        process(tick, std::move(data), on_serialized);
+        process(tick, std::move(data), on_serialized, user_data);
     }
 
     template <typename T>
-    VectorSerializer<T> createVectorSerializer(const std::vector<T>* initial_data = nullptr)
+    VectorSerializer<T> createVectorSerializer(const std::vector<T>* initial_data = nullptr, const void* user_data = nullptr)
     {
         std::vector<char> serialized_data;
         reusable_buffers_.try_pop(serialized_data);

@@ -34,7 +34,7 @@ static void UpdateCalledChainLinks(PipelineEntry& entry, const std::string& func
     auto db_mgr = entry.getDatabaseManager();
     auto tick = entry.getTick();
     auto compressed = entry.compressed() ? 1 : 0;
-    auto db_id = entry.getCommittedDbId();
+    auto db_id = entry.getCommittedDbID();
 
     auto record = db_mgr->INSERT(
         SQL_TABLE("CalledChainLinks"),

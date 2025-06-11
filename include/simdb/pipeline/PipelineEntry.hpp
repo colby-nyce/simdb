@@ -47,14 +47,14 @@ public:
         return dynamic_cast<AppT*>(owning_app_);
     }
 
-    PipelineChain& getStageChain(const PipelineStage* stage)
-    {
-        return stage_chains_[stage];
-    }
-
     void setStageChain(const PipelineStage* stage, const PipelineChain& chain)
     {
         stage_chains_[stage] = chain;
+    }
+
+    PipelineChain& getStageChain(const PipelineStage* stage)
+    {
+        return stage_chains_[stage];
     }
 
     void runStageChain(const PipelineStage* stage)
@@ -64,6 +64,16 @@ public:
         {
             it->second(*this);
         }
+    }
+
+    void setUserData(const void* user_data)
+    {
+        user_data_ = user_data;
+    }
+
+    const void* getUserData() const
+    {
+        return user_data_;
     }
 
     const void* getDataPtr() const
@@ -128,7 +138,7 @@ public:
         compressed_ = true;
     }
 
-    int getCommittedDbId() const
+    int getCommittedDbID() const
     {
         return committed_db_id_;
     }
@@ -152,6 +162,7 @@ private:
     DatabaseManager* db_mgr_ = nullptr;
     PipelineChainLink* next_ = nullptr;
     App* owning_app_ = nullptr;
+    const void* user_data_ = nullptr;
     int committed_db_id_ = 0;
     std::vector<char> bytes_;
     bool compressed_ = false;
