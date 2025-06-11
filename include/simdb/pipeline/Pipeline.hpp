@@ -26,7 +26,7 @@ public:
         // queues_ are all the inputs to each stage
         for (size_t i = 0; i < stages_.size(); ++i)
         {
-            auto queue = std::make_unique<ConcurrentQueue<PipelineEntryBase>>();
+            auto queue = std::make_unique<ConcurrentQueue<PipelineEntry>>();
             stages_[i]->setInputQueue(queue.get());
             queues_.push_back(std::move(queue));
         }
@@ -43,7 +43,7 @@ public:
         }
     }
 
-    void processEntry(PipelineEntryBase&& entry)
+    void processEntry(PipelineEntry&& entry)
     {
         if (!queues_.at(0))
         {
@@ -64,7 +64,7 @@ public:
 
 private:
     std::vector<std::unique_ptr<PipelineStage>> stages_;
-    std::vector<std::unique_ptr<ConcurrentQueue<PipelineEntryBase>>> queues_;
+    std::vector<std::unique_ptr<ConcurrentQueue<PipelineEntry>>> queues_;
 };
 
 } // namespace simdb

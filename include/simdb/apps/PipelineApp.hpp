@@ -26,15 +26,22 @@ public:
         serialization_chain_.reverse();
     }
 
+    DatabaseManager* getDatabaseManager() const
+    {
+        return pipeline_.getDatabaseManager();
+    }
+
     void process(uint64_t tick, std::vector<char>&& data, simdb::PipelineFunc on_serialized = nullptr)
     {
-        simdb::PipelineEntryBase entry(tick, pipeline_.getDatabaseManager(), std::move(data));
+        simdb::PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data));
+        entry.setOwningApp(this);
         auto& chain = entry.getStageChain(serialization_stage_);
         chain += serialization_chain_;
         if (on_serialized)
         {
             chain += on_serialized;
         }
+        chain += RetireEntry;
         pipeline_.processEntry(std::move(entry));
     }
 
@@ -70,6 +77,16 @@ public:
 private:
     virtual void onPreTeardown_() {}
     virtual void onPostTeardown_() {}
+
+    static void RetireEntry(simdb::PipelineEntry& entry)
+    {
+        static_cast<PipelineApp*>(entry.getOwningApp())->retireEntry(entry);
+    }
+
+    void retireEntry(simdb::PipelineEntry& entry)
+    {
+        entry.retire(reusable_buffers_);
+    }
 
     simdb::AppPipeline& pipeline_;
     simdb::PipelineChain serialization_chain_;

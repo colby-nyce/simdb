@@ -32,7 +32,7 @@ public:
         return serialization_stage_;
     }
 
-    void processEntry(PipelineEntryBase&& entry)
+    void processEntry(PipelineEntry&& entry)
     {
         compression_stage_->getInputQueue()->push(std::move(entry));
     }
@@ -43,7 +43,7 @@ public:
     }
 
 private:
-    static void CompressEntry(PipelineEntryBase& entry)
+    static void CompressEntry(PipelineEntry& entry)
     {
         entry.compress();
     }

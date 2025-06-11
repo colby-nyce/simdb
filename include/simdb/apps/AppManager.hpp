@@ -77,25 +77,12 @@ public:
         return apps_.find(key) != apps_.end();
     }
 
-    /// Finalize the app pipeline. Cannot be called twice. Must be called before createEnabledApps().
-    //void finalizeAppPipeline(AppPipelineMode mode = DEFAULT_APP_PIPELINE_MODE)
-    //{
-    //    auto num_stages = getNumStages(mode);
-    //    auto ensure_compressed = ensureCompressed(mode);
-    //    async_pipeline_ = std::make_unique<AsyncPipeline>(num_stages, ensure_compressed);
-    //}
-
     /// Call after command line args and config files are parsed.
     void createEnabledApps(DatabaseManager* db_mgr)
     {
-        //if (!async_pipeline_)
-        //{
-        //    throw DBException("App pipeline must be finalized before creating enabled apps.");
-        //}
-
         for (const auto& app_name : enabled_apps_)
         {
-            App* app = nullptr;//app_factories_[app_name]->createApp(db_mgr, *async_pipeline_);
+            App* app = app_factories_[app_name]->createApp(db_mgr);
             const auto key = app_name + "_" + db_mgr->getDatabaseFilePath();
             apps_[key] = std::unique_ptr<App>(app);
         }
@@ -172,7 +159,12 @@ public:
                         SQL_VALUES(app_name));
 
                     app->app_id_ = record->getId();
-                    app->appendSchema();
+
+                    Schema app_schema;
+                    if (app->defineSchema(app_schema))
+                    {
+                        db_mgr->appendSchema(app_schema);
+                    }
                 }
             });
     }
@@ -244,11 +236,6 @@ public:
         {
             apps_.clear();
         }
-
-        if (apps_.empty())
-        {
-            async_pipeline_.reset();
-        }
     }
 
 private:
@@ -262,9 +249,6 @@ private:
 
     /// Enabled apps (may or may not be instantiated).
     std::set<std::string> enabled_apps_;
-
-    /// One AsyncPipeline for all apps to share, even if they write to different databases.
-    std::shared_ptr<AsyncPipeline> async_pipeline_;
 };
 
 } // namespace simdb

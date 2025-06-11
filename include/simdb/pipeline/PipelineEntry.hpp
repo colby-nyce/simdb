@@ -9,35 +9,42 @@
 namespace simdb
 {
 
+class App;
 class DatabaseManager;
 class PipelineChainLink;
 class PipelineStage;
 class Pipeline;
 
 /// Represents a single entry in a processing pipeline.
-class PipelineEntryBase
+class PipelineEntry
 {
 public:
-    PipelineEntryBase(uint64_t tick, DatabaseManager* db_mgr, std::vector<char>&& bytes)
+    PipelineEntry(uint64_t tick, DatabaseManager* db_mgr, std::vector<char>&& bytes)
         : tick_(tick)
         , db_mgr_(db_mgr)
         , bytes_(std::move(bytes))
     {
     }
 
-    PipelineEntryBase() = default;
+    PipelineEntry() = default;
 
-    virtual ~PipelineEntryBase() = default;
+    virtual ~PipelineEntry() = default;
 
-    void addStageChainLink(const PipelineStage* stage, PipelineFunc func)
+    void setOwningApp(App* app)
     {
-        if (stage == nullptr || func == nullptr)
-        {
-            throw DBException("Invalid stage or function for stage chain link");
-        }
+        owning_app_ = app;
+    }
 
-        auto& chain = stage_chains_[stage];
-        chain += func;
+    App* getOwningApp() const
+    {
+        return owning_app_;
+    }
+
+    template <typename AppT>
+    AppT* getOwningAppAs() const
+    {
+        static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
+        return dynamic_cast<AppT*>(owning_app_);
     }
 
     PipelineChain& getStageChain(const PipelineStage* stage)
@@ -135,11 +142,16 @@ public:
         committed_db_id_ = db_id;
     }
 
+    void retire(simdb::ConcurrentQueue<std::vector<char>>& reusable_buffers)
+    {
+        reusable_buffers.push(std::move(bytes_));
+    }
+
 private:
     uint64_t tick_;
     DatabaseManager* db_mgr_ = nullptr;
     PipelineChainLink* next_ = nullptr;
-    Pipeline* owning_pipeline_ = nullptr;
+    App* owning_app_ = nullptr;
     int committed_db_id_ = 0;
     std::vector<char> bytes_;
     bool compressed_ = false;

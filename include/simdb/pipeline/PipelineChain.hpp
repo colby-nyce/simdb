@@ -10,8 +10,8 @@
 namespace simdb
 {
 
-class PipelineEntryBase;
-using PipelineFunc = void(*)(PipelineEntryBase&);
+class PipelineEntry;
+using PipelineFunc = void(*)(PipelineEntry&);
 
 /// Node in a pipeline chain (linked list).
 class PipelineChainLink
@@ -64,7 +64,7 @@ public:
         return func_ != nullptr;
     }
 
-    void operator()(PipelineEntryBase& entry) const
+    void operator()(PipelineEntry& entry) const
     {
         if (func_)
         {
@@ -227,7 +227,7 @@ public:
     }
 
     // Process the entry through the pipeline chain.
-    void operator()(PipelineEntryBase& entry) const
+    void operator()(PipelineEntry& entry) const
     {
         if (head_)
         {

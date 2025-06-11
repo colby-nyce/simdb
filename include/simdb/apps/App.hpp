@@ -36,6 +36,7 @@ namespace simdb
 
 class AsyncPipeline;
 class DatabaseManager;
+class Schema;
 
 /// Base class for SimDB applications. Note that app subclasses are given
 /// the DatabaseManager instance as a constructor argument, so they can
@@ -45,7 +46,7 @@ class App
 {
 public:
     virtual ~App() = default;
-    virtual void appendSchema() {}
+    virtual bool defineSchema(Schema&) { return false; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual void postSim() {}
     virtual void teardown() {}

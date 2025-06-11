@@ -15,22 +15,22 @@ public:
     {
     }
 
-    void setInputQueue(ConcurrentQueue<PipelineEntryBase>* input_queue)
+    void setInputQueue(ConcurrentQueue<PipelineEntry>* input_queue)
     {
         input_queue_ = input_queue;
     }
 
-    void setOutputQueue(ConcurrentQueue<PipelineEntryBase>* output_queue)
+    void setOutputQueue(ConcurrentQueue<PipelineEntry>* output_queue)
     {
         output_queue_ = output_queue;
     }
 
-    ConcurrentQueue<PipelineEntryBase>* getInputQueue() const
+    ConcurrentQueue<PipelineEntry>* getInputQueue() const
     {
         return input_queue_;
     }
 
-    ConcurrentQueue<PipelineEntryBase>* getOutputQueue() const
+    ConcurrentQueue<PipelineEntry>* getOutputQueue() const
     {
         return output_queue_;
     }
@@ -58,8 +58,8 @@ private:
     {
     public:
         Processor(PipelineStage* owning_stage,
-                  ConcurrentQueue<PipelineEntryBase>* input_queue,
-                  ConcurrentQueue<PipelineEntryBase>* output_queue,
+                  ConcurrentQueue<PipelineEntry>* input_queue,
+                  ConcurrentQueue<PipelineEntry>* output_queue,
                   const PipelineChain& stage_chain,
                   double interval_seconds)
             : Thread(interval_seconds * 1000) // Convert seconds to milliseconds
@@ -78,7 +78,7 @@ private:
 
         void flush()
         {
-            PipelineEntryBase entry;
+            PipelineEntry entry;
             while (input_queue_->try_pop(entry))
             {
                 // First run our default chain.
@@ -109,13 +109,13 @@ private:
         }
 
         PipelineStage* owning_stage_;
-        ConcurrentQueue<PipelineEntryBase>* input_queue_;
-        ConcurrentQueue<PipelineEntryBase>* output_queue_;
+        ConcurrentQueue<PipelineEntry>* input_queue_;
+        ConcurrentQueue<PipelineEntry>* output_queue_;
         PipelineChain stage_chain_;
     };
 
-    ConcurrentQueue<PipelineEntryBase>* input_queue_ = nullptr;
-    ConcurrentQueue<PipelineEntryBase>* output_queue_ = nullptr;
+    ConcurrentQueue<PipelineEntry>* input_queue_ = nullptr;
+    ConcurrentQueue<PipelineEntry>* output_queue_ = nullptr;
     PipelineChain stage_chain_;
     std::unique_ptr<Processor> processor_;
 };
