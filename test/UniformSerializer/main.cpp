@@ -30,7 +30,7 @@ class FlatVectorSerializer : public simdb::UniformSerializer
 public:
     static constexpr auto NAME = "FlatVectorSerializer";
 
-    FlatVectorSerializer(simdb::AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
+    FlatVectorSerializer(simdb::AppPipeline& pipeline, PipelineChain& serialization_chain)
         : simdb::UniformSerializer(pipeline, serialization_chain)
     {
     }
@@ -85,7 +85,7 @@ int main(int argc, char** argv)
 {
     DB_INIT;
 
-    auto& app_mgr = simdb::AppManager::getInstance();
+    simdb::AppManager app_mgr;
     app_mgr.enableApp(FlatVectorSerializer::NAME);
 
     simdb::DatabaseManager db_mgr("test.db");

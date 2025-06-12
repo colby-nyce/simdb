@@ -12,7 +12,7 @@ namespace simdb
 class PipelineApp : public App
 {
 public:
-    PipelineApp(AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
+    PipelineApp(AppPipeline& pipeline, PipelineChain& serialization_chain)
         : pipeline_(pipeline)
         , serialization_chain_(serialization_chain)
         , serialization_stage_(pipeline.getSerializationStage())
@@ -37,13 +37,9 @@ public:
         entry.setOwningApp(this);
         entry.setUserData(user_data);
         auto& chain = entry.getStageChain(serialization_stage_);
-        chain += serialization_chain_;
-        if (on_serialized)
-        {
-            chain += on_serialized;
-        }
-        chain += RetireEntry;
+        chain = serialization_chain_ + on_serialized + RetireEntry;
         pipeline_.processEntry(std::move(entry));
+        ++num_sent_;
     }
 
     template <typename T>
@@ -65,6 +61,7 @@ public:
     {
         std::vector<char> serialized_data;
         reusable_buffers_.try_pop(serialized_data);
+        serialized_data.clear();
         return VectorSerializer<T>(std::move(serialized_data), initial_data);
     }
 
@@ -73,6 +70,9 @@ public:
         onPreTeardown_();
         pipeline_.teardown();
         onPostTeardown_();
+
+        std::cout << "PipelineApp teardown complete. "
+                  << "Sent: " << num_sent_ << ", Retired: " << num_retired_ << std::endl;
     }
 
 private:
@@ -87,12 +87,15 @@ private:
     void retireEntry(PipelineEntry& entry)
     {
         entry.retire(reusable_buffers_);
+        ++num_retired_;
     }
 
     AppPipeline& pipeline_;
     PipelineChain serialization_chain_;
     ConcurrentQueue<std::vector<char>> reusable_buffers_;
     PipelineStage* serialization_stage_ = nullptr;
+    uint64_t num_sent_ = 0;
+    uint64_t num_retired_ = 0;
 };
 
 } // namespace simdb

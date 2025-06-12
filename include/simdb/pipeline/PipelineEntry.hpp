@@ -11,7 +11,6 @@ namespace simdb
 
 class App;
 class DatabaseManager;
-class PipelineChainLink;
 class PipelineStage;
 class Pipeline;
 
@@ -95,16 +94,6 @@ public:
         return db_mgr_;
     }
 
-    void setNext(PipelineChainLink* next)
-    {
-        next_ = next;
-    }
-
-    PipelineChainLink* getNext() const
-    {
-        return next_;
-    }
-
     uint64_t getTick() const
     {
         return tick_;
@@ -142,10 +131,16 @@ public:
         if (reusable_buffers_)
         {
             reusable_buffers_->try_pop(compressed_data);
+            compressed_data.clear();
         }
 
         compressData(data_ptr, num_bytes, compressed_data, level);
         std::swap(bytes_, compressed_data);
+
+        if (reusable_buffers_)
+        {
+            reusable_buffers_->push(std::move(compressed_data));
+        }
         compressed_ = true;
     }
 
@@ -171,7 +166,6 @@ public:
 private:
     uint64_t tick_;
     DatabaseManager* db_mgr_ = nullptr;
-    PipelineChainLink* next_ = nullptr;
     App* owning_app_ = nullptr;
     const void* user_data_ = nullptr;
     int committed_db_id_ = 0;

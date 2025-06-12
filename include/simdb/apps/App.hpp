@@ -75,7 +75,8 @@ public:
     App* createApp(DatabaseManager* db_mgr) override
     {
         app_pipeline_ = std::make_unique<AppPipeline>(db_mgr);
-        return new AppT(*app_pipeline_);
+        PipelineChain chain;
+        return new AppT(*app_pipeline_, chain);
     }
 
 private:

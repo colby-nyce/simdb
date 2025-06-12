@@ -18,8 +18,8 @@ namespace simdb
 class UniformSerializer : public PipelineApp
 {
 public:
-    UniformSerializer(AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
-        : PipelineApp(pipeline, serialization_chain + OnCommitEntry)
+    UniformSerializer(AppPipeline& pipeline, PipelineChain& serialization_chain)
+        : PipelineApp(pipeline, serialization_chain.append(OnCommitEntry))
     {
     }
 

@@ -18,10 +18,6 @@ public:
         {
             *this = *initial_data;
         }
-        else
-        {
-            output_.clear();
-        }
     }
 
     std::vector<char> release()

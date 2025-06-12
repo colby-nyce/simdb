@@ -66,8 +66,8 @@ void DoExtraStuff(PipelineEntry& entry)
 class Collector : public simdb::PipelineApp
 {
 public:
-    Collector(simdb::AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
-        : simdb::PipelineApp(pipeline, serialization_chain + ProcessCollectorEntry)
+    Collector(simdb::AppPipeline& pipeline, PipelineChain& serialization_chain)
+        : simdb::PipelineApp(pipeline, serialization_chain.append(ProcessCollectorEntry))
     {
     }
 };
@@ -78,8 +78,8 @@ class StatsCollector : public Collector
 public:
     static constexpr auto NAME = "StatsCollector";
 
-    StatsCollector(simdb::AppPipeline& pipeline, PipelineChain serialization_chain = PipelineChain())
-        : Collector(pipeline, serialization_chain + ProcessStatsCollectorEntry)
+    StatsCollector(simdb::AppPipeline& pipeline, PipelineChain& serialization_chain )
+        : Collector(pipeline, serialization_chain.append(ProcessStatsCollectorEntry))
     {
     }
 
@@ -168,7 +168,7 @@ int main(int argc, char** argv)
 {
     DB_INIT;
 
-    auto& app_mgr = simdb::AppManager::getInstance();
+    simdb::AppManager app_mgr;
     app_mgr.enableApp(StatsCollector::NAME);
 
     simdb::DatabaseManager db_mgr("test.db");
