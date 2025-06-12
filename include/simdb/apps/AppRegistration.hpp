@@ -7,7 +7,7 @@ struct AppRegistration
 {
     AppRegistration()
     {
-        simdb::AppManager::getInstance().registerApp<AppT>();
+        simdb::AppManager::registerApp<AppT>();
     }
 };
 

@@ -17,19 +17,13 @@ namespace simdb
 class AppManager
 {
 public:
-    static AppManager& getInstance()
-    {
-        static AppManager instance;
-        return instance;
-    }
-
     /// Register an app as early as possible (doesn't create it yet) Register
     /// your app by adding this macro to a translation unit at file scope:
     ///
     ///   class MyApp : public simdb::App { ... };
     ///   REGISTER_SIMDB_APPLICATION(MyApp); 
     template <typename AppT>
-    void registerApp()
+    static void registerApp()
     {
         auto it = app_factories_.find(AppT::NAME);
         if (it != app_factories_.end())
@@ -213,7 +207,7 @@ public:
     /// Optionally pass in the DatabaseManager if you want to only delete
     /// those apps that are associated with that specific database. Else
     /// all apps will be deleted.
-    void deleteApps(DatabaseManager* db_mgr = nullptr)
+    void destroy(DatabaseManager* db_mgr = nullptr)
     {
         if (db_mgr)
         {
@@ -236,13 +230,13 @@ public:
         {
             apps_.clear();
         }
+
+        app_factories_.clear();
     }
 
 private:
-    AppManager() = default;
-
     /// Registered app factories.
-    std::map<std::string, std::unique_ptr<AppFactoryBase>> app_factories_;
+    static inline std::map<std::string, std::unique_ptr<AppFactoryBase>> app_factories_;
 
     /// Instantiated apps (implicitly enabled).
     std::map<std::string, std::unique_ptr<App>> apps_;

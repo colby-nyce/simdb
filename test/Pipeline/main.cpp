@@ -207,7 +207,7 @@ int main(int argc, char** argv)
     // Finish...
     app_mgr.postSim(&db_mgr);
     app_mgr.teardown();
-    app_mgr.deleteApps();
+    app_mgr.destroy();
 
     // Validate...
     auto query = db_mgr.createQuery("CalledChainLinks");

@@ -15,14 +15,18 @@ class PipelineChainLink;
 class PipelineStage;
 class Pipeline;
 
+using ReusableBuffers = simdb::ConcurrentQueue<std::vector<char>>;
+
 /// Represents a single entry in a processing pipeline.
 class PipelineEntry
 {
 public:
-    PipelineEntry(uint64_t tick, DatabaseManager* db_mgr, std::vector<char>&& bytes)
+    PipelineEntry(uint64_t tick, DatabaseManager* db_mgr, std::vector<char>&& bytes,
+                  ReusableBuffers* reusable_buffers = nullptr)
         : tick_(tick)
         , db_mgr_(db_mgr)
         , bytes_(std::move(bytes))
+        , reusable_buffers_(reusable_buffers)
     {
     }
 
@@ -134,7 +138,14 @@ public:
             return;
         }
 
-        compressData(data_ptr, num_bytes, bytes_, level);
+        std::vector<char> compressed_data;
+        if (reusable_buffers_)
+        {
+            reusable_buffers_->try_pop(compressed_data);
+        }
+
+        compressData(data_ptr, num_bytes, compressed_data, level);
+        std::swap(bytes_, compressed_data);
         compressed_ = true;
     }
 
@@ -166,6 +177,7 @@ private:
     int committed_db_id_ = 0;
     std::vector<char> bytes_;
     bool compressed_ = false;
+    ReusableBuffers* reusable_buffers_ = nullptr;
     std::unordered_map<const PipelineStage*, PipelineChain> stage_chains_;
 };
 

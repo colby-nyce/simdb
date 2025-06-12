@@ -33,7 +33,7 @@ public:
 
     void process(uint64_t tick, std::vector<char>&& data, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
     {
-        PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data));
+        PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data), &reusable_buffers_);
         entry.setOwningApp(this);
         entry.setUserData(user_data);
         auto& chain = entry.getStageChain(serialization_stage_);

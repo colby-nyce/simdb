@@ -111,7 +111,7 @@ int main(int argc, char** argv)
     // Finish...
     app_mgr.postSim(&db_mgr);
     app_mgr.teardown();
-    app_mgr.deleteApps();
+    app_mgr.destroy();
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;
