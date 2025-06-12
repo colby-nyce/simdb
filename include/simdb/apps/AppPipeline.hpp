@@ -35,7 +35,7 @@ public:
 
     void processEntry(PipelineEntry&& entry)
     {
-        compression_stage_->getInputQueue()->push(std::move(entry));
+        compression_stage_->getInputQueue()->emplace(std::move(entry));
     }
 
     void teardown()

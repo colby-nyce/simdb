@@ -139,7 +139,7 @@ public:
 
         if (reusable_buffers_)
         {
-            reusable_buffers_->push(std::move(compressed_data));
+            reusable_buffers_->emplace(std::move(compressed_data));
         }
         compressed_ = true;
     }
@@ -160,7 +160,7 @@ public:
 
     void retire(simdb::ConcurrentQueue<std::vector<char>>& reusable_buffers)
     {
-        reusable_buffers.push(std::move(bytes_));
+        reusable_buffers.emplace(std::move(bytes_));
     }
 
 private:

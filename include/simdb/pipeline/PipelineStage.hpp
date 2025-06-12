@@ -14,49 +14,43 @@ public:
     PipelineStage(const PipelineChain& stage_chain)
         : stage_chain_(stage_chain)
     {
+        processor_ = std::make_unique<Processor>(this, stage_chain_);
     }
 
     void setInputQueue(ConcurrentQueue<PipelineEntry>* input_queue)
     {
-        input_queue_ = input_queue;
+        processor_->setInputQueue(input_queue);
     }
 
     void setOutputQueue(ConcurrentQueue<PipelineEntry>* output_queue)
     {
-        output_queue_ = output_queue;
+        processor_->setOutputQueue(output_queue);
     }
 
     ConcurrentQueue<PipelineEntry>* getInputQueue() const
     {
-        return input_queue_;
+        return processor_->getInputQueue();
     }
 
     ConcurrentQueue<PipelineEntry>* getOutputQueue() const
     {
-        return output_queue_;
+        return processor_->getOutputQueue();
     }
 
     void setDatabaseManager(DatabaseManager* db_mgr)
     {
-        db_mgr_ = db_mgr;
+        processor_->setDatabaseManager(db_mgr);
     }
 
-    void start(double interval_seconds = 0.5)
+    void start()
     {
-        if (!processor_)
-        {
-            processor_ = std::make_unique<Processor>(
-                this, input_queue_, output_queue_, stage_chain_, db_mgr_, interval_seconds);
-        }
+        processor_->start();
     }
 
     void teardown()
     {
-        if (processor_)
-        {
-            processor_->teardown();
-            processor_.reset();
-        }
+        processor_->teardown();
+        processor_.reset();
     }
 
 private:
@@ -64,24 +58,49 @@ private:
     {
     public:
         Processor(PipelineStage* owning_stage,
-                  ConcurrentQueue<PipelineEntry>* input_queue,
-                  ConcurrentQueue<PipelineEntry>* output_queue,
-                  const PipelineChain& stage_chain,
-                  DatabaseManager* db_mgr,
-                  double interval_seconds)
-            : Thread(interval_seconds * 1000) // Convert seconds to milliseconds
+                  const PipelineChain& stage_chain)
+            : Thread(500)
             , owning_stage_(owning_stage)
-            , input_queue_(input_queue)
-            , output_queue_(output_queue)
             , stage_chain_(stage_chain)
-            , db_mgr_(db_mgr)
+        {
+        }
+
+        void setInputQueue(ConcurrentQueue<PipelineEntry>* input_queue)
+        {
+            input_queue_ = input_queue;
+        }
+
+        void setOutputQueue(ConcurrentQueue<PipelineEntry>* output_queue)
+        {
+            output_queue_ = output_queue;
+        }
+
+        ConcurrentQueue<PipelineEntry>* getInputQueue() const
+        {
+            return input_queue_;
+        }
+
+        ConcurrentQueue<PipelineEntry>* getOutputQueue() const
+        {
+            return output_queue_;
+        }
+
+        void setDatabaseManager(DatabaseManager* db_mgr)
+        {
+            db_mgr_ = db_mgr;
+        }
+
+        void start()
         {
             if (!input_queue_)
             {
-                throw DBException("Input queue must be set before starting the processor.");
+                throw DBException("Input queue is not set for the PipelineStage.");
             }
 
-            startThreadLoop();
+            if (!isRunning())
+            {
+                startThreadLoop();
+            }
         }
 
         void flush()
@@ -123,23 +142,20 @@ private:
                 // We may or may not have a downstream stage.
                 if (output_queue_)
                 {
-                    output_queue_->push(std::move(entry));
+                    output_queue_->emplace(std::move(entry));
                 }
             }
         }
 
         PipelineStage* owning_stage_;
-        ConcurrentQueue<PipelineEntry>* input_queue_;
-        ConcurrentQueue<PipelineEntry>* output_queue_;
+        ConcurrentQueue<PipelineEntry>* input_queue_ = nullptr;
+        ConcurrentQueue<PipelineEntry>* output_queue_ = nullptr;
         PipelineChain stage_chain_;
         DatabaseManager* db_mgr_ = nullptr;
     };
 
-    ConcurrentQueue<PipelineEntry>* input_queue_ = nullptr;
-    ConcurrentQueue<PipelineEntry>* output_queue_ = nullptr;
     PipelineChain stage_chain_;
     std::unique_ptr<Processor> processor_;
-    DatabaseManager* db_mgr_ = nullptr;
 };
 
 } // namespace simdb

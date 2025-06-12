@@ -49,7 +49,7 @@ public:
         {
             throw DBException("Pipeline not finalized. Call finalize() before processing entries.");
         }
-        queues_[0]->push(std::move(entry));
+        queues_[0]->emplace(std::move(entry));
     }
 
     void teardown()
