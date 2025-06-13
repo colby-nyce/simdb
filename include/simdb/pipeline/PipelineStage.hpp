@@ -129,7 +129,6 @@ private:
             while (input_queue_->try_pop(entry))
             {
                 entry.setDatabaseManager(db_mgr_);
-                entry.setReusableBuffers(&reusable_buffers_);
                 entry.runStage(stage_idx_);
                 if (output_queue_)
                 {
@@ -142,7 +141,6 @@ private:
         ConcurrentQueue<PipelineEntry>* output_queue_ = nullptr;
         DatabaseManager* db_mgr_ = nullptr;
         size_t stage_idx_ = 0;
-        ReusableBuffers reusable_buffers_;
     };
 
     std::unique_ptr<Processor> processor_;

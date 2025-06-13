@@ -37,8 +37,6 @@ public:
 
     void processEntry(PipelineEntry&& entry, bool strict_fifo = true)
     {
-        auto retire_stage_idx = app_pipeline_->numStages();
-        entry.appendStageFunc(retire_stage_idx, RetireEntry);
         app_pipeline_->processEntry(std::move(entry), strict_fifo);
     }
 
@@ -64,10 +62,7 @@ public:
     template <typename T>
     VectorSerializer<T> createVectorSerializer(const std::vector<T>* initial_data = nullptr, const void* user_data = nullptr)
     {
-        std::vector<char> serialized_data;
-        reusable_buffers_.try_pop(serialized_data);
-        serialized_data.clear();
-        return VectorSerializer<T>(std::move(serialized_data), initial_data);
+        return VectorSerializer<T>(initial_data);
     }
 
     void teardown() override final
@@ -81,13 +76,6 @@ private:
     virtual void onPreTeardown_() {}
     virtual void onPostTeardown_() {}
 
-    static void RetireEntry(PipelineEntry& entry)
-    {
-        entry.setReusableBuffers(&reusable_buffers_);
-        entry.retire();
-    }
-
-    static inline ConcurrentQueue<std::vector<char>> reusable_buffers_;
     std::unique_ptr<simdb::AppPipeline> app_pipeline_;
     DatabaseManager* db_mgr_ = nullptr;
 };

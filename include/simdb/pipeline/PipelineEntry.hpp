@@ -22,8 +22,6 @@ public:
     virtual void onLeaveStage(const PipelineEntry& entry, size_t stage_idx) = 0;
 };
 
-using ReusableBuffers = simdb::ConcurrentQueue<std::vector<char>>;
-
 /// Represents a single entry in a processing pipeline.
 class PipelineEntry
 {
@@ -126,11 +124,6 @@ public:
         return user_data_;
     }
 
-    void setReusableBuffers(ReusableBuffers* reusable_buffers)
-    {
-        reusable_buffers_ = reusable_buffers;
-    }
-
     uint64_t getTick() const
     {
         return tick_;
@@ -165,19 +158,8 @@ public:
         }
 
         std::vector<char> compressed_data;
-        if (reusable_buffers_)
-        {
-            reusable_buffers_->try_pop(compressed_data);
-            compressed_data.clear();
-        }
-
         compressData(data_ptr, num_bytes, compressed_data, level);
         std::swap(bytes_, compressed_data);
-
-        if (reusable_buffers_)
-        {
-            reusable_buffers_->emplace(std::move(compressed_data));
-        }
         compressed_ = true;
     }
 
@@ -200,14 +182,6 @@ public:
         committed_db_id_ = db_id;
     }
 
-    void retire()
-    {
-        if (reusable_buffers_)
-        {
-            reusable_buffers_->emplace(std::move(bytes_));
-        }
-    }
-
 private:
     uint64_t tick_;
     DatabaseManager* db_mgr_ = nullptr;
@@ -216,7 +190,6 @@ private:
     std::vector<char> bytes_;
     bool compressed_ = false;
     int app_id_ = -1;
-    ReusableBuffers* reusable_buffers_ = nullptr;
     const std::vector<PipelineStageObserver*>* stage_observers_ = nullptr;
     const std::vector<std::vector<PipelineFunc>>* stage_functions_ = nullptr;
     std::vector<std::vector<PipelineFunc>> extra_stage_functions_;
