@@ -44,7 +44,7 @@ public:
 
     PipelineEntry prepareEntry(uint64_t tick, std::vector<char>&& data)
     {
-        return PipelineEntry(tick, std::move(data), getAppID_(), &reusable_buffers_);
+        return PipelineEntry(tick, std::move(data), getAppID_());
     }
 
     template <typename T>
@@ -83,10 +83,11 @@ private:
 
     static void RetireEntry(PipelineEntry& entry)
     {
+        entry.setReusableBuffers(&reusable_buffers_);
         entry.retire();
     }
 
-    ConcurrentQueue<std::vector<char>> reusable_buffers_;
+    static inline ConcurrentQueue<std::vector<char>> reusable_buffers_;
     std::unique_ptr<simdb::AppPipeline> app_pipeline_;
     DatabaseManager* db_mgr_ = nullptr;
 };

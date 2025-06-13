@@ -28,13 +28,10 @@ using ReusableBuffers = simdb::ConcurrentQueue<std::vector<char>>;
 class PipelineEntry
 {
 public:
-    PipelineEntry(uint64_t tick, std::vector<char>&& bytes,
-                  const int app_id = -1,
-                  ReusableBuffers* reusable_buffers = nullptr)
+    PipelineEntry(uint64_t tick, std::vector<char>&& bytes, const int app_id)
         : tick_(tick)
         , bytes_(std::move(bytes))
         , app_id_(app_id)
-        , reusable_buffers_(reusable_buffers)
     {
     }
 
@@ -129,6 +126,11 @@ public:
         return user_data_;
     }
 
+    void setReusableBuffers(ReusableBuffers* reusable_buffers)
+    {
+        reusable_buffers_ = reusable_buffers;
+    }
+
     uint64_t getTick() const
     {
         return tick_;
@@ -214,7 +216,7 @@ private:
     std::vector<char> bytes_;
     bool compressed_ = false;
     int app_id_ = -1;
-    ReusableBuffers* reusable_buffers_ = nullptr; // TODO cnyce: does this slow down simulation?
+    ReusableBuffers* reusable_buffers_ = nullptr;
     const std::vector<PipelineStageObserver*>* stage_observers_ = nullptr;
     const std::vector<std::vector<PipelineFunc>>* stage_functions_ = nullptr;
     std::vector<std::vector<PipelineFunc>> extra_stage_functions_;
