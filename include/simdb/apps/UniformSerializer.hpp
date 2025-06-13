@@ -18,9 +18,18 @@ namespace simdb
 class UniformSerializer : public PipelineApp
 {
 public:
-    UniformSerializer(AppPipeline& pipeline, PipelineChain& serialization_chain)
-        : PipelineApp(pipeline, serialization_chain.append(OnCommitEntry))
+    UniformSerializer() = default;
+
+    void configPipeline(simdb::PipelineConfig& config) override final
     {
+        // Let subclasses define what they need for the pipeline.
+        configPipeline_(config);
+
+        // But make sure we get to commit the entry before running
+        // the subclass code during the serialization stage.
+        auto commit_stage = config.numAsyncStages();
+        commit_stage = std::max(commit_stage, 1ul);
+        config.asyncStage(commit_stage) << OnCommitEntry;
     }
 
     bool defineSchema(simdb::Schema& schema) override final
@@ -62,24 +71,17 @@ public:
 private:
     static void OnCommitEntry(PipelineEntry& entry)
     {
-        static_cast<UniformSerializer*>(entry.getOwningApp())->onCommitEntry_(entry);
-    }
+        auto db_mgr = entry.getDatabaseManager();
 
-    void onCommitEntry_(PipelineEntry& entry)
-    {
-        // Sanity check that the DatabaseEntry has our DatabaseManager.
-        if (entry.getDatabaseManager() != getDatabaseManager())
-        {
-            throw DBException("DatabaseEntry's db_mgr does not match UniformSerializer's db_mgr.");
-        }
-
-        auto record = getDatabaseManager()->INSERT(
+        auto record = db_mgr->INSERT(
             SQL_TABLE("UnifiedCollectorBlobs"),
             SQL_COLUMNS("AppID", "Tick", "DataBlob", "IsCompressed"),
-            SQL_VALUES(getAppID_(), entry.getTick(), entry.getBlob(), entry.compressed()));
+            SQL_VALUES(entry.getAppId(), entry.getTick(), entry.getBlob(), entry.compressed()));
 
         entry.setCommittedDbId(record->getId());
     }
+
+    virtual void configPipeline_(simdb::PipelineConfig& config) = 0;
 
     virtual void defineSchema_(Schema&) {}
 

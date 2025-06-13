@@ -4,7 +4,6 @@
 
 // clang-format off
 
-using simdb::PipelineChain;
 using simdb::PipelineEntry;
 
 std::vector<double> generateRandomData(size_t size)
@@ -30,17 +29,12 @@ class FlatVectorSerializer : public simdb::UniformSerializer
 public:
     static constexpr auto NAME = "FlatVectorSerializer";
 
-    FlatVectorSerializer(simdb::AppPipeline& pipeline, PipelineChain& serialization_chain)
-        : simdb::UniformSerializer(pipeline, serialization_chain)
-    {
-    }
+    FlatVectorSerializer() = default;
 
     void addStat(const std::string& stat_name)
     {
         stat_names_.push_back(stat_name);
     }
-
-    using simdb::UniformSerializer::process;
 
     void process(uint64_t tick, const std::vector<double>& data)
     {
@@ -50,10 +44,17 @@ public:
         }
 
         simdb::VectorSerializer<double> serializer = createVectorSerializer<double>(&data);
-        process(tick, std::move(serializer));
+        simdb::PipelineEntry entry = prepareEntry(tick, std::move(serializer));
+        processEntry(std::move(entry));
     }
 
 private:
+    void configPipeline_(simdb::PipelineConfig&) override
+    {
+        // Nothing extra for this subclass. The UniformSerializer
+        // is going to handle the serialization.
+    }
+
     void defineSchema_(simdb::Schema& schema) override
     {
         auto& tbl = schema.addTable("StatisticNames");

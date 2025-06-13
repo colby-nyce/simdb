@@ -29,8 +29,6 @@
 /// with 1-to-many apps that are all writing to it with their own custom schemas
 /// and logic.
 
-#include "simdb/apps/AppPipeline.hpp"
-
 namespace simdb
 {
 
@@ -74,13 +72,8 @@ class AppFactory : public AppFactoryBase
 public:
     App* createApp(DatabaseManager* db_mgr) override
     {
-        app_pipeline_ = std::make_unique<AppPipeline>(db_mgr);
-        PipelineChain chain;
-        return new AppT(*app_pipeline_, chain);
+        return new AppT;
     }
-
-private:
-    std::unique_ptr<AppPipeline> app_pipeline_;
 };
 
 } // namespace simdb

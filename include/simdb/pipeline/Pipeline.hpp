@@ -9,9 +9,10 @@ namespace simdb
 class Pipeline
 {
 public:
-    PipelineStage* addStage(const PipelineChain& stage_chain = nullptr)
+    PipelineStage* addStage()
     {
-        auto stage = std::make_unique<PipelineStage>(stage_chain);
+        auto stage_idx = stages_.size() + 1;
+        auto stage = std::make_unique<PipelineStage>(stage_idx);
         stages_.push_back(std::move(stage));
         return stages_.back().get();
     }
@@ -43,13 +44,13 @@ public:
         }
     }
 
-    void processEntry(PipelineEntry&& entry)
+    void processEntry(PipelineEntry&& entry, size_t stage_idx = 1)
     {
-        if (!queues_.at(0))
+        if (!queues_.at(stage_idx - 1))
         {
             throw DBException("Pipeline not finalized. Call finalize() before processing entries.");
         }
-        queues_[0]->emplace(std::move(entry));
+        queues_[stage_idx - 1]->emplace(std::move(entry));
     }
 
     void teardown()
@@ -65,6 +66,69 @@ public:
 private:
     std::vector<std::unique_ptr<PipelineStage>> stages_;
     std::vector<std::unique_ptr<ConcurrentQueue<PipelineEntry>>> queues_;
+};
+
+class AppPipeline
+{
+public:
+    AppPipeline(std::shared_ptr<Pipeline> pipeline,
+                const std::vector<std::vector<PipelineFunc>>& stage_functions,
+                const std::vector<PipelineStageObserver*>& stage_observers)
+        : pipeline_(pipeline)
+        , stage_functions_(stage_functions)
+        , stage_observers_(stage_observers)
+    {
+        if (!pipeline_)
+        {
+            throw DBException("Pipeline cannot be null.");
+        }
+
+        if (stage_functions_.size() != stage_observers_.size())
+        {
+            throw DBException("Stage functions and observers must have the same size.");
+        }
+
+        for (size_t i = 0; i < stage_functions_.size(); ++i)
+        {
+            if (stage_functions_[i].empty() && stage_observers_[i])
+            {
+                throw DBException("Cannot observe a stage that has no functions.");
+            }
+        }
+
+        for (size_t i = 0; i < stage_functions_.size(); ++i)
+        {
+            if (!stage_functions_[i].empty())
+            {
+                first_stage_idx_ = i + 1;
+                break;
+            }
+        }
+    }
+
+    size_t numStages() const
+    {
+        return stage_functions_.size();
+    }
+
+    void processEntry(PipelineEntry&& entry, bool strict_fifo = true)
+    {
+        entry.setStageFunctions(&stage_functions_);
+        entry.setStageObservers(&stage_observers_);
+        pipeline_->processEntry(std::move(entry), strict_fifo ? 1 : first_stage_idx_);
+    }
+
+    void teardown()
+    {
+        pipeline_->teardown();
+        pipeline_.reset();
+    }
+
+private:
+    std::shared_ptr<Pipeline> pipeline_;
+    std::vector<std::vector<PipelineFunc>> stage_functions_;
+    std::vector<PipelineStageObserver*> stage_observers_;
+    size_t first_stage_idx_ = 0;
 };
 
 } // namespace simdb

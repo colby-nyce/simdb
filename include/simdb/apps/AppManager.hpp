@@ -1,6 +1,8 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
+#include "simdb/apps/PipelineApp.hpp"
+#include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <map>
@@ -79,6 +81,104 @@ public:
             App* app = app_factories_[app_name]->createApp(db_mgr);
             const auto key = app_name + "_" + db_mgr->getDatabaseFilePath();
             apps_[key] = std::unique_ptr<App>(app);
+        }
+
+        std::map<PipelineApp*, std::unique_ptr<PipelineConfig>> pipeline_configs;
+        for (auto& [app_name, app] : apps_)
+        {
+            if (auto pipeline_app = dynamic_cast<PipelineApp*>(app.get()))
+            {
+                auto config = std::make_unique<PipelineConfig>();
+                pipeline_app->configPipeline(*config);
+                pipeline_app->setDatabaseManager(db_mgr);
+                pipeline_configs[pipeline_app] = std::move(config);
+            }
+        }
+
+        size_t total_async_stages = 0;
+        for (const auto& [pipeline_app, config] : pipeline_configs)
+        {
+            total_async_stages = std::max(total_async_stages, config->numAsyncStages());
+        }
+
+        if (total_async_stages > 0)
+        {
+            auto pipeline = std::make_shared<Pipeline>();
+            for (size_t i = 1; i <= total_async_stages; ++i)
+            {
+                auto stage = pipeline->addStage();
+                if (i == total_async_stages)
+                {
+                    stage->setDatabaseManager(db_mgr);
+                }
+            }
+
+            pipeline->finalize();
+            for (const auto& [pipeline_app, config] : pipeline_configs)
+            {
+                size_t app_async_stages = config->numAsyncStages();
+                if (app_async_stages > 0)
+                {
+                    //                |--------------------Non DB stage
+                    //                |        |-----------Non DB stage
+                    //                |        |        |--DB stage
+                    //                |        |        |
+                    //   Pipeline   Stage1   Stage2   Stage3
+                    //   -----------------------------------------------------
+                    //   app1 -----> entry -> entry -> entry (needs all 3 stages)
+                    //   app2 --------------> entry -> entry (only needs 2 stages)
+                    //
+                    size_t first_stage_idx = 0;
+                    size_t last_stage_idx = total_async_stages;
+
+                    // app1
+                    if (app_async_stages == total_async_stages)
+                    {
+                        first_stage_idx = 1;
+                    }
+
+                    // app2
+                    else if (app_async_stages < total_async_stages)
+                    {
+                        first_stage_idx = total_async_stages - app_async_stages + 1;
+                    }
+
+                    // Get a vector of stage functions for this app.
+                    //
+                    // app1:
+                    //   [
+                    //      [Func1, Func2, Func3], // Stage 1
+                    //      [Func4, Func5],        // Stage 2
+                    //      [Func6]                // Stage 3
+                    //   ]
+                    //
+                    // app2:
+                    //   [
+                    //      [],                    // Stage 1 (no functions)
+                    //      [Func7, Func8],        // Stage 2
+                    //      [Func9]                // Stage 3
+                    //   ]
+                    std::vector<std::vector<PipelineFunc>> stage_functions;
+                    std::vector<PipelineStageObserver*> stage_observers;
+                    size_t app_stage_idx = 1;
+                    for (size_t stage_idx = 1; stage_idx <= total_async_stages; ++stage_idx)
+                    {
+                        if (stage_idx >= first_stage_idx && stage_idx <= last_stage_idx)
+                        {
+                            const auto& stage_config = config->asyncStage(app_stage_idx++);
+                            stage_functions.push_back(stage_config.getFunctions());
+                            stage_observers.push_back(stage_config.getObserver());
+                        }
+                        else
+                        {
+                            stage_functions.push_back({});
+                        }
+                    }
+
+                    auto app_pipeline = std::make_unique<AppPipeline>(pipeline, stage_functions, stage_observers);
+                    pipeline_app->setPipeline(std::move(app_pipeline));
+                }
+            }
         }
     }
 

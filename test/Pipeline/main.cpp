@@ -12,7 +12,6 @@
 /// operations on the data, such as compression, serialization, or
 /// transformation.
 
-using simdb::PipelineChain;
 using simdb::PipelineEntry;
 
 std::vector<double> generateRandomData(size_t size)
@@ -29,7 +28,7 @@ std::vector<double> generateRandomData(size_t size)
     return data;
 }
 
-static void UpdateCalledChainLinks(PipelineEntry& entry, const std::string& func_name)
+static void UpdateCalledFuncs(PipelineEntry& entry, const std::string& func_name)
 {
     auto db_mgr = entry.getDatabaseManager();
     auto tick = entry.getTick();
@@ -37,7 +36,7 @@ static void UpdateCalledChainLinks(PipelineEntry& entry, const std::string& func
     auto db_id = entry.getCommittedDbID();
 
     auto record = db_mgr->INSERT(
-        SQL_TABLE("CalledChainLinks"),
+        SQL_TABLE("CalledFunctions"),
         SQL_COLUMNS("Tick", "FunctionName", "EntryCompressed", "EntryDbId"),
         SQL_VALUES(tick, func_name, compressed, db_id));
 
@@ -47,40 +46,23 @@ static void UpdateCalledChainLinks(PipelineEntry& entry, const std::string& func
     }
 }
 
-static void ProcessCollectorEntry(PipelineEntry& entry)
-{
-    UpdateCalledChainLinks(entry, "ProcessCollectorEntry");
-}
-
-static void ProcessStatsCollectorEntry(PipelineEntry& entry)
-{
-    UpdateCalledChainLinks(entry, "ProcessStatsCollectorEntry");
-}
-
-void DoExtraStuff(PipelineEntry& entry)
-{
-    UpdateCalledChainLinks(entry, "DoExtraStuff");
-}
-
 // ------------------------------------------------------------------------
-class Collector : public simdb::PipelineApp
-{
-public:
-    Collector(simdb::AppPipeline& pipeline, PipelineChain& serialization_chain)
-        : simdb::PipelineApp(pipeline, serialization_chain.append(ProcessCollectorEntry))
-    {
-    }
-};
-
-// ------------------------------------------------------------------------
-class StatsCollector : public Collector
+class StatsCollector : public simdb::PipelineApp
 {
 public:
     static constexpr auto NAME = "StatsCollector";
 
-    StatsCollector(simdb::AppPipeline& pipeline, PipelineChain& serialization_chain )
-        : Collector(pipeline, serialization_chain.append(ProcessStatsCollectorEntry))
+    StatsCollector() = default;
+
+    void configPipeline(simdb::PipelineConfig& config) override
     {
+        // Perform compression on the first async stage
+        config.asyncStage(1) >> CompressEntry;
+        config.asyncStage(1).observe(&async_stage_observer_);
+
+        // Write to the database in the second async stage
+        config.asyncStage(2) >> SerializationFunc1 >> SerializationFunc2;
+        config.asyncStage(2).observe(&async_stage_observer_);
     }
 
     bool defineSchema(simdb::Schema& schema) override
@@ -93,8 +75,8 @@ public:
         meta_tbl.addColumn("SimStartTime", dt::string_t);
         meta_tbl.addColumn("SimEndTime", dt::string_t);
 
-        // This table is used to verify the serialization PipelineChain
-        auto& funcs_tbl = schema.addTable("CalledChainLinks");
+        // This table is used to verify the serialization code path
+        auto& funcs_tbl = schema.addTable("CalledFunctions");
         funcs_tbl.addColumn("Tick", dt::int64_t);
         funcs_tbl.addColumn("FunctionName", dt::string_t);
         funcs_tbl.addColumn("EntryCompressed", dt::int32_t);
@@ -139,6 +121,21 @@ public:
     }
 
 private:
+    static void SerializationFunc1(PipelineEntry& entry)
+    {
+        UpdateCalledFuncs(entry, "SerializationFunc1");
+    }
+
+    static void SerializationFunc2(PipelineEntry& entry)
+    {
+        UpdateCalledFuncs(entry, "SerializationFunc2");
+    }
+
+    static void CompressEntry(PipelineEntry& entry)
+    {
+        entry.compress();
+    }
+
     std::string getFormattedCurrentTime_() const
     {
         // Get current time as time_point
@@ -156,10 +153,30 @@ private:
         return oss.str();
     }
 
+    class AsyncStageObserver : public simdb::PipelineStageObserver
+    {
+    public:
+        void onEnterStage(const PipelineEntry& entry, size_t stage_idx) override
+        {
+            // TODO cnyce
+        }
+
+        void onLeaveStage(const PipelineEntry& entry, size_t stage_idx) override
+        {
+            // TODO cnyce
+        }
+    };
+
     std::string sim_cmdline_;
     std::string sim_start_time_;
     std::string sim_end_time_;
+    AsyncStageObserver async_stage_observer_;
 };
+
+static void ExtraSerializationFunc(PipelineEntry& entry)
+{
+    UpdateCalledFuncs(entry, "ExtraSerializationFunc");
+}
 
 REGISTER_SIMDB_APPLICATION(StatsCollector);
 
@@ -193,15 +210,11 @@ int main(int argc, char** argv)
 
         vector = generateRandomData(1000);
 
-        // Process the data and tell the pipeline to append DoExtraStuff()
-        // to the serialization chain. On the database write thread, these
-        // functions will get called:
-        //
-        //   ProcessCollectorEntry()          |-- These came from the PipelineApp
-        //   ProcessStatsCollectorEntry()  |-- class hierarchy and always process
-        //                                    |-- from the base class down.
-        //   DoExtraStuff()
-        pipeline_collector->process(tick, std::move(vector), DoExtraStuff);
+        // Process the data and tell the pipeline to append ExtraSerializationFunc()
+        // to the serialization functions.
+        simdb::PipelineEntry entry = pipeline_collector->prepareEntry(tick, std::move(vector));
+        entry.appendStageFunc(2, ExtraSerializationFunc);
+        pipeline_collector->processEntry(std::move(entry));
     }
 
     // Finish...
@@ -210,7 +223,7 @@ int main(int argc, char** argv)
     app_mgr.destroy();
 
     // Validate...
-    auto query = db_mgr.createQuery("CalledChainLinks");
+    auto query = db_mgr.createQuery("CalledFunctions");
 
     std::string func_name;
     query->select("FunctionName", func_name);
@@ -227,15 +240,15 @@ int main(int argc, char** argv)
         query->addConstraintForInt("Tick", simdb::Constraints::EQUAL, tick);
 
         // First verify that exactly 3 functions were called
-        // in the serialization chain.
+        // in the serialization code path.
         EXPECT_EQUAL(query->count(), 3);
 
         // Now verify that the functions were called in the
         // correct order.
         const char* expected_funcs[] = {
-            "ProcessCollectorEntry",
-            "ProcessStatsCollectorEntry",
-            "DoExtraStuff"
+            "SerializationFunc1",
+            "SerializationFunc2",
+            "ExtraSerializationFunc"
         };
 
         auto results = query->getResultSet();
@@ -251,8 +264,8 @@ int main(int argc, char** argv)
 
             // Verify that the first serialization callback
             // set the committed database ID. All other
-            // functions in the chain should have the same
-            // database ID for this tick.
+            // functions should have the same database ID
+            // for this tick.
             if (entry_db_id)
             {
                 db_id = entry_db_id;

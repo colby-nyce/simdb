@@ -1,10 +1,11 @@
 #pragma once
 
-#include "simdb/pipeline/PipelineChain.hpp"
+#include "simdb/pipeline/PipelineConfig.hpp"
 #include "simdb/utils/MetaStructs.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/schema/Blob.hpp"
+#include <iostream>
 
 namespace simdb
 {
@@ -14,70 +15,38 @@ class DatabaseManager;
 class PipelineStage;
 class Pipeline;
 
+class PipelineStageObserver
+{
+public:
+    virtual void onEnterStage(const PipelineEntry& entry, size_t stage_idx) = 0;
+    virtual void onLeaveStage(const PipelineEntry& entry, size_t stage_idx) = 0;
+};
+
 using ReusableBuffers = simdb::ConcurrentQueue<std::vector<char>>;
 
 /// Represents a single entry in a processing pipeline.
 class PipelineEntry
 {
 public:
-    PipelineEntry(uint64_t tick, DatabaseManager* db_mgr, std::vector<char>&& bytes,
+    PipelineEntry(uint64_t tick, std::vector<char>&& bytes,
+                  const int app_id = -1,
                   ReusableBuffers* reusable_buffers = nullptr)
         : tick_(tick)
-        , db_mgr_(db_mgr)
         , bytes_(std::move(bytes))
+        , app_id_(app_id)
         , reusable_buffers_(reusable_buffers)
     {
     }
 
     PipelineEntry() = default;
 
-    virtual ~PipelineEntry() = default;
+    PipelineEntry(const PipelineEntry&) = delete;
 
-    void setOwningApp(App* app)
-    {
-        owning_app_ = app;
-    }
+    PipelineEntry(PipelineEntry&&) = default;
 
-    App* getOwningApp() const
-    {
-        return owning_app_;
-    }
+    PipelineEntry& operator=(const PipelineEntry&) = delete;
 
-    template <typename AppT>
-    AppT* getOwningAppAs() const
-    {
-        static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
-        return dynamic_cast<AppT*>(owning_app_);
-    }
-
-    void setStageChain(const PipelineStage* stage, const PipelineChain& chain)
-    {
-        stage_chains_[stage] = chain;
-    }
-
-    PipelineChain& getStageChain(const PipelineStage* stage)
-    {
-        return stage_chains_[stage];
-    }
-
-    void runStageChain(const PipelineStage* stage)
-    {
-        auto it = stage_chains_.find(stage);
-        if (it != stage_chains_.end())
-        {
-            it->second(*this);
-        }
-    }
-
-    void setUserData(const void* user_data)
-    {
-        user_data_ = user_data;
-    }
-
-    const void* getUserData() const
-    {
-        return user_data_;
-    }
+    PipelineEntry& operator=(PipelineEntry&&) = default;
 
     const void* getDataPtr() const
     {
@@ -92,6 +61,72 @@ public:
     DatabaseManager* getDatabaseManager() const
     {
         return db_mgr_;
+    }
+
+    void setDatabaseManager(DatabaseManager* db_mgr)
+    {
+        db_mgr_ = db_mgr;
+    }
+
+    void setStageObservers(const std::vector<PipelineStageObserver*>* stage_observers)
+    {
+        if (stage_observers_)
+        {
+            throw DBException("Stage observers are already set for this PipelineEntry.");
+        }
+        stage_observers_ = stage_observers;
+    }
+
+    void setStageFunctions(const std::vector<std::vector<PipelineFunc>>* stage_functions)
+    {
+        if (stage_functions_)
+        {
+            throw DBException("Stage functions are already set for this PipelineEntry.");
+        }
+        stage_functions_ = stage_functions;
+    }
+
+    void appendStageFunc(size_t stage_idx, PipelineFunc func)
+    {
+        extra_stage_functions_.resize(std::max(extra_stage_functions_.size(), stage_idx));
+        extra_stage_functions_[stage_idx - 1].push_back(func);
+    }
+
+    void runStage(size_t stage_idx)
+    {
+        auto observer = stage_observers_ ? (*stage_observers_)[stage_idx - 1] : nullptr;
+        if (observer)
+        {
+            observer->onEnterStage(*this, stage_idx);
+        }
+
+        for (const auto& func : stage_functions_->at(stage_idx - 1))
+        {
+            func(*this);
+        }
+
+        if (!extra_stage_functions_.empty() && stage_idx - 1 < extra_stage_functions_.size())
+        {
+            for (const auto& func : extra_stage_functions_[stage_idx - 1])
+            {
+                func(*this);
+            }
+        }
+
+        if (observer)
+        {
+            observer->onLeaveStage(*this, stage_idx);
+        }
+    }
+
+    void setUserData(const void* user_data)
+    {
+        user_data_ = user_data;
+    }
+
+    const void* getUserData() const
+    {
+        return user_data_;
     }
 
     uint64_t getTick() const
@@ -144,6 +179,11 @@ public:
         compressed_ = true;
     }
 
+    int getAppId() const
+    {
+        return app_id_;
+    }
+
     int getCommittedDbID() const
     {
         return committed_db_id_;
@@ -158,21 +198,26 @@ public:
         committed_db_id_ = db_id;
     }
 
-    void retire(simdb::ConcurrentQueue<std::vector<char>>& reusable_buffers)
+    void retire()
     {
-        reusable_buffers.emplace(std::move(bytes_));
+        if (reusable_buffers_)
+        {
+            reusable_buffers_->emplace(std::move(bytes_));
+        }
     }
 
 private:
     uint64_t tick_;
     DatabaseManager* db_mgr_ = nullptr;
-    App* owning_app_ = nullptr;
     const void* user_data_ = nullptr;
     int committed_db_id_ = 0;
     std::vector<char> bytes_;
     bool compressed_ = false;
-    ReusableBuffers* reusable_buffers_ = nullptr;
-    std::unordered_map<const PipelineStage*, PipelineChain> stage_chains_;
+    int app_id_ = -1;
+    ReusableBuffers* reusable_buffers_ = nullptr; // TODO cnyce: does this slow down simulation?
+    const std::vector<PipelineStageObserver*>* stage_observers_ = nullptr;
+    const std::vector<std::vector<PipelineFunc>>* stage_functions_ = nullptr;
+    std::vector<std::vector<PipelineFunc>> extra_stage_functions_;
 };
 
 } // namespace simdb

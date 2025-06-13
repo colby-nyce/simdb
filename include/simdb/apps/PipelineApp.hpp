@@ -1,59 +1,64 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
-#include "simdb/apps/AppPipeline.hpp"
+#include "simdb/pipeline/Pipeline.hpp"
+#include "simdb/pipeline/PipelineConfig.hpp"
+#include "simdb/pipeline/PipelineEntry.hpp"
 #include "simdb/utils/VectorSerializer.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
 namespace simdb
 {
 
+class AppPipeline;
+
 /// Base class for SimDB applications that use a pipeline for processing.
 class PipelineApp : public App
 {
 public:
-    PipelineApp(AppPipeline& pipeline, PipelineChain& serialization_chain)
-        : pipeline_(pipeline)
-        , serialization_chain_(serialization_chain)
-        , serialization_stage_(pipeline.getSerializationStage())
+    PipelineApp() = default;
+
+    virtual void configPipeline(PipelineConfig& config) = 0;
+
+    void setPipeline(std::unique_ptr<AppPipeline> pipeline)
     {
-        // Now that we are in the base class, reverse the chain to ensure
-        // that we run the chain links in the correct order. The base class
-        // should be the first link in the chain and on down the class
-        // hierarchy. For instance, a base class might handle writing to
-        // the database, and subclasses will need the DB ID for their
-        // entry processing functions.
-        serialization_chain_.reverse();
+        app_pipeline_ = std::move(pipeline);
+    }
+
+    void setDatabaseManager(DatabaseManager* db_mgr)
+    {
+        db_mgr_ = db_mgr;
     }
 
     DatabaseManager* getDatabaseManager() const
     {
-        return pipeline_.getDatabaseManager();
+        return db_mgr_;
     }
 
-    void process(uint64_t tick, std::vector<char>&& data, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
+    void processEntry(PipelineEntry&& entry, bool strict_fifo = true)
     {
-        PipelineEntry entry(tick, pipeline_.getDatabaseManager(), std::move(data), &reusable_buffers_);
-        entry.setOwningApp(this);
-        entry.setUserData(user_data);
-        auto& chain = entry.getStageChain(serialization_stage_);
-        chain = serialization_chain_ + on_serialized + RetireEntry;
-        pipeline_.processEntry(std::move(entry));
-        ++num_sent_;
+        auto retire_stage_idx = app_pipeline_->numStages();
+        entry.appendStageFunc(retire_stage_idx, RetireEntry);
+        app_pipeline_->processEntry(std::move(entry), strict_fifo);
+    }
+
+    PipelineEntry prepareEntry(uint64_t tick, std::vector<char>&& data)
+    {
+        return PipelineEntry(tick, std::move(data), getAppID_(), &reusable_buffers_);
     }
 
     template <typename T>
-    void process(uint64_t tick, const std::vector<T>& data, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
+    PipelineEntry prepareEntry(uint64_t tick, const std::vector<T>& data)
     {
         VectorSerializer<T> serializer = createVectorSerializer<T>(&data);
-        process(tick, std::move(serializer), on_serialized, user_data);
+        return prepareEntry(tick, std::move(serializer));
     }
 
     template <typename T>
-    void process(uint64_t tick, VectorSerializer<T>&& serializer, PipelineFunc on_serialized = nullptr, const void* user_data = nullptr)
+    PipelineEntry prepareEntry(uint64_t tick, VectorSerializer<T>&& serializer)
     {
         std::vector<char> data = serializer.release();
-        process(tick, std::move(data), on_serialized, user_data);
+        return prepareEntry(tick, std::move(data));
     }
 
     template <typename T>
@@ -68,11 +73,8 @@ public:
     void teardown() override final
     {
         onPreTeardown_();
-        pipeline_.teardown();
+        app_pipeline_->teardown();
         onPostTeardown_();
-
-        std::cout << "PipelineApp teardown complete. "
-                  << "Sent: " << num_sent_ << ", Retired: " << num_retired_ << std::endl;
     }
 
 private:
@@ -81,21 +83,12 @@ private:
 
     static void RetireEntry(PipelineEntry& entry)
     {
-        static_cast<PipelineApp*>(entry.getOwningApp())->retireEntry(entry);
+        entry.retire();
     }
 
-    void retireEntry(PipelineEntry& entry)
-    {
-        entry.retire(reusable_buffers_);
-        ++num_retired_;
-    }
-
-    AppPipeline& pipeline_;
-    PipelineChain serialization_chain_;
     ConcurrentQueue<std::vector<char>> reusable_buffers_;
-    PipelineStage* serialization_stage_ = nullptr;
-    uint64_t num_sent_ = 0;
-    uint64_t num_retired_ = 0;
+    std::unique_ptr<simdb::AppPipeline> app_pipeline_;
+    DatabaseManager* db_mgr_ = nullptr;
 };
 
 } // namespace simdb

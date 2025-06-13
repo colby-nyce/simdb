@@ -2,6 +2,7 @@
 
 #include "simdb/Exceptions.hpp"
 #include <vector>
+#include <cstring>
 
 namespace simdb
 {

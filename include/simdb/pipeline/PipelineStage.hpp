@@ -1,6 +1,5 @@
 #pragma once
 
-#include "simdb/pipeline/PipelineChain.hpp"
 #include "simdb/pipeline/PipelineEntry.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/Thread.hpp"
@@ -11,10 +10,9 @@ namespace simdb
 class PipelineStage
 {
 public:
-    PipelineStage(const PipelineChain& stage_chain)
-        : stage_chain_(stage_chain)
+    explicit PipelineStage(size_t stage_idx)
+        : processor_(std::make_unique<Processor>(stage_idx))
     {
-        processor_ = std::make_unique<Processor>(this, stage_chain_);
     }
 
     void setInputQueue(ConcurrentQueue<PipelineEntry>* input_queue)
@@ -57,11 +55,9 @@ private:
     class Processor : public Thread
     {
     public:
-        Processor(PipelineStage* owning_stage,
-                  const PipelineChain& stage_chain)
+        Processor(size_t stage_idx)
             : Thread(500)
-            , owning_stage_(owning_stage)
-            , stage_chain_(stage_chain)
+            , stage_idx_(stage_idx)
         {
         }
 
@@ -132,14 +128,8 @@ private:
             PipelineEntry entry;
             while (input_queue_->try_pop(entry))
             {
-                // First run our default chain.
-                stage_chain_(entry);
-
-                // Now run any stage-specific chains
-                // that were added to this entry.
-                entry.runStageChain(owning_stage_);
-
-                // We may or may not have a downstream stage.
+                entry.setDatabaseManager(db_mgr_);
+                entry.runStage(stage_idx_);
                 if (output_queue_)
                 {
                     output_queue_->emplace(std::move(entry));
@@ -147,14 +137,12 @@ private:
             }
         }
 
-        PipelineStage* owning_stage_;
         ConcurrentQueue<PipelineEntry>* input_queue_ = nullptr;
         ConcurrentQueue<PipelineEntry>* output_queue_ = nullptr;
-        PipelineChain stage_chain_;
         DatabaseManager* db_mgr_ = nullptr;
+        size_t stage_idx_ = 0;
     };
 
-    PipelineChain stage_chain_;
     std::unique_ptr<Processor> processor_;
 };
 
