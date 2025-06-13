@@ -20,18 +20,6 @@ class UniformSerializer : public PipelineApp
 public:
     UniformSerializer() = default;
 
-    void configPipeline(simdb::PipelineConfig& config) override final
-    {
-        // Let subclasses define what they need for the pipeline.
-        configPipeline_(config);
-
-        // But make sure we get to commit the entry before running
-        // the subclass code during the serialization stage.
-        auto commit_stage = config.numAsyncStages();
-        commit_stage = std::max(commit_stage, 1ul);
-        config.asyncStage(commit_stage) << OnCommitEntry;
-    }
-
     bool defineSchema(simdb::Schema& schema) override final
     {
         using dt = SqlDataType;
@@ -68,8 +56,13 @@ public:
         postSim_();
     }
 
-private:
-    static void OnCommitEntry(PipelineEntry& entry)
+protected:
+    static void CompressEntry(PipelineEntry& entry)
+    {
+        entry.compress();
+    }
+
+    static void CommitEntry(PipelineEntry& entry)
     {
         auto db_mgr = entry.getDatabaseManager();
 
@@ -81,8 +74,7 @@ private:
         entry.setCommittedDbId(record->getId());
     }
 
-    virtual void configPipeline_(simdb::PipelineConfig& config) = 0;
-
+private:
     virtual void defineSchema_(Schema&) {}
 
     virtual void postInit_(int argc, char** argv)

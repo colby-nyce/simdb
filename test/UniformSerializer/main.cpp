@@ -31,6 +31,12 @@ public:
 
     FlatVectorSerializer() = default;
 
+    void configPipeline(simdb::PipelineConfig& config) override
+    {
+        config.asyncStage(1) >> CompressEntry;
+        config.asyncStage(2) >> CommitEntry;
+    }
+
     void addStat(const std::string& stat_name)
     {
         stat_names_.push_back(stat_name);
@@ -49,12 +55,6 @@ public:
     }
 
 private:
-    void configPipeline_(simdb::PipelineConfig&) override
-    {
-        // Nothing extra for this subclass. The UniformSerializer
-        // is going to handle the serialization.
-    }
-
     void defineSchema_(simdb::Schema& schema) override
     {
         auto& tbl = schema.addTable("StatisticNames");
