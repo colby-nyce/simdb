@@ -58,7 +58,7 @@ private:
     void defineSchema_(simdb::Schema& schema) override
     {
         auto& tbl = schema.addTable("ProfileData");
-        tbl.addColumn("Data", simdb::SqlDataType::string_t);
+        tbl.addColumn("ProfileData", simdb::SqlDataType::blob_t);
     };
 
     void postInit_(int argc, char **argv) override
