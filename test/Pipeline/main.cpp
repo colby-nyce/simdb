@@ -120,6 +120,11 @@ public:
             SQL_VALUES(sim_cmdline_, sim_start_time_, sim_end_time_));
     }
 
+    void validate(size_t num_ticks) const
+    {
+        async_stage_observer_.validate(num_ticks);
+    }
+
 private:
     static void SerializationFunc1(PipelineEntry& entry)
     {
@@ -158,13 +163,38 @@ private:
     public:
         void onEnterStage(const PipelineEntry& entry, size_t stage_idx) override
         {
-            // TODO cnyce
+            if (stage_entry_counts_.find(stage_idx) == stage_entry_counts_.end())
+            {
+                stage_entry_counts_[stage_idx] = 0;
+            }
+            ++stage_entry_counts_[stage_idx];
         }
 
         void onLeaveStage(const PipelineEntry& entry, size_t stage_idx) override
         {
-            // TODO cnyce
+            if (stage_exit_counts_.find(stage_idx) == stage_exit_counts_.end())
+            {
+                stage_exit_counts_[stage_idx] = 0;
+            }
+            ++stage_exit_counts_[stage_idx];
         }
+
+        void validate(size_t num_ticks) const
+        {
+            for (const auto& [stage_idx, count] : stage_entry_counts_)
+            {
+                EXPECT_EQUAL(count, num_ticks);
+            }
+
+            for (const auto& [stage_idx, count] : stage_exit_counts_)
+            {
+                EXPECT_EQUAL(count, num_ticks);
+            }
+        }
+
+    private:
+        std::map<size_t, size_t> stage_entry_counts_;
+        std::map<size_t, size_t> stage_exit_counts_;
     };
 
     std::string sim_cmdline_;
@@ -220,9 +250,10 @@ int main(int argc, char** argv)
     // Finish...
     app_mgr.postSim(&db_mgr);
     app_mgr.teardown();
-    app_mgr.destroy();
 
     // Validate...
+    pipeline_collector->validate(NUM_TICKS);
+
     auto query = db_mgr.createQuery("CalledFunctions");
 
     std::string func_name;
@@ -283,6 +314,9 @@ int main(int argc, char** argv)
             }
         }
     }
+
+    // Done.
+    app_mgr.destroy();
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;
