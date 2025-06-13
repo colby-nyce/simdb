@@ -1,0 +1,4 @@
+project(ProfileDataSerializer_test)
+add_executable(ProfileDataSerializer_test main.cpp)
+include(../TestingMacros.cmake)
+simdb_test(ProfileDataSerializer_test ProfileDataSerializer_test_RUN)
