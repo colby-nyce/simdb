@@ -55,7 +55,7 @@ public:
     }
 
 private:
-    void defineSchema_(simdb::Schema& schema) override
+    void extendSchema_(simdb::Schema& schema) override
     {
         auto& tbl = schema.addTable("StatisticNames");
         tbl.addColumn("Name", simdb::SqlDataType::string_t);
