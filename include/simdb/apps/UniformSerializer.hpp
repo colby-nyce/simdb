@@ -35,7 +35,7 @@ public:
         meta_tbl.addColumn("AppID", dt::int32_t);
         meta_tbl.addColumn("ByteLayoutYAML", dt::string_t);
 
-        defineSchema_(schema);
+        extendSchema_(schema);
         return true;
     }
 
@@ -75,7 +75,7 @@ protected:
     }
 
 private:
-    virtual void defineSchema_(Schema&) {}
+    virtual void extendSchema_(Schema&) {}
 
     virtual void postInit_(int argc, char** argv)
     {
