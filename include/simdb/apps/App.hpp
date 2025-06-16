@@ -1,5 +1,8 @@
 #pragma once
 
+#include <memory>
+#include <vector>
+
 /// Aside from its core SQLite functionality, SimDB provides a framework for
 /// creating "apps" which get selectively enabled based on your simulation
 /// configuration (e.g. command line options, config file, etc).
@@ -34,7 +37,9 @@ namespace simdb
 
 class AsyncPipeline;
 class DatabaseManager;
+class PipelineStageBase;
 class Schema;
+class TransformQueueBase;
 
 /// Base class for SimDB applications. Note that app subclasses are given
 /// the DatabaseManager instance as a constructor argument, so they can
@@ -59,6 +64,15 @@ private:
     friend class AppManager;
 };
 
+/// Base class for all Apps that want to process data using a
+/// high-performance pipeline.
+class PipelineApp : public App
+{
+public:
+    virtual std::vector<std::unique_ptr<PipelineStageBase>> configPipeline() = 0;
+    virtual void setPipelineInputQueue(TransformQueueBase*) = 0;
+};
+
 class AppFactoryBase
 {
 public:
@@ -72,7 +86,7 @@ class AppFactory : public AppFactoryBase
 public:
     App* createApp(DatabaseManager* db_mgr) override
     {
-        return new AppT;
+        return new AppT(db_mgr);
     }
 };
 

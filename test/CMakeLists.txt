@@ -7,4 +7,3 @@ add_custom_command(
 
 add_subdirectory(SQLite)
 add_subdirectory(Pipeline)
-add_subdirectory(UniformSerializer)
