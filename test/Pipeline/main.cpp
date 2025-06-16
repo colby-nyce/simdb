@@ -103,7 +103,7 @@ public:
         return true;
     }
 
-    void configPipeline(simdb::PipelineFinalizer& finalizer) override
+    void configPipeline(simdb::PipelineConfig& config) override
     {
         // Stage 1:
         //   - Input type:      DotProdArray
@@ -199,8 +199,8 @@ public:
         stage2->last(std::move(transform5));
 
         // Finalize
-        finalizer.addStage(std::move(stage1));
-        finalizer.addStage(std::move(stage2));
+        config.addStage(std::move(stage1));
+        config.addStage(std::move(stage2));
     }
 
     void setPipelineInputQueue(simdb::TransformQueueBase* queue) override

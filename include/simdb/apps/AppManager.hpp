@@ -282,26 +282,23 @@ private:
         }
 
         std::vector<App*> db_apps = getApps_(db_mgr);
-        std::map<App*, std::unique_ptr<PipelineFinalizer>> finalizers;
+        std::map<App*, std::unique_ptr<PipelineConfig>> configs;
         for (auto app : db_apps) {
-            auto finalizer = std::make_unique<PipelineFinalizer>();
-            app->configPipeline(*finalizer);
-            finalizers[app] = std::move(finalizer);
+            auto cfg = std::make_unique<PipelineConfig>();
+            app->configPipeline(*cfg);
+            configs[app] = std::move(cfg);
         }
 
-        // Extract from each finalizer:
-        //   - How many stages the app needs 
-        //   - Whether it needs the last stage to be on the DB thread 
-        std::vector<PipelineFinalizer::Config> app_configs;
-        for (auto& [app, finalizer] : finalizers)
+        std::vector<PipelineConfig::Config> app_configs;
+        for (auto& [app, cfg] : configs)
         {
-            app_configs.emplace_back(finalizer->getConfig());
+            app_configs.emplace_back(cfg->getConfig());
         }
 
         // We need to give each app its specific ConcurrentQueue
         // where it should send its data down the pipeline.
-        for (auto& [app, finalizer] : finalizers) {
-            app->setPipelineInputQueue(finalizer->getInputQueue());
+        for (auto& [app, cfg] : configs) {
+            app->setPipelineInputQueue(cfg->getInputQueue());
         }
 
         // Create one PipelineThread object per stage, and give all the 
@@ -330,8 +327,8 @@ private:
         }
 
         std::map<App*, std::vector<std::unique_ptr<PipelineStageBase>>> app_stages;
-        for (auto& [app, finalizer] : finalizers) {
-            app_stages[app] = finalizer->releaseStages();
+        for (auto& [app, cfg] : configs) {
+            app_stages[app] = cfg->releaseStages();
         }
 
         std::map<PipelineThread*, std::vector<std::unique_ptr<PipelineStageBase>>> thread_stages;
@@ -345,7 +342,6 @@ private:
                 if (auto db = stages.back()->getDatabaseManager())
                 {
                     assert(db_mgr == db); (void)db;
-                    //pipeline_threads[thread_idx]->addStage(std::move(stages.back()));
                     thread_stages[pipeline_threads[thread_idx].get()].emplace_back(std::move(stages.back()));
                     pipeline_threads[thread_idx]->setDatabaseManager(db_mgr);
                     stages.pop_back();
@@ -361,7 +357,6 @@ private:
             {
                 if (!stages.empty())
                 {
-                    //pipeline_threads[thread_idx]->addStage(std::move(stages.back()));
                     thread_stages[pipeline_threads[thread_idx].get()].emplace_back(std::move(stages.back()));
                     stages.pop_back();
                 }

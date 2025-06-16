@@ -228,19 +228,7 @@ private:
 };
 
 /// TODO cnyce
-class Pipeline
-{
-public:
-    Pipeline(std::vector<std::unique_ptr<PipelineStageBase>>&& stages)
-        : stages_(std::move(stages))
-    {}
-
-private:
-    std::vector<std::unique_ptr<PipelineStageBase>> stages_;
-};
-
-/// TODO cnyce
-class PipelineFinalizer
+class PipelineConfig
 {
 public:
     void addStage(std::unique_ptr<PipelineStageBase> stage)

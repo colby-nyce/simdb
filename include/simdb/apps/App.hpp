@@ -34,7 +34,7 @@ namespace simdb
 
 class AsyncPipeline;
 class DatabaseManager;
-class PipelineFinalizer;
+class PipelineConfig;
 class Schema;
 class TransformQueueBase;
 
@@ -47,7 +47,7 @@ class App
 public:
     virtual ~App() = default;
     virtual bool defineSchema(Schema&) { return false; }
-    virtual void configPipeline(PipelineFinalizer&) {}
+    virtual void configPipeline(PipelineConfig&) {}
     virtual void setPipelineInputQueue(TransformQueueBase*) {}
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual void postSim() {}
