@@ -183,7 +183,7 @@ public:
         return db_mgr_;
     }
 
-    std::vector<PipelineTransformBase*> getTransforms()
+    std::vector<PipelineTransformBase*> getTransforms() override
     {
         if (!accepting_transforms_.count(AcceptingTransforms::NONE))
         {
