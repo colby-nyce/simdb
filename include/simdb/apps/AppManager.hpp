@@ -1,15 +1,15 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
-#include "simdb/apps/PipelineApp.hpp"
-#include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/pipeline/PipelineThread.hpp"
 
 #include <map>
 #include <set>
 
 namespace simdb
 {
+class PipelineThread;
 
 /// @brief Singleton class that manages all SimDB applications.
 ///
@@ -81,104 +81,6 @@ public:
             App* app = app_factories_[app_name]->createApp(db_mgr);
             const auto key = app_name + "_" + db_mgr->getDatabaseFilePath();
             apps_[key] = std::unique_ptr<App>(app);
-        }
-
-        std::map<PipelineApp*, std::unique_ptr<PipelineConfig>> pipeline_configs;
-        for (auto& [app_name, app] : apps_)
-        {
-            if (auto pipeline_app = dynamic_cast<PipelineApp*>(app.get()))
-            {
-                auto config = std::make_unique<PipelineConfig>();
-                pipeline_app->configPipeline(*config);
-                pipeline_app->setDatabaseManager(db_mgr);
-                pipeline_configs[pipeline_app] = std::move(config);
-            }
-        }
-
-        size_t total_async_stages = 0;
-        for (const auto& [pipeline_app, config] : pipeline_configs)
-        {
-            total_async_stages = std::max(total_async_stages, config->numAsyncStages());
-        }
-
-        if (total_async_stages > 0)
-        {
-            auto pipeline = std::make_shared<Pipeline>();
-            for (size_t i = 1; i <= total_async_stages; ++i)
-            {
-                auto stage = pipeline->addStage();
-                if (i == total_async_stages)
-                {
-                    stage->setDatabaseManager(db_mgr);
-                }
-            }
-
-            pipeline->finalize();
-            for (const auto& [pipeline_app, config] : pipeline_configs)
-            {
-                size_t app_async_stages = config->numAsyncStages();
-                if (app_async_stages > 0)
-                {
-                    //                |--------------------Non DB stage
-                    //                |        |-----------Non DB stage
-                    //                |        |        |--DB stage
-                    //                |        |        |
-                    //   Pipeline   Stage1   Stage2   Stage3
-                    //   -----------------------------------------------------
-                    //   app1 -----> entry -> entry -> entry (needs all 3 stages)
-                    //   app2 --------------> entry -> entry (only needs 2 stages)
-                    //
-                    size_t first_stage_idx = 0;
-                    size_t last_stage_idx = total_async_stages;
-
-                    // app1
-                    if (app_async_stages == total_async_stages)
-                    {
-                        first_stage_idx = 1;
-                    }
-
-                    // app2
-                    else if (app_async_stages < total_async_stages)
-                    {
-                        first_stage_idx = total_async_stages - app_async_stages + 1;
-                    }
-
-                    // Get a vector of stage functions for this app.
-                    //
-                    // app1:
-                    //   [
-                    //      [Func1, Func2, Func3], // Stage 1
-                    //      [Func4, Func5],        // Stage 2
-                    //      [Func6]                // Stage 3
-                    //   ]
-                    //
-                    // app2:
-                    //   [
-                    //      [],                    // Stage 1 (no functions)
-                    //      [Func7, Func8],        // Stage 2
-                    //      [Func9]                // Stage 3
-                    //   ]
-                    std::vector<std::vector<PipelineFunc>> stage_functions;
-                    std::vector<PipelineStageObserver*> stage_observers;
-                    size_t app_stage_idx = 1;
-                    for (size_t stage_idx = 1; stage_idx <= total_async_stages; ++stage_idx)
-                    {
-                        if (stage_idx >= first_stage_idx && stage_idx <= last_stage_idx)
-                        {
-                            const auto& stage_config = config->asyncStage(app_stage_idx++);
-                            stage_functions.push_back(stage_config.getFunctions());
-                            stage_observers.push_back(stage_config.getObserver());
-                        }
-                        else
-                        {
-                            stage_functions.push_back({});
-                        }
-                    }
-
-                    auto app_pipeline = std::make_unique<AppPipeline>(pipeline, stage_functions, stage_observers);
-                    pipeline_app->setPipeline(std::move(app_pipeline));
-                }
-            }
         }
     }
 
@@ -269,7 +171,8 @@ public:
         db_mgr->safeTransaction(
             [&]()
             {
-                for (const auto& [name, app] : apps_)
+                configureAppPipelines_(db_mgr);
+                for (auto app : getApps_(db_mgr))
                 {
                     app->postInit(argc, argv);
                 }
@@ -282,7 +185,7 @@ public:
         db_mgr->safeTransaction(
             [&]()
             {
-                for (const auto& [name, app] : apps_)
+                for (auto app : getApps_(db_mgr))
                 {
                     app->postSim();
                 }
@@ -292,9 +195,25 @@ public:
     /// Call this after the simulation ends for resource cleanup tasks
     /// such as closing files, releasing memory, flushing/shutting down
     /// background threads, etc.
-    void teardown()
+    void teardown(DatabaseManager* db_mgr)
     {
-        for (const auto& [name, app] : apps_)
+        auto db_apps = getApps_(db_mgr);
+        if (db_apps.empty())
+        {
+            return;
+        }
+
+        for (auto& thread : pipeline_threads_[db_mgr])
+        {
+            thread->flush();
+        }
+
+        for (auto& thread : pipeline_threads_[db_mgr])
+        {
+            thread->stopThreadLoop();
+        }
+
+        for (auto app : db_apps)
         {
             app->teardown();
         }
@@ -335,6 +254,169 @@ public:
     }
 
 private:
+    /// Get all Apps that belong to the given database.
+    std::vector<App*> getApps_(DatabaseManager* db_mgr)
+    {
+        std::vector<App*> apps;
+        for (const auto& [key, app] : apps_)
+        {
+            // The key is formatted as "<AppName>_<db_file>"
+            auto pos = key.find("_" + db_mgr->getDatabaseFilePath());
+            if (pos != std::string::npos)
+            {
+                apps.push_back(app.get());
+            }
+        }
+        return apps;
+    }
+
+    /// Configure all pipelines used for this database's running applications.
+    /// This is called as late as possible in postInit() right before simulation
+    /// starts.
+    void configureAppPipelines_(DatabaseManager* db_mgr)
+    {
+        auto& pipeline_threads = pipeline_threads_[db_mgr];
+        if (!pipeline_threads.empty())
+        {
+            throw DBException("Reconfiguring pipeline is disallowed");
+        }
+
+        std::vector<App*> db_apps = getApps_(db_mgr);
+        std::map<App*, std::unique_ptr<PipelineFinalizer>> finalizers;
+        for (auto app : db_apps) {
+            auto finalizer = std::make_unique<PipelineFinalizer>();
+            app->configPipeline(*finalizer);
+            finalizers[app] = std::move(finalizer);
+        }
+
+        // Extract from each finalizer:
+        //   - How many stages the app needs 
+        //   - Whether it needs the last stage to be on the DB thread 
+        std::vector<PipelineFinalizer::Config> app_configs;
+        for (auto& [app, finalizer] : finalizers)
+        {
+            app_configs.emplace_back(finalizer->getConfig());
+        }
+
+        // We need to give each app its specific ConcurrentQueue
+        // where it should send its data down the pipeline.
+        for (auto& [app, finalizer] : finalizers) {
+            app->setPipelineInputQueue(finalizer->getInputQueue());
+        }
+
+        // Create one PipelineThread object per stage, and give all the 
+        // apps' stages to the appropriate PipelineThread.
+        bool needs_db_stage = false;
+        size_t num_non_db_stages = 0;
+        for (const auto& cfg : app_configs) {
+            if (cfg.needs_db)
+            {
+                needs_db_stage = true;
+                if (cfg.num_stages > 1)
+                {
+                    num_non_db_stages = std::max(num_non_db_stages, cfg.num_stages - 1);
+                }
+            }
+            else
+            {
+                num_non_db_stages = std::max(num_non_db_stages, cfg.num_stages);
+            }
+        }
+
+        const size_t num_stages = (needs_db_stage ? 1 : 0) + num_non_db_stages;
+        for (size_t i = 0; i < num_stages; ++i)
+        {
+            pipeline_threads.emplace_back(std::make_unique<PipelineThread>());
+        }
+
+        std::map<App*, std::vector<std::unique_ptr<PipelineStageBase>>> app_stages;
+        for (auto& [app, finalizer] : finalizers) {
+            app_stages[app] = finalizer->releaseStages();
+        }
+
+        std::map<PipelineThread*, std::vector<std::unique_ptr<PipelineStageBase>>> thread_stages;
+
+        // Add final stages to the DB thread
+        size_t thread_idx = num_stages - 1;
+        if (needs_db_stage)
+        {
+            for (auto& [app, stages] : app_stages)
+            {
+                if (auto db = stages.back()->getDatabaseManager())
+                {
+                    assert(db_mgr == db); (void)db;
+                    //pipeline_threads[thread_idx]->addStage(std::move(stages.back()));
+                    thread_stages[pipeline_threads[thread_idx].get()].emplace_back(std::move(stages.back()));
+                    pipeline_threads[thread_idx]->setDatabaseManager(db_mgr);
+                    stages.pop_back();
+                }
+            }
+            --thread_idx;
+        }
+
+        // Add remaining stages to non-DB threads
+        for (size_t i = 0; i < num_non_db_stages; ++i)
+        {
+            for (auto& [app, stages] : app_stages)
+            {
+                if (!stages.empty())
+                {
+                    //pipeline_threads[thread_idx]->addStage(std::move(stages.back()));
+                    thread_stages[pipeline_threads[thread_idx].get()].emplace_back(std::move(stages.back()));
+                    stages.pop_back();
+                }
+            }
+
+            if (thread_idx == 0)
+            {
+                assert(i == num_non_db_stages - 1);
+                break;
+            }
+        }
+
+        // Sanity check
+        for (auto& [app, stages] : app_stages)
+        {
+            if (!stages.empty())
+            {
+                throw DBException("Internal logic error");
+            }
+        }
+
+        // Finalize threads.
+        for (auto& [thread, stages] : thread_stages)
+        {
+            // Reverse is needed since we "walked backwards" setting up
+            // the thread stages (DB stage first, then walk backwards).
+            std::reverse(stages.begin(), stages.end());
+            for (auto& stage : stages)
+            {
+                thread->addStage(std::move(stage));
+            }
+        }
+
+        // Connect all input/output queues.
+        std::vector<PipelineTransformBase*> all_transforms;
+        for (auto& thread : pipeline_threads)
+        {
+            auto thread_transforms = thread->getTransforms();
+            all_transforms.insert(all_transforms.end(), thread_transforms.begin(), thread_transforms.end());
+        }
+
+        for (size_t i = 1; i < all_transforms.size(); ++i)
+        {
+            auto prev = all_transforms[i-1];
+            auto curr = all_transforms[i];
+            prev->setOutputQueue(curr->getInputQueue());
+        }
+
+        // Open threads
+        for (auto& thread : pipeline_threads)
+        {
+            thread->startThreadLoop();
+        }
+    }
+
     /// Registered app factories.
     static inline std::map<std::string, std::unique_ptr<AppFactoryBase>> app_factories_;
 
@@ -343,6 +425,9 @@ private:
 
     /// Enabled apps (may or may not be instantiated).
     std::set<std::string> enabled_apps_;
+
+    /// All threads for all pipelines for all apps.
+    std::map<DatabaseManager*, std::vector<std::unique_ptr<PipelineThread>>> pipeline_threads_;
 };
 
 } // namespace simdb

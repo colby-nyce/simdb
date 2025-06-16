@@ -34,7 +34,9 @@ namespace simdb
 
 class AsyncPipeline;
 class DatabaseManager;
+class PipelineFinalizer;
 class Schema;
+class TransformQueueBase;
 
 /// Base class for SimDB applications. Note that app subclasses are given
 /// the DatabaseManager instance as a constructor argument, so they can
@@ -45,6 +47,8 @@ class App
 public:
     virtual ~App() = default;
     virtual bool defineSchema(Schema&) { return false; }
+    virtual void configPipeline(PipelineFinalizer&) {}
+    virtual void setPipelineInputQueue(TransformQueueBase*) {}
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual void postSim() {}
     virtual void teardown() {}
@@ -72,7 +76,7 @@ class AppFactory : public AppFactoryBase
 public:
     App* createApp(DatabaseManager* db_mgr) override
     {
-        return new AppT;
+        return new AppT(db_mgr);
     }
 };
 

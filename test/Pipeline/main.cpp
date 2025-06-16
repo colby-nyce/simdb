@@ -1,5 +1,6 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/apps/PipelineApp.hpp"
+#include "simdb/utils/Random.hpp"
 #include "simdb/test/SimDBTester.hpp"
 #include <iostream>
 #include <random>
@@ -13,20 +14,6 @@
 /// transformation.
 
 using simdb::PipelineEntry;
-
-std::vector<double> generateRandomData(size_t size)
-{
-    std::vector<double> data(size);
-    std::mt19937 gen(std::random_device{}());
-    std::uniform_real_distribution<double> dis(0.0, 100.0);
-    
-    for (auto& value : data)
-    {
-        value = dis(gen);
-    }
-    
-    return data;
-}
 
 static void UpdateCalledFuncs(PipelineEntry& entry, const std::string& func_name)
 {
@@ -238,7 +225,7 @@ int main(int argc, char** argv)
         simdb::VectorSerializer<double> vector =
             pipeline_collector->createVectorSerializer<double>();
 
-        vector = generateRandomData(1000);
+        vector = simdb::utils::generateRandomData<double>(1000);
 
         // Process the data and tell the pipeline to append ExtraSerializationFunc()
         // to the serialization functions.
