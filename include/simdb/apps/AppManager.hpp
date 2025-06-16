@@ -9,7 +9,6 @@
 
 namespace simdb
 {
-class PipelineThread;
 
 /// @brief Singleton class that manages all SimDB applications.
 ///
@@ -217,6 +216,8 @@ public:
         {
             app->teardown();
         }
+
+        pipeline_threads_.erase(db_mgr);
     }
 
     /// Delete all instantiated apps. This may be needed since AppManager
