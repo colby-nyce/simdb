@@ -1,96 +1,220 @@
 #include "simdb/apps/AppRegistration.hpp"
-#include "simdb/apps/PipelineApp.hpp"
+#include "simdb/pipeline/Pipeline.hpp"
+#include "simdb/utils/Compress.hpp"
 #include "simdb/test/SimDBTester.hpp"
-#include <iostream>
-#include <random>
+#include "simdb/utils/Random.hpp"
 
 // clang-format off
 
-/// This test uses the SimDB pipeline framework to demonstrate how to
-/// create a pipeline application that processes data entries through
-/// a series of stages. Each stage can be customized to perform specific
-/// operations on the data, such as compression, serialization, or
-/// transformation.
+// This test shows how to configure and build a pipeline for SimDB apps.
+// Pipelines are composed of stages, and stages are composed of transforms.
+// Each pipeline stage runs on its own thread, and both stages and transforms
+// can have any input/output data type.
+//
+// To illustrate the flexibility of SimDB pipelines, we will write an app
+// which performs dot products on input data, buffers 1000 of the dot product
+// values, compresses them into a char buffer, and writes the compressed data
+// to the database.
+//
+// Stage (thread)             Transform
+// -----------------------------------------------------------------
+// 1                          In:   std::vector<double>
+//                            Do:   buffer N arrays
+//                            Out:  std::vector<std::vector<double>>
+//
+// 1                          In:   std::vector<std::vector<double>>
+//                            Do:   calculate dot product
+//                            Out:  double
+//
+// 1                          In:   double
+//                            Do:   buffer M dot products
+//                            Out:  std::vector<double>
+//
+// 2                          In:   std::vector<double>
+//                            Do:   zlib compression
+//                            Out:  std::vector<char>
+//
+// 2                          In:   std::vector<char>
+//                            Do:   write to database
+//                            Out:  (no output)
+//
+using DotProdArray = std::vector<double>;
+using DotProdArrays = std::vector<DotProdArray>;
+using DotProdValue = double;
+using DotProdValueBuffer = std::vector<DotProdValue>;
+using CompressedDotProdValues = std::vector<char>;
 
-using simdb::PipelineEntry;
+constexpr size_t NUM_DOT_PROD_ARRAYS = 2;
+constexpr size_t DOT_PROD_BUFFER_LEN = 1000;
 
-std::vector<double> generateRandomData(size_t size)
+double GetColumnwiseDotProduct(const std::vector<std::vector<double>>& mat)
 {
-    std::vector<double> data(size);
-    std::mt19937 gen(std::random_device{}());
-    std::uniform_real_distribution<double> dis(0.0, 100.0);
-    
-    for (auto& value : data)
+    if (mat.empty())
     {
-        value = dis(gen);
+        return 0.0;
     }
-    
-    return data;
+
+    const size_t num_rows = mat.size();
+    const size_t num_cols = mat[0].size();
+
+    for (const auto& row : mat)
+    {
+        if (row.size() != num_cols)
+        {
+            throw simdb::DBException("All rows must have the same number of columns.");
+        }
+    }
+
+    double sum = 0.0;
+    for (size_t col = 0; col < num_cols; ++col)
+    {
+        double product = 1.0;
+        for (size_t row = 0; row < num_rows; ++row)
+        {
+            product *= mat[row][col];
+        }
+        sum += product;
+    }
+
+    return sum;
 }
 
-static void UpdateCalledFuncs(PipelineEntry& entry, const std::string& func_name)
-{
-    auto db_mgr = entry.getDatabaseManager();
-    auto tick = entry.getTick();
-    auto compressed = entry.compressed() ? 1 : 0;
-    auto db_id = entry.getCommittedDbID();
-
-    auto record = db_mgr->INSERT(
-        SQL_TABLE("CalledFunctions"),
-        SQL_COLUMNS("Tick", "FunctionName", "EntryCompressed", "EntryDbId"),
-        SQL_VALUES(tick, func_name, compressed, db_id));
-
-    if (!db_id)
-    {
-        entry.setCommittedDbId(record->getId());
-    }
-}
-
-// ------------------------------------------------------------------------
-class StatsCollector : public simdb::PipelineApp
+class DotProductSerializer : public simdb::PipelineApp
 {
 public:
-    static constexpr auto NAME = "StatsCollector";
+    static constexpr auto NAME = "dot-product";
 
-    StatsCollector() = default;
-
-    void configPipeline(simdb::PipelineConfig& config) override
-    {
-        // Perform compression on the first async stage
-        config.asyncStage(1) >> CompressEntry;
-        config.asyncStage(1).observe(&async_stage_observer_);
-
-        // Write to the database in the second async stage
-        config.asyncStage(2) >> SerializationFunc1 >> SerializationFunc2;
-        config.asyncStage(2).observe(&async_stage_observer_);
-    }
+    DotProductSerializer(simdb::DatabaseManager* db_mgr)
+        : db_mgr_(db_mgr)
+    {}
 
     bool defineSchema(simdb::Schema& schema) override
     {
         using dt = simdb::SqlDataType;
 
-        // This table is used to store app-specific metadata
         auto& meta_tbl = schema.addTable("Metadata");
-        meta_tbl.addColumn("SimCmdline", dt::string_t);
-        meta_tbl.addColumn("SimStartTime", dt::string_t);
-        meta_tbl.addColumn("SimEndTime", dt::string_t);
+        meta_tbl.addColumn("NumDotProdArrays", dt::int32_t);
+        meta_tbl.addColumn("DotProdBufferLen", dt::int32_t);
+        meta_tbl.addColumn("SimCommandLine", dt::string_t);
 
-        // This table is used to verify the serialization code path
-        auto& funcs_tbl = schema.addTable("CalledFunctions");
-        funcs_tbl.addColumn("Tick", dt::int64_t);
-        funcs_tbl.addColumn("FunctionName", dt::string_t);
-        funcs_tbl.addColumn("EntryCompressed", dt::int32_t);
-        funcs_tbl.addColumn("EntryDbId", dt::int32_t);
-
-        // This table is used to store the raw data
-        auto& blob_tbl = schema.addTable("BlobData");
-        blob_tbl.addColumn("Tick", dt::int64_t);
-        blob_tbl.addColumn("Data", dt::blob_t);
-
-        // Make the verification step faster
-        funcs_tbl.createCompoundIndexOn({"Tick", "FunctionName"});
+        auto& data_tbl = schema.addTable("CompressedDotProducts");
+        data_tbl.addColumn("DataBlob", dt::blob_t);
 
         return true;
+    }
+
+    std::vector<std::unique_ptr<simdb::PipelineStageBase>> configPipeline() override
+    {
+        // Stage 1:
+        //   - Input type:      DotProdArray
+        //   - Output type:     DotProdValueBuffer
+        //   - Num transforms:  3
+        //   - Database access: No
+        auto stage1 = std::make_unique<simdb::PipelineStage<DotProdArray, DotProdValueBuffer>>();
+
+        // Transform 1:
+        //   - Input type:      DotProdArray
+        //   - Output type:     DotProdArrays
+        //   - Function:        Buffer N arrays
+        auto transform1 = std::make_unique<simdb::PipelineTransform<DotProdArray, DotProdArrays>>(
+            [this](DotProdArray& in, simdb::ConcurrentQueue<DotProdArrays>& out)
+            {
+                transform1_array_buf_.emplace_back(std::move(in));
+                if (transform1_array_buf_.size() == NUM_DOT_PROD_ARRAYS)
+                {
+                    out.emplace(std::move(transform1_array_buf_));
+                }
+            }
+        );
+
+        // Transform 2:
+        //   - Input type:      DotProdArrays
+        //   - Output type:     DotProdValue
+        //   - Function:        Calculate dot product
+        auto transform2 = std::make_unique<simdb::PipelineTransform<DotProdArrays, DotProdValue>>(
+            [this](DotProdArrays& in, simdb::ConcurrentQueue<DotProdValue>& out)
+            {
+                auto dot_product = GetColumnwiseDotProduct(in);
+                out.push(dot_product);
+            }
+        );
+
+        // Transform 3:
+        //   - Input type:      DotProdValue
+        //   - Output type:     DotProdValueBuffer
+        //   - Function:        Buffer M dot products
+        auto transform3 = std::make_unique<simdb::PipelineTransform<DotProdValue, DotProdValueBuffer>>(
+            [this](DotProdValue& in, simdb::ConcurrentQueue<DotProdValueBuffer>& out)
+            {
+                transform3_dot_prod_val_buf_.push_back(in);
+                if (transform3_dot_prod_val_buf_.size() == DOT_PROD_BUFFER_LEN)
+                {
+                    out.emplace(std::move(transform3_dot_prod_val_buf_));
+                }
+            }
+        );
+
+        // Connect stage 1
+        stage1->first(std::move(transform1));
+        stage1->then(std::move(transform2));
+        stage1->last(std::move(transform3));
+
+        // Stage 2:
+        //   - Input type:      DotProdValueBuffer
+        //   - Output type:     none
+        //   - Num transforms:  2
+        //   - Database access: Yes
+        auto stage2 = std::make_unique<simdb::PipelineStage<DotProdValueBuffer, void>>(db_mgr_);
+
+        // Transform 4:
+        //   - Input type:      DotProdValueBuffer
+        //   - Output type:     CompressedDotProdValues
+        //   - Function:        Perform zlib compression
+        auto transform4 = std::make_unique<simdb::PipelineTransform<DotProdValueBuffer, CompressedDotProdValues>>(
+            [this](DotProdValueBuffer& in, simdb::ConcurrentQueue<CompressedDotProdValues>& out)
+            {
+                std::vector<char> compressed;
+                auto data_ptr = in.data();
+                auto num_bytes = in.size() * sizeof(double);
+                simdb::compressData(data_ptr, num_bytes, compressed);
+                out.emplace(std::move(compressed));
+            }
+        );
+
+        // Transform 5:
+        //   - Input type:      CompressedDotProdValues
+        //   - Output type:     none
+        //   - Function:        Write to database
+        auto transform5 = std::make_unique<simdb::PipelineTransform<CompressedDotProdValues, void>>(
+            [this](CompressedDotProdValues& in)
+            {
+                db_mgr_->INSERT(SQL_TABLE("CompressedDotProducts"),
+                                SQL_COLUMNS("DataBlob"),
+                                SQL_VALUES(in));
+            }
+        );
+
+        // Connect stage 2
+        stage2->first(std::move(transform4));
+        stage2->last(std::move(transform5));
+
+        // Finalize
+        std::vector<std::unique_ptr<simdb::PipelineStageBase>> stages;
+        stages.emplace_back(std::move(stage1));
+        stages.emplace_back(std::move(stage2));
+        return stages;
+    }
+
+    void setPipelineInputQueue(simdb::TransformQueueBase* queue) override
+    {
+        if (auto q = dynamic_cast<simdb::TransformQueue<DotProdArray>*>(queue))
+        {
+            pipeline_queue_ = q->getQueue();
+        }
+        else
+        {
+            throw simdb::DBException("Invalid data type! Expected a ConcurrentQueue<DotProdArray>");
+        }
     }
 
     void postInit(int argc, char** argv) override
@@ -98,125 +222,43 @@ public:
         std::ostringstream oss;
         for (int i = 0; i < argc; ++i)
         {
-            oss << argv[i];
-            if (i < argc - 1)
-            {
-                oss << " ";
-            }
+            oss << argv[i] << " ";
         }
+        const auto sim_cmdline = oss.str();
 
-        sim_cmdline_ = oss.str();
-        sim_start_time_ = getFormattedCurrentTime_();
+        db_mgr_->INSERT(SQL_TABLE("Metadata"),
+                        SQL_COLUMNS("NumDotProdArrays", "DotProdBufferLen", "SimCommandLine"),
+                        SQL_VALUES(NUM_DOT_PROD_ARRAYS, DOT_PROD_BUFFER_LEN, sim_cmdline));
     }
 
-    void postSim() override
+    void process(const DotProdArray& data)
     {
-        sim_end_time_ = getFormattedCurrentTime_();
-        auto db_mgr = getDatabaseManager();
-
-        db_mgr->INSERT(
-            SQL_TABLE("Metadata"),
-            SQL_COLUMNS("SimCmdline", "SimStartTime", "SimEndTime"),
-            SQL_VALUES(sim_cmdline_, sim_start_time_, sim_end_time_));
+        pipeline_queue_->push(data);
     }
 
-    void validate(size_t num_ticks) const
+    void process(DotProdArray&& data)
     {
-        async_stage_observer_.validate(num_ticks);
+        pipeline_queue_->emplace(std::move(data));
     }
 
 private:
-    static void SerializationFunc1(PipelineEntry& entry)
-    {
-        UpdateCalledFuncs(entry, "SerializationFunc1");
-    }
+    simdb::DatabaseManager *const db_mgr_;
+    simdb::ConcurrentQueue<DotProdArray>* pipeline_queue_ = nullptr;
 
-    static void SerializationFunc2(PipelineEntry& entry)
-    {
-        UpdateCalledFuncs(entry, "SerializationFunc2");
-    }
-
-    static void CompressEntry(PipelineEntry& entry)
-    {
-        entry.compress();
-    }
-
-    std::string getFormattedCurrentTime_() const
-    {
-        // Get current time as time_point
-        auto now = std::chrono::system_clock::now();
-
-        // Convert to time_t for formatting
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-
-        // Convert to local time
-        std::tm* local_time = std::localtime(&now_c);
-
-        // Format as MM::DD::YYYY hh::mm::ss
-        std::ostringstream oss;
-        oss << std::put_time(local_time, "%m::%d::%Y %H::%M::%S");
-        return oss.str();
-    }
-
-    class AsyncStageObserver : public simdb::PipelineStageObserver
-    {
-    public:
-        void onEnterStage(const PipelineEntry& entry, size_t stage_idx) override
-        {
-            if (stage_entry_counts_.find(stage_idx) == stage_entry_counts_.end())
-            {
-                stage_entry_counts_[stage_idx] = 0;
-            }
-            ++stage_entry_counts_[stage_idx];
-        }
-
-        void onLeaveStage(const PipelineEntry& entry, size_t stage_idx) override
-        {
-            if (stage_exit_counts_.find(stage_idx) == stage_exit_counts_.end())
-            {
-                stage_exit_counts_[stage_idx] = 0;
-            }
-            ++stage_exit_counts_[stage_idx];
-        }
-
-        void validate(size_t num_ticks) const
-        {
-            for (const auto& [stage_idx, count] : stage_entry_counts_)
-            {
-                EXPECT_EQUAL(count, num_ticks);
-            }
-
-            for (const auto& [stage_idx, count] : stage_exit_counts_)
-            {
-                EXPECT_EQUAL(count, num_ticks);
-            }
-        }
-
-    private:
-        std::map<size_t, size_t> stage_entry_counts_;
-        std::map<size_t, size_t> stage_exit_counts_;
-    };
-
-    std::string sim_cmdline_;
-    std::string sim_start_time_;
-    std::string sim_end_time_;
-    AsyncStageObserver async_stage_observer_;
+    // These variables are NOT thread-safe. They are only accessible from
+    // inside the lambdas we gave to the PipelineTransform constructors.
+    DotProdArrays transform1_array_buf_;
+    DotProdValueBuffer transform3_dot_prod_val_buf_;
 };
 
-static void ExtraSerializationFunc(PipelineEntry& entry)
-{
-    UpdateCalledFuncs(entry, "ExtraSerializationFunc");
-}
+REGISTER_SIMDB_APPLICATION(DotProductSerializer);
 
-REGISTER_SIMDB_APPLICATION(StatsCollector);
-
-// ------------------------------------------------------------------------
 int main(int argc, char** argv)
 {
     DB_INIT;
 
     simdb::AppManager app_mgr;
-    app_mgr.enableApp(StatsCollector::NAME);
+    app_mgr.enableApp(DotProductSerializer::NAME);
 
     simdb::DatabaseManager db_mgr("test.db");
 
@@ -225,98 +267,47 @@ int main(int argc, char** argv)
     app_mgr.createSchemas(&db_mgr);
     app_mgr.postInit(&db_mgr, argc, argv);
 
-    // Simulate...
-    auto pipeline_collector = app_mgr.getApp<StatsCollector>(&db_mgr);
-    constexpr auto NUM_TICKS = 100;
-    for (int tick = 0; tick < NUM_TICKS; ++tick)
+    auto serializer = app_mgr.getApp<DotProductSerializer>(&db_mgr);
+    std::vector<std::vector<double>> sent;
+    for (uint64_t tick = 0; tick < DOT_PROD_BUFFER_LEN * 2; ++tick)
     {
-        // Since we have a std::vector<double> of data and the PipelineEntry
-        // only uses std::vector<char>, we can use a utility from the PipelineApp
-        // to convert our vector to a char vector. Converting data through the
-        // PipelineApp has a performance advantage of using a pool of char
-        // vectors under the hood to prevent unnecessary allocations.
-        simdb::VectorSerializer<double> vector =
-            pipeline_collector->createVectorSerializer<double>();
-
-        vector = generateRandomData(1000);
-
-        // Process the data and tell the pipeline to append ExtraSerializationFunc()
-        // to the serialization functions.
-        simdb::PipelineEntry entry = pipeline_collector->prepareEntry(tick, std::move(vector));
-        entry.appendStageFunc(2, ExtraSerializationFunc);
-        pipeline_collector->processEntry(std::move(entry));
+        // Push a random set of values e.g. [a1,a2,a3]
+        auto values = simdb::utils::generateRandomData<double>(3);
+        sent.push_back(values);
+        serializer->process(std::move(values));
     }
 
     // Finish...
     app_mgr.postSim(&db_mgr);
-    app_mgr.teardown();
+    app_mgr.teardown(&db_mgr);
+    app_mgr.destroy();
 
     // Validate...
-    pipeline_collector->validate(NUM_TICKS);
-
-    auto query = db_mgr.createQuery("CalledFunctions");
-
-    std::string func_name;
-    query->select("FunctionName", func_name);
-
-    int32_t entry_compressed;
-    query->select("EntryCompressed", entry_compressed);
-
-    int32_t entry_db_id;
-    query->select("EntryDbId", entry_db_id);
-
-    for (int tick = 0; tick < NUM_TICKS; ++tick)
+    std::vector<double> dot_products;
+    for (size_t i = 0; i < sent.size(); i += 2)
     {
-        query->resetConstraints();
-        query->addConstraintForInt("Tick", simdb::Constraints::EQUAL, tick);
-
-        // First verify that exactly 3 functions were called
-        // in the serialization code path.
-        EXPECT_EQUAL(query->count(), 3);
-
-        // Now verify that the functions were called in the
-        // correct order.
-        const char* expected_funcs[] = {
-            "SerializationFunc1",
-            "SerializationFunc2",
-            "ExtraSerializationFunc"
-        };
-
-        auto results = query->getResultSet();
-        size_t loop_idx = 0;
-        int db_id = 0;
-        while (results.getNextRecord())
-        {
-            EXPECT_EQUAL(func_name, expected_funcs[loop_idx]);
-
-            // Verify that the entry was compressed by the
-            // time it got to the serialization stage.
-            EXPECT_EQUAL(entry_compressed, 1);
-
-            // Verify that the first serialization callback
-            // set the committed database ID. All other
-            // functions should have the same database ID
-            // for this tick.
-            if (entry_db_id)
-            {
-                db_id = entry_db_id;
-            }
-
-            // Update the loop index for the next iteration.
-            if (loop_idx == 2)
-            {
-                db_id = 0;
-                loop_idx = 0;
-            }
-            else
-            {
-                ++loop_idx;
-            }
-        }
+        DotProdArrays mat;
+        mat.push_back(sent[i]);
+        mat.push_back(sent[i+1]);
+        auto dot_product = GetColumnwiseDotProduct(mat);
+        dot_products.push_back(dot_product);
     }
 
-    // Done.
-    app_mgr.destroy();
+    EXPECT_EQUAL(dot_products.size(), DOT_PROD_BUFFER_LEN);
+
+    std::vector<char> compressed_dot_products;
+    auto data_ptr = dot_products.data();
+    auto num_bytes = dot_products.size() * sizeof(double);
+    simdb::compressData(data_ptr, num_bytes, compressed_dot_products);
+
+    auto query = db_mgr.createQuery("CompressedDotProducts");
+    std::vector<char> written_blob;
+    query->select("DataBlob", written_blob);
+
+    auto result_set = query->getResultSet();
+    EXPECT_TRUE(result_set.getNextRecord());
+    EXPECT_EQUAL(written_blob, compressed_dot_products);
+    EXPECT_FALSE(result_set.getNextRecord());
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

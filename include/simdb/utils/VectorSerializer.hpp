@@ -12,8 +12,7 @@ template <typename T>
 class VectorSerializer
 {
 public:
-    VectorSerializer(std::vector<char>&& out, const std::vector<T>* initial_data = nullptr)
-        : output_(std::move(out))
+    VectorSerializer(const std::vector<T>* initial_data = nullptr)
     {
         if (initial_data)
         {
