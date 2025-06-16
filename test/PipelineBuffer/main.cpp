@@ -1,5 +1,5 @@
 #include "simdb/apps/AppRegistration.hpp"
-#include "simdb/pipeline/AppPipeline.hpp"
+#include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/test/SimDBTester.hpp"
 #include "simdb/utils/Random.hpp"
@@ -103,7 +103,7 @@ public:
         return true;
     }
 
-    void configPipeline(simdb::PipelineFinalizer& finalizer)
+    void configPipeline(simdb::PipelineFinalizer& finalizer) override
     {
         // Stage 1:
         //   - Input type:      DotProdArray

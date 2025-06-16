@@ -6,6 +6,4 @@ add_custom_command(
     POST_BUILD COMMAND ctest -LE --test-action test)
 
 add_subdirectory(SQLite)
-add_subdirectory(Pipeline)
 add_subdirectory(PipelineBuffer)
-add_subdirectory(UniformSerializer)

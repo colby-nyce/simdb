@@ -136,10 +136,7 @@ public:
 };
 
 /// Pipeline stage with known I/O data types. Runs on its own thread
-/// and executes the transforms added to it. Note that a pipeline
-/// stage might be executing another app's code as well "mixed in"
-/// with your code. SimDB enforces apps to share threads to not
-/// create too many of them.
+/// and executes the transforms added to it.
 template <typename In, typename Out>
 class PipelineStage : public PipelineStageBase
 {

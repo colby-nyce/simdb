@@ -1,6 +1,6 @@
 #pragma once
 
-#include "simdb/pipeline/AppPipeline.hpp"
+#include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/utils/Thread.hpp"
 
 namespace simdb {
