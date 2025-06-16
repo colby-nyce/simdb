@@ -82,126 +82,21 @@ SimDB features include:
     auto record = db_mgr.getRecord("SimHierarchy", 1);
     record->setPropertyString("NodeName", "root");
 
-## Collection System / Argos
+## SimDB Pipelines
 
-One of SimDB's most powerful features is its data collection system and the front-end viewer "Argos". Its design is generic enough to support:
+TBD
 
-* Cycle-driven simulation
-* Event-driven simulation
-* Multiple clock domains on different frequencies
-* Any data type (scalar or in a container)
+## SimDB Apps
 
-Argos reads the collection database and provides various widgets to analyze data and find issues, bottlenecks, etc.
+TBD
 
-The primary use case driving Argos design is pipeline collection for CPU/GPU
-performance models e.g. [Olympia](https://github.com/riscv-software-src/riscv-perf-model)
+## Pipeline Collection (Argos)
 
-The collection system requires you to supply various template specializations in order to collect your data types:
-
-    enum TargetUnit {
-        DECODE,
-        RENAME,
-        RETIRE
-    };
-
-    struct MemPacket {
-        uint64_t opcode;
-        TargetUnit target;
-        const char* mnemonic;
-    };
-
-    using MemPacketPtr = std::shared_ptr<MemPacket>;
-
-    namespace simdb {
-
-        template <> void defineEnumMap<TargetEnum>(std::string& enum_name, std::map<std::string, int>& map)
-        {
-            map["Decode"] = TargetUnit::DECODE;
-            map["Rename"] = TargetUnit::RENAME;
-            map["Retire"] = TargetUnit::RETIRE;
-        }
-
-        template <> void defineStructSchema<MemPacket>(StructSchema<MemPacket>& schema)
-        {
-            schema.addHex<uint64_t>("opcode");
-            schema.addEnum<TargetUnit>("target");
-            schema.addString("mnemonic");
-        }
-
-        template <> void writeStructFields<MemPacket>(const MemPacket* pkt, StructFieldSerializer<MemPacket>* serializer)
-        {
-            serializer->writeField(pkt->opcode);
-            serializer->writeField(pkt->target);
-            serializer->writeField(pkt->mnemonic);
-        }
-
-    } namespace simdb
-
-Then you can setup SimDB collection points like this:
-
-    simdb::DatabaseManager db_mgr("sim.db");
-    db_mgr.enableCollection();
-
-    auto collection_mgr = db_mgr.getCollectionMgr();
-    collection_mgr->addClock("rootclk", 10);
-
-    const uint32_t CAPACITY = 32;
-    static constexpr bool SPARSE_FLAG = false;
-
-    // Collect every MemPacket that comes through the receive() method,
-    // but only if the downstream unit can accept it.
-    std::shared_ptr<simdb::CollectionPoint> ready_pkt_collectable =
-        collection_mgr->createCollectable<MemPacket>("SinglePkt", "rootclk");
-
-    // Collect all the MemPackets that are currently queued up waiting on
-    // the downstream unit to become available for more packets.
-    std::shared_ptr<simdb::ContigIterableCollectionPoint> waiting_pkts_collectable =
-        collection_mgr->createIterableCollector<MemPacket, SPARSE_FLAG>(
-            "PktQueue", "rootclk", CAPACITY);
-
-    .......................... simulation loop ..........................
-
-    void Unit::receive(MemPacket* pkt)
-    {
-        // Assume we can either send this packet downstream somewhere,
-        // or it has to be queued for later processing.
-        if (downstream->ready()) {
-            ready_packet = pkt;
-        } else {
-            ready_packet = nullptr;
-            waiting_pkts.push_back(pkt);
-        }
-    }
-
-    void Unit::collect()
-    {
-        if (ready_packet) {
-            ready_pkt_collectable->activate(ready_packet);
-        } else {
-            waiting_pkts_collectable->activate(waiting_pkts);
-        }
-    }
-
-    void Simulation::collect()
-    {
-        // Get all the collectables' bytes ready in the collection system
-        for (auto unit : units) {
-            unit->collect();
-        }
-
-        // "Sweep" the activated collectables that operate on the
-        // root clock, and tell SimDB to timestamp the collection
-        // blob for Argos queries.
-        collection_mgr->sweep("rootclk", current_tick);
-    }
-
-See a complete example with a toy simulator here:
-
-simdb/test/Collection/main.cpp
+TBD
 
 # Argos viewer
 
-See simdb/python/viewer/README
+TBD
 
 # Python API
 
@@ -213,5 +108,4 @@ The following dependencies must be installed to use SimDB (sudo apt install, con
 
 * sqlite3
 * zlib
-* rapidjson
 * wxPython (for Argos viewer only)
