@@ -54,22 +54,36 @@ public:
         simdb::PipelineEntry entry = prepareEntry(tick, std::move(buf));
         processEntry(std::move(entry));
     };
+
+    void addStat(const std::string& profile_data)
+    {
+        profile_data_names_.push_back(profile_data);
+    };
+
 private:
     void defineSchema_(simdb::Schema& schema) override
     {
-        auto& tbl = schema.addTable("ProfileData");
-        tbl.addColumn("ProfileData", simdb::SqlDataType::blob_t);
+        auto& tbl = schema.addTable("ProfileDataNames");
+        tbl.addColumn("Name", simdb::SqlDataType::string_t);
     };
 
     void postInit_(int argc, char **argv) override
     {
-        // Nothing to do here?
+        for (const auto& data_name : profile_data_names_)
+        {
+            getDatabaseManager()->INSERT(
+                SQL_TABLE("ProfileDataNames"),
+                SQL_COLUMNS("Name"),
+                SQL_VALUES(data_name));
+        }
     };
 
     std::string getByteLayoutYAML_() const
     {
         return "NOT YET IMPLEMENTED";
-    }
+    };
+
+    std::vector<std::string> profile_data_names_;
 };
 
 REGISTER_SIMDB_APPLICATION(ProfileDataSerializer);
@@ -85,12 +99,19 @@ int main(int argc, char** argv)
 
     // Setup
     app_mgr.createEnabledApps(&db_mgr);
-
-    auto serializer = app_mgr.getApp<ProfileDataSerializer>(&db_mgr);
-
     app_mgr.createSchemas(&db_mgr);
 
-    for (uint64_t tick=0; tick<1000; ++tick)
+    // Profiler Metadata
+    auto serializer = app_mgr.getApp<ProfileDataSerializer>(&db_mgr);
+    serializer->addStat("inst_pc");
+    serializer->addStat("uarch_id");
+    serializer->addStat("retire_cycles_cost");
+
+    app_mgr.postInit(&db_mgr, argc, argv);
+
+    // Simulate
+    constexpr auto NUM_TICKS = 1000;
+    for (uint64_t tick=0; tick<NUM_TICKS; ++tick)
     {
         auto profile_data = generateRandomData();
         serializer->process(tick, profile_data);
