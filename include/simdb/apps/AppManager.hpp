@@ -270,22 +270,44 @@ private:
         return apps;
     }
 
+    /// Get all PipelineApps that belong to the given database.
+    std::vector<PipelineApp*> getPipelineApps_(DatabaseManager* db_mgr)
+    {
+        std::vector<PipelineApp*> pipeline_apps;
+        for (auto app : getApps_(db_mgr))
+        {
+            if (auto pipeline_app = dynamic_cast<PipelineApp*>(app))
+            {
+                pipeline_apps.push_back(pipeline_app);
+            }            
+        }
+        return pipeline_apps;
+    }
+
     /// Configure all pipelines used for this database's running applications.
     /// This is called as late as possible in postInit() right before simulation
     /// starts.
     void configureAppPipelines_(DatabaseManager* db_mgr)
     {
+        std::vector<PipelineApp*> db_apps = getPipelineApps_(db_mgr);
+        if (db_apps.empty())
+        {
+            return;
+        }
+
         auto& pipeline_threads = pipeline_threads_[db_mgr];
         if (!pipeline_threads.empty())
         {
             throw DBException("Reconfiguring pipeline is disallowed");
         }
 
-        std::vector<App*> db_apps = getApps_(db_mgr);
-        std::map<App*, std::unique_ptr<PipelineConfig>> configs;
+        std::map<PipelineApp*, std::unique_ptr<PipelineConfig>> configs;
         for (auto app : db_apps) {
             auto cfg = std::make_unique<PipelineConfig>();
-            app->configPipeline(*cfg);
+            for (auto& stage : app->configPipeline())
+            {
+                cfg->addStage(std::move(stage));
+            }
             configs[app] = std::move(cfg);
         }
 
@@ -326,7 +348,7 @@ private:
             pipeline_threads.emplace_back(std::make_unique<PipelineThread>());
         }
 
-        std::map<App*, std::vector<std::unique_ptr<PipelineStageBase>>> app_stages;
+        std::map<PipelineApp*, std::vector<std::unique_ptr<PipelineStageBase>>> app_stages;
         for (auto& [app, cfg] : configs) {
             app_stages[app] = cfg->releaseStages();
         }

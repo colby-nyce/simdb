@@ -227,7 +227,8 @@ private:
     std::vector<std::unique_ptr<PipelineTransformBase>> transforms_;
 };
 
-/// TODO cnyce
+/// Pipeline configuration object used by AppManager to configure
+/// a single app's pipeline.
 class PipelineConfig
 {
 public:

@@ -79,7 +79,7 @@ double GetColumnwiseDotProduct(const std::vector<std::vector<double>>& mat)
     return sum;
 }
 
-class DotProductSerializer : public simdb::App
+class DotProductSerializer : public simdb::PipelineApp
 {
 public:
     static constexpr auto NAME = "dot-product";
@@ -103,7 +103,7 @@ public:
         return true;
     }
 
-    void configPipeline(simdb::PipelineConfig& config) override
+    std::vector<std::unique_ptr<simdb::PipelineStageBase>> configPipeline() override
     {
         // Stage 1:
         //   - Input type:      DotProdArray
@@ -199,8 +199,10 @@ public:
         stage2->last(std::move(transform5));
 
         // Finalize
-        config.addStage(std::move(stage1));
-        config.addStage(std::move(stage2));
+        std::vector<std::unique_ptr<simdb::PipelineStageBase>> stages;
+        stages.emplace_back(std::move(stage1));
+        stages.emplace_back(std::move(stage2));
+        return stages;
     }
 
     void setPipelineInputQueue(simdb::TransformQueueBase* queue) override
