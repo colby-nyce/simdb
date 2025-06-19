@@ -105,6 +105,12 @@ public:
 
     std::vector<std::unique_ptr<simdb::PipelineStageBase>> configPipeline() override
     {
+        // These are the state variables we will use inside the transforms below.
+        // We are enforced to give ownership to the transform so it is guaranteed
+        // safe to access from the pipeline thread.
+        DotProdArrays transform1_array_buf;
+        DotProdValueBuffer transform3_dot_prod_val_buf;
+
         // Stage 1:
         //   - Input type:      DotProdArray
         //   - Output type:     DotProdValueBuffer
@@ -116,14 +122,22 @@ public:
         //   - Input type:      DotProdArray
         //   - Output type:     DotProdArrays
         //   - Function:        Buffer N arrays
-        auto transform1 = std::make_unique<simdb::PipelineTransform<DotProdArray, DotProdArrays>>(
-            [this](DotProdArray& in, simdb::ConcurrentQueue<DotProdArrays>& out)
+        auto transform1 = std::make_unique<simdb::PipelineTransform<DotProdArray, DotProdArrays, DotProdArrays>>(
+            std::move(transform1_array_buf),
+            [](DotProdArray& in, simdb::ConcurrentQueue<DotProdArrays>& out, DotProdArrays& buf)
             {
-                transform1_array_buf_.emplace_back(std::move(in));
-                if (transform1_array_buf_.size() == NUM_DOT_PROD_ARRAYS)
+                buf.emplace_back(std::move(in));
+                if (buf.size() == NUM_DOT_PROD_ARRAYS)
                 {
-                    out.emplace(std::move(transform1_array_buf_));
+                    out.emplace(std::move(buf));
                 }
+            },
+            // If you want to take bake ownership of the transform state object,
+            // provide a post-sim callback. This is called just prior to your
+            // app's postSim() method is called.
+            [this](simdb::DatabaseManager*, DotProdArrays&& arrays)
+            {
+                takeBack_(std::move(arrays));
             }
         );
 
@@ -131,8 +145,8 @@ public:
         //   - Input type:      DotProdArrays
         //   - Output type:     DotProdValue
         //   - Function:        Calculate dot product
-        auto transform2 = std::make_unique<simdb::PipelineTransform<DotProdArrays, DotProdValue>>(
-            [this](DotProdArrays& in, simdb::ConcurrentQueue<DotProdValue>& out)
+        auto transform2 = std::make_unique<simdb::PipelineTransform<DotProdArrays, DotProdValue, void>>(
+            [](DotProdArrays& in, simdb::ConcurrentQueue<DotProdValue>& out)
             {
                 auto dot_product = GetColumnwiseDotProduct(in);
                 out.push(dot_product);
@@ -143,14 +157,22 @@ public:
         //   - Input type:      DotProdValue
         //   - Output type:     DotProdValueBuffer
         //   - Function:        Buffer M dot products
-        auto transform3 = std::make_unique<simdb::PipelineTransform<DotProdValue, DotProdValueBuffer>>(
-            [this](DotProdValue& in, simdb::ConcurrentQueue<DotProdValueBuffer>& out)
+        auto transform3 = std::make_unique<simdb::PipelineTransform<DotProdValue, DotProdValueBuffer, DotProdValueBuffer>>(
+            std::move(transform3_dot_prod_val_buf),
+            [](DotProdValue& in, simdb::ConcurrentQueue<DotProdValueBuffer>& out, DotProdValueBuffer& buf)
             {
-                transform3_dot_prod_val_buf_.push_back(in);
-                if (transform3_dot_prod_val_buf_.size() == DOT_PROD_BUFFER_LEN)
+                buf.push_back(in);
+                if (buf.size() == DOT_PROD_BUFFER_LEN)
                 {
-                    out.emplace(std::move(transform3_dot_prod_val_buf_));
+                    out.emplace(std::move(buf));
                 }
+            },
+            // If you want to take bake ownership of the transform state object,
+            // provide a post-sim callback. This is called just prior to your
+            // app's postSim() method is called.
+            [this](simdb::DatabaseManager*, DotProdValueBuffer&& buffer)
+            {
+                takeBack_(std::move(buffer));
             }
         );
 
@@ -170,8 +192,8 @@ public:
         //   - Input type:      DotProdValueBuffer
         //   - Output type:     CompressedDotProdValues
         //   - Function:        Perform zlib compression
-        auto transform4 = std::make_unique<simdb::PipelineTransform<DotProdValueBuffer, CompressedDotProdValues>>(
-            [this](DotProdValueBuffer& in, simdb::ConcurrentQueue<CompressedDotProdValues>& out)
+        auto transform4 = std::make_unique<simdb::PipelineTransform<DotProdValueBuffer, CompressedDotProdValues, void>>(
+            [](DotProdValueBuffer& in, simdb::ConcurrentQueue<CompressedDotProdValues>& out)
             {
                 std::vector<char> compressed;
                 auto data_ptr = in.data();
@@ -185,9 +207,12 @@ public:
         //   - Input type:      CompressedDotProdValues
         //   - Output type:     none
         //   - Function:        Write to database
-        auto transform5 = std::make_unique<simdb::PipelineTransform<CompressedDotProdValues, void>>(
+        auto transform5 = std::make_unique<simdb::PipelineTransform<CompressedDotProdValues, void, void>>(
             [this](CompressedDotProdValues& in)
             {
+                // Even though we are accessing "this" member variable db_mgr_,
+                // the INSERT method performs a safeTransaction() under the
+                // hood, which is mutex-protected.
                 db_mgr_->INSERT(SQL_TABLE("CompressedDotProducts"),
                                 SQL_COLUMNS("DataBlob"),
                                 SQL_VALUES(in));
@@ -231,6 +256,12 @@ public:
                         SQL_VALUES(NUM_DOT_PROD_ARRAYS, DOT_PROD_BUFFER_LEN, sim_cmdline));
     }
 
+    void postSim() override
+    {
+        EXPECT_TRUE(arrays_returned_);
+        EXPECT_TRUE(buffer_returned_);
+    }
+
     void process(const DotProdArray& data)
     {
         pipeline_queue_->push(data);
@@ -242,13 +273,20 @@ public:
     }
 
 private:
+    void takeBack_(DotProdArrays&&)
+    {
+        arrays_returned_ = true;
+    }
+
+    void takeBack_(DotProdValueBuffer&&)
+    {
+        buffer_returned_ = true;
+    }
+
     simdb::DatabaseManager *const db_mgr_;
     simdb::ConcurrentQueue<DotProdArray>* pipeline_queue_ = nullptr;
-
-    // These variables are NOT thread-safe. They are only accessible from
-    // inside the lambdas we gave to the PipelineTransform constructors.
-    DotProdArrays transform1_array_buf_;
-    DotProdValueBuffer transform3_dot_prod_val_buf_;
+    bool arrays_returned_ = false;
+    bool buffer_returned_ = false;
 };
 
 REGISTER_SIMDB_APPLICATION(DotProductSerializer);
