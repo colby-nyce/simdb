@@ -55,10 +55,9 @@ public:
 /// ownership of that data to the transform. It will be given back
 /// to your function call (non-const ref). This is enforced so
 /// that SimDB can ensure that your data is accessed safely.
-/// Unless you opt out, your function will implicitly be called
-/// under a mutex lock (owned by the transform itself). You can
-/// attach a callback to receive the data back at the end of
-/// simulation.
+/// Your function will implicitly be called under a mutex lock
+/// (owned by the transform itself). You can attach a callback to
+/// receive the data back at the end of simulation.
 ///
 /// For example, say we want to have a simple transform in a 
 /// stage do nothing but "intercept" string data being received
@@ -83,12 +82,12 @@ public:
 ///        },
 ///        [](simdb::DatabaseManager* db_mgr, string_map_t&& map)
 ///        {
-///          for (const auto& [s,id] : map)
+///          for (const auto& [s, id] : map)
 ///          {
 ///            db_mgr->INSERT(
 ///              SQL_TABLE("StringMap"),
 ///              SQL_COLUMNS("String", "StringID"),
-///              SQL_VALUES(s,id));
+///              SQL_VALUES(s, id));
 ///          }
 ///        },
 ///        std::move(string_ids));
@@ -96,8 +95,8 @@ public:
 ///      // Configure rest of pipeline...
 ///   }
 ///
-/// If you do not need any state to implement for methods,
-/// then create the transform like this:
+/// If you do not need any state to implement your transform,
+/// then create it like this:
 ///
 ///   auto transform = std::make_unique<simdb::PipelineTransform<std::string, size_t, void>>(
 ///     [](std::string& in, simdb::ConcurrentQueue<size_t>& out)
@@ -112,7 +111,7 @@ public:
 ///     [this](std::string& in, simdb::ConcurrentQueue<size_t>& out)
 ///     {
 ///       size_t hash_val = 0;
-///       auto it = hash_values_.find(in);
+///       auto it = hash_values_.find(in);    <-- hash_values_ is not thread-safe
 ///       if (it == hash_values_.end())
 ///       {
 ///         it = hash_values_.insert({in, std::hash<std::string>{}(in)});
