@@ -184,6 +184,18 @@ public:
         db_mgr->safeTransaction(
             [&]()
             {
+                auto it = pipeline_threads_.find(db_mgr);
+                if (it != pipeline_threads_.end())
+                {
+                    for (auto& thread : it->second)
+                    {
+                        for (auto transform : thread->getTransforms())
+                        {
+                            transform->postSim(db_mgr);
+                        }
+                    }
+                }
+
                 for (auto app : getApps_(db_mgr))
                 {
                     app->postSim();
