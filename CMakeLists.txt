@@ -8,25 +8,9 @@ set(SIMDB_BASE ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${SIMDB_BASE}/include)
 include(${SIMDB_BASE}/cmake/simdb-config.cmake)
 
-# Create include/simdb/3p if it doesn't exist
-file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/include/simdb/3p)
-
-# Copy the third-party headers to include/simdb/3p
-file(GLOB CONCURRENTQUEUE_HEADERS ${PROJECT_SOURCE_DIR}/concurrentqueue/*.h)
-foreach(hdr ${CONCURRENTQUEUE_HEADERS})
-    get_filename_component(name ${hdr} NAME)
-    execute_process(
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            ${hdr}
-            ${PROJECT_SOURCE_DIR}/include/simdb/3p/${name}
-    )
-endforeach()
-
-
+## Testing
 add_subdirectory(test EXCLUDE_FROM_ALL)
 
-#
-# Installation
-#
+## Installation
 install(DIRECTORY include/simdb/ DESTINATION include/simdb)
 install(DIRECTORY cmake/ DESTINATION lib/cmake/simdb)
