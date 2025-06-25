@@ -1,0 +1,3 @@
+[submodule "external/RaftLib"]
+	path = external/RaftLib
+	url = https://github.com/RaftLib/RaftLib.git
