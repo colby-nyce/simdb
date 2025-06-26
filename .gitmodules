@@ -1,0 +1,3 @@
+[submodule "3p/RaftLib"]
+	path = 3p/RaftLib
+	url = git@github.com:colby-nyce/RaftLib.git
