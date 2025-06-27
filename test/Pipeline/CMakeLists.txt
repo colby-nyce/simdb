@@ -1,6 +1,1 @@
-set(PROJECT Pipeline)
-project(${PROJECT})
-add_executable(${PROJECT} main.cpp)
-add_test(NAME ${PROJECT}_test COMMAND $<TARGET_FILE:${PROJECT}>)
-add_dependencies(simdb_regress ${PROJECT})
-target_link_libraries(${PROJECT} simdb)
+simdb_test(Pipeline)
