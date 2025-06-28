@@ -16,3 +16,4 @@ endmacro()
 
 add_subdirectory(SQLite)
 add_subdirectory(TBB)
+add_subdirectory(PipelineApp)

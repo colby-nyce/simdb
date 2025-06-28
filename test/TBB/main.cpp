@@ -21,8 +21,8 @@ int main()
     auto& stat_blob_tbl = schema.addTable("StatBlobs");
     stat_blob_tbl.addColumn("StatBlob", dt::blob_t);
 
-    simdb::DatabaseManager db("test.db");
-    db.appendSchema(schema);
+    simdb::DatabaseManager db_mgr("test.db");
+    db_mgr.appendSchema(schema);
 
     // Design a pipeline that accepts std::vector<double> stats values,
     // compresses them into std::vector<char> buffers, then writes them
@@ -52,7 +52,7 @@ int main()
     using CompressedBytesPtr = std::shared_ptr<CompressedBytes>;
     using TaggedBytes = std::pair<uint64_t, CompressedBytesPtr>;
 
-    simdb::DatabaseQueue<CompressedBytesPtr, true> db_thread(db,
+    simdb::DatabaseQueue<CompressedBytesPtr, true> db_thread(db_mgr,
         [](simdb::DatabaseManager& db_mgr, CompressedBytesPtr&& bytes)
         {
             db_mgr.INSERT(SQL_TABLE("StatBlobs"),
@@ -99,7 +99,7 @@ int main()
     g.wait_for_all();
     db_thread.stop();
 
-    auto query = db.createQuery("StatBlobs");
+    auto query = db_mgr.createQuery("StatBlobs");
 
     std::vector<char> bytes;
     query->select("StatBlob", bytes);
