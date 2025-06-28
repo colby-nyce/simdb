@@ -35,11 +35,8 @@
 namespace simdb
 {
 
-class AsyncPipeline;
 class DatabaseManager;
-class PipelineStageBase;
 class Schema;
-class TransformQueueBase;
 
 /// Base class for SimDB applications. Note that app subclasses are given
 /// the DatabaseManager instance as a constructor argument, so they can
@@ -62,15 +59,6 @@ private:
 
     // Allow AppManager to set the app ID
     friend class AppManager;
-};
-
-/// Base class for all Apps that want to process data using a
-/// high-performance pipeline.
-class PipelineApp : public App
-{
-public:
-    virtual std::vector<std::unique_ptr<PipelineStageBase>> configPipeline() = 0;
-    virtual void setPipelineInputQueue(TransformQueueBase*) = 0;
 };
 
 class AppFactoryBase
