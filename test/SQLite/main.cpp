@@ -9,7 +9,7 @@
 // clang-format off
 
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/test/SimDBTester.hpp"
+#include "SimDBTester.hpp"
 
 TEST_INIT;
 
