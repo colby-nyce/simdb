@@ -142,7 +142,7 @@ public:
         pipeline->addTask(std::move(sqlite_task));      // Thread 3 (shared DB thread for all apps
                                                         //           using the same DatabaseManager)
 
-        pipeline_head_ = pipeline->getHead<DotProdInput>();
+        pipeline_head_ = pipeline->getPipelineInput<DotProdInput>();
         if (!pipeline_head_)
         {
             throw simdb::DBException("Pipeline failed to build");

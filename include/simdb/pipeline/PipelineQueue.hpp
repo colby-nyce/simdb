@@ -4,12 +4,17 @@
 
 namespace simdb::pipeline {
 
+/// Base class for all concurrent queues marshalling
+/// data between pipeline threads.
 class QueueBase
 {
 public:
     virtual ~QueueBase() = default;
 };
 
+/// Wrapper around a concurrent queue which is used by
+/// pipeline tasks that know their specific input/output
+/// types.
 template <typename T>
 class PipelineQueue : public QueueBase
 {
