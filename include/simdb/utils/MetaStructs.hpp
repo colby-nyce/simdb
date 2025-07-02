@@ -215,7 +215,7 @@ template <typename T> struct is_contiguous<std::vector<T>> : std::true_type
 {
 };
 
-template <typename T, std::size_t N> struct is_contiguous<std::array<T,N>> : std::true_type
+template <typename T, std::size_t PortIdx> struct is_contiguous<std::array<T,N>> : std::true_type
 {
 };
 

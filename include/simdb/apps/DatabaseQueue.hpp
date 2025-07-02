@@ -11,9 +11,6 @@
 namespace simdb
 {
 
-template <typename DataT, bool OrderByTags>
-class DatabaseQueue;
-
 template <typename DataT>
 class DatabaseQueue<DataT, false>
 {

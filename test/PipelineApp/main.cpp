@@ -1,47 +1,87 @@
 // clang-format off
 
 #include "simdb/apps/AppRegistration.hpp"
-#include "simdb/apps/DatabaseQueue.hpp"
+#include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/utils/Compress.hpp"
+#include "simdb/utils/Random.hpp"
 #include "SimDBTester.hpp"
 
-#include <tbb/flow_graph.h>
-
 // This test shows how to configure and build a pipeline for SimDB apps.
-// It is the same test as TBB/main.cpp but configured as an app instead
-// of standalone code.
+//
+// To showcase a variety of pipeline elements, this app will stream data
+// to a dot product calculation engine, and send compressed results to
+// the database asynchronously.
+//
+// In one thread, buffer the input vectors, compute the dot products, and buffer the
+// dot products before sending them along down the pipeline.
+//
+// The dot product value vectors are compressed on a second thread, and
+// writes to SQLite happen on a third thread.
 
-using StatsVector = std::vector<double>;
-using StatsVectorPtr = std::shared_ptr<StatsVector>;
-using TaggedStats = std::pair<uint64_t, StatsVectorPtr>;
-
+using DotProdInput = std::vector<double>;
+using BufferedDotProdInputs = std::vector<DotProdInput>;
+using DotProductValue = double;
+using BufferedDotProductValues = std::vector<DotProductValue>;
 using CompressedBytes = std::vector<char>;
-using CompressedBytesPtr = std::shared_ptr<CompressedBytes>;
-using TaggedBytes = std::pair<uint64_t, CompressedBytesPtr>;
+using CompressionQueue = simdb::pipeline::DatabaseQueue<CompressedBytes>;
 
-class StatBlobSerializer : public simdb::App
+static constexpr size_t DOT_PROD_ARRAY_LEN = 2;
+static constexpr size_t DOT_PROD_BUFLEN = 1000;
+
+double CalcDotProduct(const BufferedDotProdInputs& in)
+{
+    if (in.empty())
+    {
+        return 0;
+    }
+
+    const size_t num_rows = in.size();
+    const size_t num_cols = in[0].size();
+
+    if (num_rows != DOT_PROD_ARRAY_LEN)
+    {
+        throw simdb::DBException("Cannot compute dot product - did not buffer enough inputs");
+    }
+
+    for (const auto& row : in)
+    {
+        if (row.size() != num_cols)
+        {
+            throw simdb::DBException("All rows must have the same number of columns.");
+        }
+    }
+
+    double sum = 0;
+    for (size_t col = 0; col < num_cols; ++col)
+    {
+        double product = 1;
+        for (size_t row = 0; row < num_rows; ++row)
+        {
+            product *= in[row][col];
+        }
+        sum += product;
+    }
+
+    return sum;
+}
+
+class DotProductApp : public simdb::App
 {
 public:
-    static constexpr auto NAME = "stat-blobs";
+    static constexpr auto NAME = "dot-products";
 
-    StatBlobSerializer(simdb::DatabaseManager* db_mgr)
+    DotProductApp(simdb::DatabaseManager* db_mgr)
         : db_mgr_(db_mgr)
-    {
-        db_thread_ = std::make_unique<simdb::DatabaseQueue<CompressedBytesPtr, true>>(
-            *db_mgr_,
-            [](simdb::DatabaseManager& db_mgr, CompressedBytesPtr&& bytes)
-            {
-                db_mgr.INSERT(SQL_TABLE("StatBlobs"),
-                              SQL_COLUMNS("StatBlob"),
-                              SQL_VALUES(*bytes));
-            });
-    }
+    {}
+
+    ~DotProductApp() noexcept = default;
 
     bool defineSchema(simdb::Schema& schema) override
     {
         using dt = simdb::SqlDataType;
-        auto& stat_blob_tbl = schema.addTable("StatBlobs");
-        stat_blob_tbl.addColumn("StatBlob", dt::blob_t);
+
+        auto& dp_tbl = schema.addTable("DotProducts");
+        dp_tbl.addColumn("Blob", dt::blob_t);
 
         return true;
     }
@@ -50,79 +90,86 @@ public:
     {
         (void)argc;
         (void)argv;
-        createPipeline_();
+    }
+
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    {
+        auto dot_prod_task = simdb::pipeline::createTask<DotProdInput, BufferedDotProductValues>(
+            [inbuf = BufferedDotProdInputs{}, outbuf = BufferedDotProductValues{}]
+            (DotProdInput&& in, simdb::ConcurrentQueue<BufferedDotProductValues>& out) mutable
+            {
+                inbuf.emplace_back(std::move(in));
+                if (inbuf.size() == DOT_PROD_ARRAY_LEN)
+                {
+                    const auto dot_product = CalcDotProduct(inbuf);
+                    inbuf.clear();
+
+                    outbuf.push_back(dot_product);
+                    if (outbuf.size() == DOT_PROD_BUFLEN)
+                    {
+                        out.emplace(std::move(outbuf));
+                    }
+                }
+            }
+        );
+
+        auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, CompressedBytes>(
+            [](BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out)
+            {
+                CompressedBytes compressed;
+                simdb::compressData(in, compressed);
+                out.emplace(std::move(compressed));
+            }
+        );
+
+        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes>, void>(
+            [](CompressedBytes&& in, simdb::DatabaseManager* db_mgr)
+            {
+                // This is on the dedicated DB thread. Note that we are inside a
+                // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
+                // going on.
+                db_mgr->INSERT(SQL_TABLE("DotProducts"),
+                               SQL_COLUMNS("Blob"),
+                               SQL_VALUES(std::move(in)));
+            }
+        );
+
+        // Finalize pipeline
+        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_);
+
+        pipeline->addTask(std::move(dot_prod_task));    // Thread 1
+        pipeline->addTask(std::move(zlib_task));        // Thread 2
+        pipeline->addTask(std::move(sqlite_task));      // Thread 3 (shared DB thread for all apps
+                                                        //           using the same DatabaseManager)
+
+        pipeline_head_ = pipeline->getHead<DotProdInput>();
+        if (!pipeline_head_)
+        {
+            throw simdb::DBException("Pipeline failed to build");
+        }
+
+        return pipeline;
+    }
+
+    void process(std::vector<double>&& input)
+    {
+        pipeline_head_->emplace(std::move(input));
     }
 
     void postSim() override
     {
-        pipeline_->wait_for_all();
     }
 
     void teardown() override
     {
-        db_thread_->stop();
-    }
-
-    void process(StatsVector&& stats)
-    {
-        process(std::make_shared<StatsVector>(std::move(stats)));
-    }
-
-    void process(const StatsVector& stats)
-    {
-        process(std::make_shared<StatsVector>(stats));
-    }
-
-    void process(StatsVectorPtr stats)
-    {
-        pipeline_head_->try_put(stats);
     }
 
 private:
-    void createPipeline_()
-    {
-        pipeline_ = std::make_shared<tbb::flow::graph>();
-        auto& g = *pipeline_;
-
-        pipeline_head_ = std::make_unique<tbb::flow::function_node<StatsVectorPtr, TaggedStats>>(
-            g, tbb::flow::serial,
-            [tag = uint64_t{0}](StatsVectorPtr stats) mutable
-            {
-                return std::make_pair(tag++, std::move(stats));
-            }
-        );
-
-        compressor_ = std::make_unique<tbb::flow::function_node<TaggedStats, TaggedBytes>>(
-            g, tbb::flow::unlimited,
-            [](TaggedStats tagged_stats)
-            {
-                TaggedBytes tagged_bytes{tagged_stats.first, std::make_shared<CompressedBytes>()};
-                simdb::compressData(*tagged_stats.second, *tagged_bytes.second);
-                return tagged_bytes;
-            });
-
-        sqlite_ = std::make_unique<tbb::flow::function_node<TaggedBytes, tbb::flow::continue_msg>>(
-            g, tbb::flow::serial,
-            [this]
-            (TaggedBytes tagged_bytes) mutable
-            {
-                db_thread_->enqueue(std::get<0>(tagged_bytes), std::move(std::get<1>(tagged_bytes)));
-                return tbb::flow::continue_msg{};
-            });
-
-        tbb::flow::make_edge(*pipeline_head_, *compressor_);
-        tbb::flow::make_edge(*compressor_, *sqlite_);
-    }
-
+    simdb::ConcurrentQueue<std::vector<double>>* pipeline_head_ = nullptr;
     simdb::DatabaseManager* db_mgr_ = nullptr;
-    std::unique_ptr<simdb::DatabaseQueue<CompressedBytesPtr, true>> db_thread_;
-    std::shared_ptr<tbb::flow::graph> pipeline_;
-    std::unique_ptr<tbb::flow::function_node<StatsVectorPtr, TaggedStats>> pipeline_head_;
-    std::unique_ptr<tbb::flow::function_node<TaggedStats, TaggedBytes>> compressor_;
-    std::unique_ptr<tbb::flow::function_node<TaggedBytes, tbb::flow::continue_msg>> sqlite_;
 };
 
-REGISTER_SIMDB_APPLICATION(StatBlobSerializer);
+REGISTER_SIMDB_APPLICATION(DotProductApp);
 
 TEST_INIT;
 
@@ -131,7 +178,7 @@ int main(int argc, char** argv)
     DB_INIT;
 
     simdb::AppManager app_mgr;
-    app_mgr.enableApp(StatBlobSerializer::NAME);
+    app_mgr.enableApp(DotProductApp::NAME);
 
     simdb::DatabaseManager db_mgr("test.db");
 
@@ -139,18 +186,18 @@ int main(int argc, char** argv)
     app_mgr.createEnabledApps(&db_mgr);
     app_mgr.createSchemas(&db_mgr);
     app_mgr.postInit(&db_mgr, argc, argv);
+    app_mgr.openPipelines();
 
     // Simulate...
-    auto serializer = app_mgr.getApp<StatBlobSerializer>(&db_mgr);
+    auto app = app_mgr.getApp<DotProductApp>(&db_mgr);
     constexpr size_t STEPS = 10000;
+    std::vector<std::vector<double>> sent;
     for (size_t i = 1; i <= STEPS; ++i)
     {
-        // [1]
-        // [2,2]
-        // [3,3,3]
-        // ...
-        StatsVector stats(i, (double)i);
-        serializer->process(std::move(stats));
+        // Generate random [a,b,c] vector for dot product.
+        auto input = simdb::utils::generateRandomData<double>(3);
+        sent.push_back(input);
+        app->process(std::move(input));
     }
 
     // Finish...
@@ -159,22 +206,43 @@ int main(int argc, char** argv)
     app_mgr.destroy();
 
     // Validate...
-    auto query = db_mgr.createQuery("StatBlobs");
+    std::vector<std::vector<double>> buffered_dot_products;
+    std::vector<double> dot_products;
 
-    std::vector<char> bytes;
-    query->select("StatBlob", bytes);
-    EXPECT_EQUAL(query->count(), STEPS);
+    for (size_t i = 0; i < sent.size() - DOT_PROD_ARRAY_LEN + 1; i += DOT_PROD_ARRAY_LEN)
+    {
+        std::vector<std::vector<double>> mat;
+        for (size_t j = 0; j < DOT_PROD_ARRAY_LEN; ++j)
+        {
+            mat.push_back(sent.at(i+j));
+        }
+
+        dot_products.push_back(CalcDotProduct(mat));
+        if (dot_products.size() == DOT_PROD_BUFLEN)
+        {
+            buffered_dot_products.push_back(dot_products);
+            dot_products.clear();
+        }
+    }
+
+    std::vector<std::vector<char>> expected_blobs;
+    for (const auto& uncompressed : buffered_dot_products)
+    {
+        expected_blobs.push_back({});
+        simdb::compressData(uncompressed, expected_blobs.back());
+    }
+
+    auto query = db_mgr.createQuery("DotProducts");
+    EXPECT_EQUAL(query->count(), expected_blobs.size());
+
+    std::vector<char> blob;
+    query->select("Blob", blob);
 
     auto result_set = query->getResultSet();
-    for (size_t i = 1; i <= STEPS; ++i)
+    size_t i = 0;
+    while (result_set.getNextRecord())
     {
-        EXPECT_TRUE(result_set.getNextRecord());
-
-        StatsVector actual;
-        simdb::decompressData(bytes, actual);
-
-        const StatsVector expected(i, (double)i);
-        EXPECT_EQUAL(expected, actual);
+        EXPECT_EQUAL(expected_blobs[i++], blob);
     }
 
     // This MUST be put at the end of unit test files' main() function.
