@@ -49,7 +49,7 @@ public:
     }
 
     template <typename Input>
-    ConcurrentQueue<Input>* getHead()
+    ConcurrentQueue<Input>* getPipelineInput()
     {
         if (tasks_.empty())
         {
