@@ -12,6 +12,8 @@ namespace simdb::pipeline {
 /// are.
 ///
 ///     DatabaseManager db_mgr("sim.db");
+///     ... create schema ...
+///
 ///     DatabaseThread db_thread(&db_mgr);
 ///
 ///     DatabaseQueue<std::vector<double>> doublesQ(db_thread,
@@ -24,7 +26,7 @@ namespace simdb::pipeline {
 ///         });
 ///
 ///     DatabaseQueue<std::string> stringsQ(db_thread,
-///         [](std::string& s, DatabaseManager* db_mgr)
+///         [](std::string&& s, DatabaseManager* db_mgr)
 ///         {
 ///              db_mgr->INSERT(
 ///                  SQL_TABLE("StringValues"),
@@ -41,7 +43,7 @@ template <typename DatabaseIn>
 class DatabaseQueue : public Runnable
 {
 public:
-    /// Function to be called as often as their is data available.
+    /// Function to be called as often as there is data available.
     /// Invoked on the database thread.
     using DatabaseFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
 
