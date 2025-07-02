@@ -40,12 +40,9 @@ public:
             {
                 tasks.emplace_back(task.get());
             }
-            else if constexpr (std::is_base_of<TaskBase, TaskT>::value)
+            else if (auto t = dynamic_cast<TaskT*>(task.get()))
             {
-                if (auto t = dynamic_cast<TaskT*>(task.get()))
-                {
-                    tasks.emplace_back(t);
-                }
+                tasks.emplace_back(t);
             }
         }
         return tasks;

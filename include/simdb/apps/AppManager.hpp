@@ -195,7 +195,10 @@ public:
                     {
                         if (dynamic_cast<pipeline::DatabaseTask*>(*it))
                         {
-                            assert(processing_db_tasks);
+                            if (!processing_db_tasks)
+                            {
+                                throw DBException("Database tasks must be at the end of the pipeline");
+                            }
                         }
                         else
                         {

@@ -35,13 +35,13 @@ public:
     {
         if (runnables_.empty())
         {
-            throw DBException("No runnables have been assigned to this thread");
+            return;
         }
 
         if (!is_running_)
         {
             is_running_ = true;
-            thread_ = std::make_unique<std::thread>(&Thread::run_, this);
+            thread_ = std::make_unique<std::thread>(&Thread::loop_, this);
         }
     }
 
@@ -59,28 +59,28 @@ public:
     }
 
 protected:
-    virtual bool flush_()
+    virtual bool run_()
     {
-        bool flushed = false;
+        bool ran = false;
         for (auto runner : runnables_)
         {
-            flushed |= runner->run();
+            ran |= runner->run();
         }
-        return flushed;
+        return ran;
     }
 
 private:
-    void run_()
+    void loop_()
     {
         while (is_running_)
         {
-            if (!flush_())
+            if (!run_())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms_));
             }
         }
 
-        flush_();
+        run_();
     }
 
     const size_t interval_ms_;
@@ -102,10 +102,10 @@ public:
     }
 
 private:
-    bool flush_() override
+    bool run_() override
     {
         bool ran = false;
-        db_mgr_->safeTransaction([&]() { ran = Thread::flush_(); });
+        db_mgr_->safeTransaction([&]() { ran = Thread::run_(); });
         return ran;
     }
 
