@@ -3,6 +3,7 @@
 #include "simdb/pipeline/PipelineRunnable.hpp"
 #include "simdb/pipeline/PipelineThread.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
+#include "simdb/utils/Demangle.hpp"
 
 namespace simdb::pipeline {
 
@@ -48,7 +49,8 @@ public:
     using DatabaseFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
 
     DatabaseQueue(DatabaseThread& db_thread, DatabaseFunc db_func)
-        : db_func_(db_func)
+        : Runnable("DatabaseQueue<" + demangle_type<DatabaseIn>() + ">")
+        , db_func_(db_func)
         , db_mgr_(db_thread.getDatabaseManager())
     {
         db_thread.addRunnable(this);

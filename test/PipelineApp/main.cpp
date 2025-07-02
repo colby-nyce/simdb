@@ -95,6 +95,7 @@ public:
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
     {
         auto dot_prod_task = simdb::pipeline::createTask<DotProdInput, BufferedDotProductValues>(
+            "DotProduct",
             [inbuf = BufferedDotProdInputs{}, outbuf = BufferedDotProductValues{}]
             (DotProdInput&& in, simdb::ConcurrentQueue<BufferedDotProductValues>& out) mutable
             {
@@ -114,6 +115,7 @@ public:
         );
 
         auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, CompressedBytes>(
+            "Compression",
             [](BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out)
             {
                 CompressedBytes compressed;
