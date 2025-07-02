@@ -101,12 +101,12 @@ public:
         , db_func_(db_func)
     {}
 
-    QueueBase* getInputQueue()
+    QueueBase* getInputQueue() override
     {
         return &input_queue_;
     }
 
-    QueueBase* getOutputQueue()
+    QueueBase* getOutputQueue() override
     {
         return nullptr;
     }

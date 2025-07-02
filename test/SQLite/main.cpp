@@ -756,7 +756,7 @@ int main()
     auto query7 = db_mgr.createQuery("NonIndexedColumns");
 
     // Make sure the tables have the same number of records first.
-    int IndexedColumns_id, NonIndexedColumns_id;
+    int NonIndexedColumns_id;
     query7->select("Id", NonIndexedColumns_id);
     query7->addConstraintForInt("SomeInt32", simdb::Constraints::EQUAL, 100000);
     query7->addConstraintForDouble("SomeDouble", simdb::Constraints::EQUAL, 100000.1);
