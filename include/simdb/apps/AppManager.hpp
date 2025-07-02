@@ -305,7 +305,7 @@ public:
         }
 
         std::cout << "************ Shutting down pipelines for all SimDB apps on database: "
-                  << db_mgr->getDatabaseFilePath() << "\n\n";
+                  << db_mgr->getDatabaseFilePath() << " ************\n\n";
 
         auto it = non_db_threads_.find(db_mgr);
         if (it != non_db_threads_.end())
