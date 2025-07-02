@@ -11,6 +11,21 @@
 namespace simdb
 {
 
+enum class JournalMode
+{
+    //PRAGMA journal_mode = OFF
+    //PRAGMA synchronous = OFF
+    FASTEST,
+
+    //PRAGMA journal_mode = DELETE;
+    //PRAGMA synchronous = FULL;
+    SAFEST,
+
+    //PRAGMA journal_mode = WAL;
+    //PRAGMA synchronous = NORMAL;
+    BALANCED
+};
+
 /*!
  * \class DatabaseManager
  *
@@ -27,7 +42,7 @@ public:
     ///                       If the file already existed and this flag is false,
     ///                       then you will not be able to call appendSchema()
     ///                       on this DatabaseManager as the schema is fixed.
-    DatabaseManager(const std::string& db_file = "sim.db", const bool force_new_file = false)
+    DatabaseManager(const std::string& db_file = "sim.db", const bool force_new_file = false, JournalMode mode = JournalMode::SAFEST)
         : db_file_(db_file)
     {
         if (std::filesystem::exists(db_file))
@@ -49,7 +64,7 @@ public:
         }
 
         db_conn_.reset(new SQLiteConnection);
-        createDatabaseFile_();
+        createDatabaseFile_(mode);
     }
 
     /// \brief   Add one or more tables to the existing schema.
@@ -159,18 +174,30 @@ public:
     }
 
     /// \brief Execute an arbitrary SQL command on this database.
-    void EXECUTE(const std::string& sql_cmd)
+    void EXECUTE(const std::string& sql_cmd, bool in_transaction = true)
     {
-        db_conn_->safeTransaction(
-            [&]()
-            {
-                auto rc = SQLiteReturnCode(sqlite3_exec(
-                    db_conn_->getDatabase(), sql_cmd.c_str(), nullptr, nullptr, nullptr));
-                if (rc)
+        if (in_transaction)
+        {
+            db_conn_->safeTransaction(
+                [&]()
                 {
-                    throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
-                }
-            });
+                    auto rc = SQLiteReturnCode(sqlite3_exec(
+                        db_conn_->getDatabase(), sql_cmd.c_str(), nullptr, nullptr, nullptr));
+                    if (rc)
+                    {
+                        throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
+                    }
+                });
+        }
+        else
+        {
+            auto rc = SQLiteReturnCode(sqlite3_exec(
+                db_conn_->getDatabase(), sql_cmd.c_str(), nullptr, nullptr, nullptr));
+            if (rc)
+            {
+                throw DBException(sqlite3_errmsg(db_conn_->getDatabase()));
+            }
+        }
     }
 
     /// \brief  Get a SqlRecord from a database ID for the given table.
@@ -300,7 +327,7 @@ private:
     }
 
     /// Open the given database file.
-    bool createDatabaseFile_()
+    bool createDatabaseFile_(JournalMode mode)
     {
         if (!db_conn_)
         {
@@ -312,6 +339,31 @@ private:
         {
             //File opened without issues. Store the full DB filename.
             db_filepath_ = db_filename;
+
+            switch (mode)
+            {
+                case JournalMode::FASTEST:
+                {
+                    EXECUTE("PRAGMA journal_mode = OFF;", false);
+                    EXECUTE("PRAGMA synchronous = OFF;", false);
+                    break;
+                }
+
+                case JournalMode::SAFEST:
+                {
+                    EXECUTE("PRAGMA journal_mode = DELETE;", false);
+                    EXECUTE("PRAGMA synchronous = FULL;", false);
+                    break;
+                }
+
+                case JournalMode::BALANCED:
+                {
+                    EXECUTE("PRAGMA journal_mode = WAL;", false);
+                    EXECUTE("PRAGMA synchronous = NORMAL;", false);
+                    break;
+                }
+            }
+
             return true;
         }
 
