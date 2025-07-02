@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <iostream>
 
 namespace simdb::pipeline {
 
@@ -20,6 +21,7 @@ public:
     ~Thread() noexcept
     {
         close();
+        printPerfReport(std::cout);
     }
 
     void addRunnable(pipeline::Runnable* runnable)
@@ -41,6 +43,7 @@ public:
         if (!is_running_)
         {
             is_running_ = true;
+            start_ = std::chrono::high_resolution_clock::now();
             thread_ = std::make_unique<std::thread>(&Thread::loop_, this);
         }
     }
@@ -56,6 +59,38 @@ public:
                 thread_.reset();
             }
         }
+    }
+
+    void printPerfReport(std::ostream& os) const noexcept
+    {
+        auto now = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<double> dur = now - start_;
+        const double total_sleep_seconds = 1.0 * num_times_slept_ * interval_ms_ / 1000.0;
+        const auto total_elap_seconds = dur.count();
+        const auto pct_time_sleeping = (total_sleep_seconds / total_elap_seconds) * 100;
+        const auto pct_time_working = 100 - pct_time_sleeping;
+
+        // Thread containing:
+        //   - <runnable>
+        //   - <runnable>
+        //
+        // Performance report:
+        //   Num times run:     548
+        //   Pct time sleeping: 7.8%
+        //   Pct time working:  91.2%
+
+        os << "Thread containing:\n";
+        for (const auto runnable : runnables_)
+        {
+            os << "    - " << runnable->getName() << "\n";
+        }
+
+        os << "\n";
+        os << "    Performance report:\n";
+        os << "        Num times run:      " << num_times_run_ << "\n";
+        os << "        Pct time sleeping:  " << std::fixed << std::setprecision(1) << pct_time_sleeping << "%\n";
+        os << "        Pct time working:   " << std::fixed << std::setprecision(1) << pct_time_working << "%\n";
+        os << "\n";
     }
 
 protected:
@@ -77,6 +112,11 @@ private:
             if (!run_())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms_));
+                ++num_times_slept_;
+            }
+            else
+            {
+                ++num_times_run_;
             }
         }
 
@@ -87,6 +127,9 @@ private:
     std::vector<pipeline::Runnable*> runnables_;
     std::unique_ptr<std::thread> thread_;
     std::atomic<bool> is_running_ = false;
+    std::chrono::high_resolution_clock::time_point start_;
+    uint64_t num_times_run_ = 0;
+    uint64_t num_times_slept_ = 0;
 };
 
 class DatabaseThread : public Thread
