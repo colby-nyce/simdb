@@ -38,6 +38,10 @@ namespace simdb
 class DatabaseManager;
 class Schema;
 
+namespace pipeline {
+    class Pipeline;
+}
+
 /// Base class for SimDB applications. Note that app subclasses are given
 /// the DatabaseManager instance as a constructor argument, so they can
 /// access the database and perform operations like appending schemas,
@@ -48,6 +52,7 @@ public:
     virtual ~App() = default;
     virtual bool defineSchema(Schema&) { return false; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
+    virtual std::unique_ptr<pipeline::Pipeline> createPipeline() { return nullptr; }
     virtual void postSim() {}
     virtual void teardown() {}
 

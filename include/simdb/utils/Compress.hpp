@@ -3,7 +3,6 @@
 #pragma once
 
 #include <zlib.h>
-#include <array>
 #include <vector>
 #include <cstring>
 #include "simdb/Exceptions.hpp"
@@ -69,15 +68,6 @@ inline void compressData(const void * data_ptr, size_t num_bytes, std::vector<ch
 /// Perform zlib compression on a vector.
 template <typename T>
 inline void compressData(const std::vector<T>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
-{
-    const void* data_ptr = in.data();
-    size_t num_bytes = in.size() * sizeof(T);
-    compressData(data_ptr, num_bytes, out, compression_level);
-}
-
-/// Perform zlib compression on an array.
-template <typename T, size_t N>
-inline void compressData(const std::array<T, N>& in, std::vector<char>& out, CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
     const void* data_ptr = in.data();
     size_t num_bytes = in.size() * sizeof(T);
