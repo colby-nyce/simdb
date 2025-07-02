@@ -18,6 +18,14 @@ if(TBB_VERSION)
 endif()
 
 set(SIMDB_BASE ${CMAKE_CURRENT_SOURCE_DIR})
+option(SIMDB_PEDANTIC "Enable build with -Wall -Wextra -Werror" ON)
+
+if(SIMDB_PEDANTIC)
+    target_compile_options(simdb INTERFACE
+        $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Werror>
+        $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Werror>
+    )
+endif()
 
 target_include_directories(simdb INTERFACE
     $<BUILD_INTERFACE:${SIMDB_BASE}/include>
