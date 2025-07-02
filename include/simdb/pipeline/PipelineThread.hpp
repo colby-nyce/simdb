@@ -18,7 +18,7 @@ public:
     {
     }
 
-    ~Thread() noexcept
+    virtual ~Thread() noexcept
     {
         close();
         printPerfReport(std::cout);
@@ -138,6 +138,8 @@ public:
     DatabaseThread(DatabaseManager* db_mgr)
         : db_mgr_(db_mgr)
     {}
+
+    ~DatabaseThread() noexcept = default;
 
     DatabaseManager* getDatabaseManager() const
     {
