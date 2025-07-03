@@ -310,12 +310,17 @@ public:
         auto it = non_db_threads_.find(db_mgr);
         if (it != non_db_threads_.end())
         {
+            for (const auto& pipeline : it->second)
+            {
+                pipeline->printPerfReport(std::cout);
+            }
             non_db_threads_.erase(it);
         }
 
         auto it2 = db_threads_.find(db_mgr);
         if (it2 != db_threads_.end())
         {
+            it2->second->printPerfReport(std::cout);
             db_threads_.erase(it2);
         }
 

@@ -8,8 +8,9 @@ namespace simdb::pipeline {
 class Pipeline
 {
 public:
-    Pipeline(DatabaseManager* db_mgr)
+    Pipeline(DatabaseManager* db_mgr, const std::string& name)
         : db_mgr_(db_mgr)
+        , pipeline_name_(name)
     {}
 
     DatabaseManager* getDatabaseManager() const
@@ -17,8 +18,15 @@ public:
         return db_mgr_;
     }
 
-    void addTask(std::unique_ptr<TaskBase> task)
+    void addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
     {
+        std::string task_name = pipeline_name_ + "." + task->getName(true);
+        if (!description.empty())
+        {
+            task_name += " (" + description + ")";
+        }
+        task->setName(task_name);
+
         if (!tasks_.empty())
         {
             auto prev = tasks_.back().get();
@@ -72,6 +80,7 @@ public:
 
 private:
     DatabaseManager* db_mgr_ = nullptr;
+    std::string pipeline_name_;
     std::vector<std::unique_ptr<TaskBase>> tasks_;
     bool requires_db_ = false;
 };

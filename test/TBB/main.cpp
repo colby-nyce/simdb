@@ -86,6 +86,7 @@ int main()
 
     g.wait_for_all();
     db_thread.close();
+    db_thread.printPerfReport(std::cout);
 
     auto query = db_mgr.createQuery("StatBlobs");
 

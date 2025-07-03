@@ -16,17 +16,11 @@ public:
     virtual QueueBase* getInputQueue() = 0;
     virtual QueueBase* getOutputQueue() = 0;
     virtual void setOutputQueue(QueueBase* q) = 0;
-
-protected:
-    TaskBase(const std::string& name)
-        : Runnable(name)
-    {}
 };
 
 class DatabaseTask : public TaskBase
 {
 public:
-    DatabaseTask(const std::string& name) : TaskBase(name) {}
     void setDatabaseManager(DatabaseManager* db_mgr) { db_mgr_ = db_mgr; }
     DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 
@@ -40,9 +34,8 @@ class Task : public TaskBase
 public:
     using Func = std::function<void(TaskIn&&, ConcurrentQueue<TaskOut>&)>;
 
-    Task(const std::string& name, Func func)
-        : TaskBase(name)
-        , func_(func)
+    Task(Func func)
+        : func_(func)
     {}
 
     QueueBase* getInputQueue() override
@@ -85,6 +78,11 @@ public:
     }
 
 private:
+    std::string getName_() const override
+    {
+        return "Task<" + demangle_type<TaskIn>() + ", " + demangle_type<TaskOut>() + ">";
+    }
+
     Func func_;
     PipelineQueue<TaskIn> input_queue_;
     PipelineQueue<TaskOut>* output_queue_ = nullptr;
@@ -97,8 +95,7 @@ public:
     using DatabaseFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
 
     Task(DatabaseFunc db_func)
-        : DatabaseTask("DatabaseQueue<" + demangle_type<DatabaseIn>() + ">")
-        , db_func_(db_func)
+        : db_func_(db_func)
     {}
 
     QueueBase* getInputQueue() override
@@ -129,6 +126,11 @@ public:
     }
 
 private:
+    std::string getName_() const override
+    {
+        return "DatabaseQueue<" + demangle_type<DatabaseIn>() + ", void>";
+    }
+
     DatabaseFunc db_func_;
     PipelineQueue<DatabaseIn> input_queue_;
 };
@@ -139,9 +141,8 @@ class Task<TaskIn, void> : public TaskBase
 public:
     using Func = std::function<void(TaskIn&&)>;
 
-    Task(const std::string& name, Func func)
-        : TaskBase(name)
-        , func_(func)
+    Task(Func func)
+        : func_(func)
     {}
 
     QueueBase* getInputQueue() override
@@ -172,6 +173,11 @@ public:
     }
 
 private:
+    std::string getName_() const override
+    {
+        return "Task<" + demangle_type<TaskIn>() + ", void>";
+    }
+
     Func func_;
     PipelineQueue<TaskIn> input_queue_;
 };
