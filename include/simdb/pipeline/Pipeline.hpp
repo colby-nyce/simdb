@@ -20,7 +20,7 @@ public:
 
     void addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
     {
-        std::string task_name = pipeline_name_ + "." + task->getName(true);
+        std::string task_name = pipeline_name_ + "." + task->getName();
         if (!description.empty())
         {
             task_name += " (" + description + ")";
