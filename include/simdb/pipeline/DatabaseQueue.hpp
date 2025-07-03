@@ -49,8 +49,7 @@ public:
     using DatabaseFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
 
     DatabaseQueue(DatabaseThread& db_thread, DatabaseFunc db_func)
-        : Runnable("DatabaseQueue<" + demangle_type<DatabaseIn>() + ">")
-        , db_func_(db_func)
+        : db_func_(db_func)
         , db_mgr_(db_thread.getDatabaseManager())
     {
         db_thread.addRunnable(this);
@@ -82,6 +81,11 @@ private:
             ran = true;
         }
         return ran;
+    }
+
+    std::string getName_() const override
+    {
+        return "DatabaseQueue<" + demangle_type<DatabaseIn>() + ">";
     }
 
     DatabaseFunc db_func_;

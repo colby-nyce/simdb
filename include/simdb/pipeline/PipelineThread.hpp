@@ -21,7 +21,6 @@ public:
     virtual ~Thread() noexcept
     {
         close();
-        printPerfReport(std::cout);
     }
 
     void addRunnable(pipeline::Runnable* runnable)

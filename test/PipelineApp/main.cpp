@@ -95,7 +95,6 @@ public:
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
     {
         auto dot_prod_task = simdb::pipeline::createTask<DotProdInput, BufferedDotProductValues>(
-            "DotProduct",
             [inbuf = BufferedDotProdInputs{}, outbuf = BufferedDotProductValues{}]
             (DotProdInput&& in, simdb::ConcurrentQueue<BufferedDotProductValues>& out) mutable
             {
@@ -115,7 +114,6 @@ public:
         );
 
         auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, CompressedBytes>(
-            "Compression",
             [](BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out)
             {
                 CompressedBytes compressed;
@@ -137,12 +135,11 @@ public:
         );
 
         // Finalize pipeline
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_);
+        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        pipeline->addTask(std::move(dot_prod_task));    // Thread 1
-        pipeline->addTask(std::move(zlib_task));        // Thread 2
-        pipeline->addTask(std::move(sqlite_task));      // Thread 3 (shared DB thread for all apps
-                                                        //           using the same DatabaseManager)
+        pipeline->addTask(std::move(dot_prod_task), "DotProduct");
+        pipeline->addTask(std::move(zlib_task), "Compression");
+        pipeline->addTask(std::move(sqlite_task), "Database");
 
         pipeline_head_ = pipeline->getPipelineInput<DotProdInput>();
         if (!pipeline_head_)
