@@ -26,6 +26,21 @@ enum class JournalMode
     BALANCED
 };
 
+using PragmaPairs = std::vector<std::pair<std::string, std::string>>;
+
+inline PragmaPairs getPragmas(JournalMode mode)
+{
+    switch (mode)
+    {
+        case JournalMode::FASTEST:
+            return {{"journal_mode", "OFF"}, {"synchronous", "OFF"}};
+        case JournalMode::SAFEST:
+            return {{"journal_mode", "DELETE"}, {"synchronous", "FULL"}};
+        case JournalMode::BALANCED:
+            return {{"journal_mode", "WAL"}, {"synchronous", "NORMAL"}};
+    }
+}
+
 /*!
  * \class DatabaseManager
  *
@@ -36,13 +51,14 @@ enum class JournalMode
 class DatabaseManager
 {
 public:
-    /// \brief Construct a DatabaseManager with a database directory and a filename.
+    /// \brief Construct a DatabaseManager
     /// \param db_file Name of the database file, typically with .db extension
     /// \param force_new_file Force the <db_file> to be overwritten if it exists.
     ///                       If the file already existed and this flag is false,
     ///                       then you will not be able to call appendSchema()
     ///                       on this DatabaseManager as the schema is fixed.
-    DatabaseManager(const std::string& db_file = "sim.db", const bool force_new_file = false, JournalMode mode = JournalMode::SAFEST)
+    /// \param pragmas Pragmas to set on the database as soon as it is opened.
+    DatabaseManager(const std::string& db_file = "sim.db", const bool force_new_file = false, const PragmaPairs& pragmas = {})
         : db_file_(db_file)
     {
         if (std::filesystem::exists(db_file))
@@ -64,7 +80,7 @@ public:
         }
 
         db_conn_.reset(new SQLiteConnection);
-        createDatabaseFile_(mode);
+        createDatabaseFile_(pragmas);
     }
 
     /// \brief   Add one or more tables to the existing schema.
@@ -327,7 +343,7 @@ private:
     }
 
     /// Open the given database file.
-    bool createDatabaseFile_(JournalMode mode)
+    bool createDatabaseFile_(const PragmaPairs& pragmas)
     {
         if (!db_conn_)
         {
@@ -340,28 +356,10 @@ private:
             //File opened without issues. Store the full DB filename.
             db_filepath_ = db_filename;
 
-            switch (mode)
+            //Issue PRAGMA's
+            for (const auto& [name, val] : pragmas)
             {
-                case JournalMode::FASTEST:
-                {
-                    EXECUTE("PRAGMA journal_mode = OFF;", false);
-                    EXECUTE("PRAGMA synchronous = OFF;", false);
-                    break;
-                }
-
-                case JournalMode::SAFEST:
-                {
-                    EXECUTE("PRAGMA journal_mode = DELETE;", false);
-                    EXECUTE("PRAGMA synchronous = FULL;", false);
-                    break;
-                }
-
-                case JournalMode::BALANCED:
-                {
-                    EXECUTE("PRAGMA journal_mode = WAL;", false);
-                    EXECUTE("PRAGMA synchronous = NORMAL;", false);
-                    break;
-                }
+                EXECUTE("PRAGMA " + name + " = " + val, false);
             }
 
             return true;
