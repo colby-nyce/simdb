@@ -28,7 +28,7 @@ using CompressionQueue = simdb::pipeline::DatabaseQueue<CompressedBytes>;
 static constexpr size_t DOT_PROD_ARRAY_LEN = 2;
 static constexpr size_t DOT_PROD_BUFLEN = 1000;
 
-double CalcDotProduct(const BufferedDotProdInputs& in)
+double CalcDotProduct(BufferedDotProdInputs&& in)
 {
     if (in.empty())
     {
@@ -65,6 +65,23 @@ double CalcDotProduct(const BufferedDotProdInputs& in)
     return sum;
 }
 
+CompressedBytes CompressBytes(BufferedDotProductValues&& in)
+{
+    CompressedBytes compressed;
+    simdb::compressData(in, compressed);
+    return compressed;
+}
+
+void WriteCompressedBytes(CompressedBytes&& in, simdb::DatabaseManager* db_mgr)
+{
+    // This is on the dedicated DB thread. Note that we are inside a
+    // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
+    // going on.
+    db_mgr->INSERT(SQL_TABLE("DotProducts"),
+                    SQL_COLUMNS("Blob"),
+                    SQL_VALUES(std::move(in)));
+}
+
 class DotProductApp : public simdb::App
 {
 public:
@@ -94,53 +111,34 @@ public:
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
     {
-        auto dot_prod_task = simdb::pipeline::createTask<DotProdInput, BufferedDotProductValues>(
-            [inbuf = BufferedDotProdInputs{}, outbuf = BufferedDotProductValues{}]
-            (DotProdInput&& in, simdb::ConcurrentQueue<BufferedDotProductValues>& out) mutable
-            {
-                inbuf.emplace_back(std::move(in));
-                if (inbuf.size() == DOT_PROD_ARRAY_LEN)
-                {
-                    const auto dot_product = CalcDotProduct(inbuf);
-                    inbuf.clear();
-
-                    outbuf.push_back(dot_product);
-                    if (outbuf.size() == DOT_PROD_BUFLEN)
-                    {
-                        out.emplace(std::move(outbuf));
-                    }
-                }
-            }
-        );
-
-        auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, CompressedBytes>(
-            [](BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out)
-            {
-                CompressedBytes compressed;
-                simdb::compressData(in, compressed);
-                out.emplace(std::move(compressed));
-            }
-        );
-
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes>, void>(
-            [](CompressedBytes&& in, simdb::DatabaseManager* db_mgr)
-            {
-                // This is on the dedicated DB thread. Note that we are inside a
-                // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
-                // going on.
-                db_mgr->INSERT(SQL_TABLE("DotProducts"),
-                               SQL_COLUMNS("Blob"),
-                               SQL_VALUES(std::move(in)));
-            }
-        );
-
-        // Finalize pipeline
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        pipeline->addTaskGroup(std::move(dot_prod_task), "DotProduct");
-        pipeline->addTaskGroup(std::move(zlib_task), "Compression");
-        pipeline->addTaskGroup(std::move(sqlite_task), "Database");
+        // Thread 1
+        auto dot_prod_task1 = simdb::pipeline::createTask<DotProdInput, simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
+        auto dot_prod_task2 = simdb::pipeline::createTask<BufferedDotProdInputs, simdb::pipeline::Function<double>>(CalcDotProduct);
+        auto dot_prod_task3 = simdb::pipeline::createTask<double, simdb::pipeline::Buffer<double>>(DOT_PROD_BUFLEN);
 
+        // Thread 2
+        auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, simdb::pipeline::Function<CompressedBytes>>(CompressBytes);
+
+        // Thread 3
+        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes>, void>(WriteCompressedBytes);
+
+        // Thread 1 tasks
+        pipeline->createTaskGroup("DotProduct")
+            ->addTask(std::move(dot_prod_task1))
+            ->addTask(std::move(dot_prod_task2))
+            ->addTask(std::move(dot_prod_task3));
+
+        // Thread 2 tasks
+        pipeline->createTaskGroup("Compression")
+            ->addTask(std::move(zlib_task));
+
+        // Thread 3 tasks
+        pipeline->createTaskGroup("Database")
+            ->addTask(std::move(sqlite_task));
+
+        // Finalize
         pipeline_head_ = pipeline->getPipelineInput<DotProdInput>();
         if (!pipeline_head_)
         {
@@ -216,7 +214,7 @@ int main(int argc, char** argv)
             mat.push_back(sent.at(i+j));
         }
 
-        dot_products.push_back(CalcDotProduct(mat));
+        dot_products.push_back(CalcDotProduct(std::move(mat)));
         if (dot_products.size() == DOT_PROD_BUFLEN)
         {
             buffered_dot_products.push_back(dot_products);

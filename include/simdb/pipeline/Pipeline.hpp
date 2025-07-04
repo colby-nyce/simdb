@@ -17,26 +17,12 @@ public:
         return db_mgr_;
     }
 
-    std::unique_ptr<TaskGroup> createTaskGroup(const std::string& description = "")
+    TaskGroup* createTaskGroup(const std::string& description = "")
     {
-        return std::make_unique<TaskGroup>(pipeline_name_, description);
-    }
-
-    void addTaskGroup(std::unique_ptr<TaskGroup> group)
-    {
-        if (!task_groups_.empty())
-        {
-            auto prev = task_groups_.back().get();
-            prev->setOutputQueue(group->getInputQueue());
-        }
+        auto prev = task_groups_.empty() ? nullptr : task_groups_.back().get();
+        auto group = std::make_unique<TaskGroup>(pipeline_name_, prev, description);
         task_groups_.emplace_back(std::move(group));
-    }
-
-    void addTaskGroup(std::unique_ptr<TaskBase> task, const std::string& description = "")
-    {
-        auto group = createTaskGroup(description);
-        group->addTask(std::move(task));
-        addTaskGroup(std::move(group));
+        return task_groups_.back().get();
     }
 
     std::vector<TaskGroup*> getTaskGroups()

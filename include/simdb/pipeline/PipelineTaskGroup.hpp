@@ -7,12 +7,13 @@ namespace simdb::pipeline {
 class TaskGroup : public Runnable
 {
 public:
-    TaskGroup(const std::string& pipeline_name, const std::string& description = "")
+    TaskGroup(const std::string& pipeline_name, TaskGroup* prev = nullptr, const std::string& description = "")
         : pipeline_name_(pipeline_name)
+        , prev_group_(prev)
         , description_(description)
     {}
 
-    void addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
+    TaskGroup* addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
     {
         std::string task_name = pipeline_name_ + "." + task->getName();
         if (!description.empty())
@@ -26,8 +27,17 @@ public:
             auto prev = tasks_.back().get();
             prev->setOutputQueue(task->getInputQueue());
         }
+        else
+        {
+            if (prev_group_ && !prev_group_->tasks_.empty())
+            {
+                auto prev_task = prev_group_->tasks_.back().get();
+                prev_task->setOutputQueue(task->getInputQueue());
+            }
+        }
         requires_db_ |= dynamic_cast<const DatabaseTask*>(task.get()) != nullptr;
         tasks_.emplace_back(std::move(task));
+        return this;
     }
 
     QueueBase* getInputQueue()
@@ -81,6 +91,17 @@ public:
         return nullptr;
     }
 
+    void print(std::ostream& os, int indent = 0) const override
+    {
+        Runnable::print(os, indent);
+        indent += 4;
+
+        for (const auto& task : tasks_)
+        {
+            task->print(os, indent);
+        }
+    }
+
     bool run() override
     {
         bool ran = false;
@@ -103,6 +124,7 @@ private:
     }
 
     std::string pipeline_name_;
+    TaskGroup* prev_group_ = nullptr;
     std::string description_;
     std::vector<std::unique_ptr<TaskBase>> tasks_;
     bool requires_db_ = false;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <string>
 
 namespace simdb::pipeline {
@@ -17,6 +18,11 @@ public:
     void setName(const std::string& name)
     {
         name_ = name;
+    }
+
+    virtual void print(std::ostream& os, int indent = 0) const
+    {
+        os << std::string(indent, ' ') << getName() << "\n";
     }
 
     virtual bool run() = 0;
