@@ -22,19 +22,21 @@ public:
         }
         task->setName(task_name);
 
+        TaskBase* prev_task = nullptr;
         if (!tasks_.empty())
         {
-            auto prev = tasks_.back().get();
-            prev->setOutputQueue(task->getInputQueue());
+            prev_task = tasks_.back().get();
         }
-        else
+        else if (prev_group_ && !prev_group_->tasks_.empty())
         {
-            if (prev_group_ && !prev_group_->tasks_.empty())
-            {
-                auto prev_task = prev_group_->tasks_.back().get();
-                prev_task->setOutputQueue(task->getInputQueue());
-            }
+            prev_task = prev_group_->tasks_.back().get();
         }
+
+        if (prev_task)
+        {
+            prev_task->setOutputQueue(task->getInputQueue());
+        }
+
         requires_db_ |= dynamic_cast<const DatabaseTask*>(task.get()) != nullptr;
         tasks_.emplace_back(std::move(task));
         return this;
