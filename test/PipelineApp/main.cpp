@@ -137,9 +137,9 @@ public:
         // Finalize pipeline
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        pipeline->addTask(std::move(dot_prod_task), "DotProduct");
-        pipeline->addTask(std::move(zlib_task), "Compression");
-        pipeline->addTask(std::move(sqlite_task), "Database");
+        pipeline->addTaskGroup(std::move(dot_prod_task), "DotProduct");
+        pipeline->addTaskGroup(std::move(zlib_task), "Compression");
+        pipeline->addTaskGroup(std::move(sqlite_task), "Database");
 
         pipeline_head_ = pipeline->getPipelineInput<DotProdInput>();
         if (!pipeline_head_)
