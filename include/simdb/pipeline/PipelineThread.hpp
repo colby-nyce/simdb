@@ -81,7 +81,7 @@ public:
         os << "Thread containing:\n";
         for (const auto runnable : runnables_)
         {
-            os << "    " << runnable->getName() << "\n";
+            runnable->print(os, 4);
         }
 
         os << "\n";

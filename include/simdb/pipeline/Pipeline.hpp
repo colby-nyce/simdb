@@ -1,7 +1,6 @@
 #pragma once
 
-#include "simdb/pipeline/PipelineTask.hpp"
-#include <set>
+#include "simdb/pipeline/PipelineTaskGroup.hpp"
 
 namespace simdb::pipeline {
 
@@ -18,71 +17,51 @@ public:
         return db_mgr_;
     }
 
-    void addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
+    TaskGroup* createTaskGroup(const std::string& description = "")
     {
-        std::string task_name = pipeline_name_ + "." + task->getName();
-        if (!description.empty())
-        {
-            task_name += " (" + description + ")";
-        }
-        task->setName(task_name);
-
-        if (!tasks_.empty())
-        {
-            auto prev = tasks_.back().get();
-            prev->setOutputQueue(task->getInputQueue());
-        }
-        requires_db_ |= dynamic_cast<const DatabaseTask*>(task.get()) != nullptr;
-        tasks_.emplace_back(std::move(task));
+        auto prev = task_groups_.empty() ? nullptr : task_groups_.back().get();
+        auto group = std::make_unique<TaskGroup>(pipeline_name_, prev, description);
+        task_groups_.emplace_back(std::move(group));
+        return task_groups_.back().get();
     }
 
-    template <typename TaskT = TaskBase>
-    std::vector<TaskT*> getTasks()
+    std::vector<TaskGroup*> getTaskGroups()
     {
-        static_assert(std::is_base_of<TaskBase, TaskT>::value);
-
-        std::vector<TaskT*> tasks;
-        for (auto& task : tasks_)
+        std::vector<TaskGroup*> groups;
+        for (auto& group : task_groups_)
         {
-            if constexpr (std::is_same<TaskT, TaskBase>::value)
-            {
-                tasks.emplace_back(task.get());
-            }
-            else if (auto t = dynamic_cast<TaskT*>(task.get()))
-            {
-                tasks.emplace_back(t);
-            }
+            groups.push_back(group.get());
         }
-        return tasks;
+        return groups;
     }
 
     template <typename Input>
     ConcurrentQueue<Input>* getPipelineInput()
     {
-        if (tasks_.empty())
+        if (task_groups_.empty())
         {
             return nullptr;
         }
 
-        auto task = tasks_[0].get();
-        auto queue = task->getInputQueue();
-        if (auto q = dynamic_cast<PipelineQueue<Input>*>(queue))
-        {
-            return &q->get();
-        }
-        return nullptr;
+        return task_groups_[0]->getPipelineInput<Input>();
     }
 
     bool requiresDatabase() const
     {
-        return requires_db_;
+        for (const auto& group : task_groups_)
+        {
+            if (group->requiresDatabase())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
-    std::vector<std::unique_ptr<TaskBase>> tasks_;
-    bool requires_db_ = false;
+    std::vector<std::unique_ptr<TaskGroup>> task_groups_;
 };
 
 } // namespace simdb::pipeline

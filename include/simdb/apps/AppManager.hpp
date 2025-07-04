@@ -190,10 +190,10 @@ public:
                 if (pipeline->requiresDatabase())
                 {
                     bool processing_db_tasks = true;
-                    auto all_tasks = pipeline->getTasks<>();
-                    for (auto it = all_tasks.rbegin(); it != all_tasks.rend(); ++it)
+                    auto all_groups = pipeline->getTaskGroups();
+                    for (auto it = all_groups.rbegin(); it != all_groups.rend(); ++it)
                     {
-                        if (dynamic_cast<pipeline::DatabaseTask*>(*it))
+                        if ((*it)->requiresDatabase())
                         {
                             if (!processing_db_tasks)
                             {
@@ -232,11 +232,9 @@ public:
                         all_threads.emplace_back(db_thread.get());
                     }
 
-                    for (auto task : pipeline->getTasks<pipeline::DatabaseTask>())
-                    {
-                        task->setDatabaseManager(db_mgr);
-                        db_thread->addRunnable(task);
-                    }
+                    auto db_group = pipeline->getTaskGroups().back();
+                    db_group->setDatabaseManager(db_mgr);
+                    db_thread->addRunnable(db_group);
                 }
             }
         }
@@ -247,10 +245,12 @@ public:
             size_t num_non_db_threads_needed = 0;
             for (auto& pipeline : pipelines)
             {
-                auto all_tasks = pipeline->getTasks<>().size();
-                auto db_tasks = pipeline->getTasks<pipeline::DatabaseTask>().size();
-                assert(all_tasks >= db_tasks);
-                num_non_db_threads_needed = std::max(num_non_db_threads_needed, all_tasks - db_tasks);
+                auto pipeline_non_db_threads = pipeline->getTaskGroups().size();
+                if (pipeline->requiresDatabase())
+                {
+                    --pipeline_non_db_threads;
+                }
+                num_non_db_threads_needed = std::max(num_non_db_threads_needed, pipeline_non_db_threads);
             }
 
             for (size_t i = 0; i < num_non_db_threads_needed; ++i)
@@ -266,11 +266,11 @@ public:
             for (auto& pipeline : pipelines)
             {
                 size_t thread_idx = 0;
-                for (auto task : pipeline->getTasks<>())
+                for (auto group : pipeline->getTaskGroups())
                 {
-                    if (!dynamic_cast<pipeline::DatabaseTask*>(task))
+                    if (!group->requiresDatabase())
                     {
-                        non_db_threads_[db_mgr][thread_idx++]->addRunnable(task);
+                        non_db_threads_[db_mgr][thread_idx++]->addRunnable(group);
                     }
                 }
             }
