@@ -1,4 +1,4 @@
-// <PipelineQueue.hpp> -*- C++ -*-
+// <Queue.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -18,7 +18,7 @@ public:
 /// pipeline tasks that know their specific input/output
 /// types.
 template <typename T>
-class PipelineQueue : public QueueBase
+class Queue : public QueueBase
 {
 public:
     ConcurrentQueue<T>& get() { return queue_; }

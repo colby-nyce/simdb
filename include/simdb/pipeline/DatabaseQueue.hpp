@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/pipeline/PipelineRunnable.hpp"
-#include "simdb/pipeline/PipelineThread.hpp"
+#include "simdb/pipeline/Runnable.hpp"
+#include "simdb/pipeline/Thread.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Demangle.hpp"
 

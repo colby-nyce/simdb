@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/pipeline/PipelineTask.hpp"
+#include "simdb/pipeline/Task.hpp"
 
 namespace simdb::pipeline {
 
@@ -102,7 +102,7 @@ public:
 
         auto task = tasks_[0].get();
         auto queue = task->getInputQueue();
-        if (auto q = dynamic_cast<PipelineQueue<Input>*>(queue))
+        if (auto q = dynamic_cast<Queue<Input>*>(queue))
         {
             return &q->get();
         }

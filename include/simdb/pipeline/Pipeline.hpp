@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/pipeline/PipelineTaskGroup.hpp"
+#include "simdb/pipeline/TaskGroup.hpp"
 
 namespace simdb::pipeline {
 
