@@ -1,9 +1,25 @@
+// <PipelineTaskGroup.hpp> -*- C++ -*-
+
 #pragma once
 
 #include "simdb/pipeline/PipelineTask.hpp"
 
 namespace simdb::pipeline {
 
+/// The TaskGroup class is used to inform the pipeline which tasks should
+/// be run on the same thread together:
+///
+///   TaskGroup1             (thread 1)
+///     Task1
+///     Task2
+///   ----------------------------------
+///   TaskGroup2             (thread 2)
+///     Task1
+///
+/// Note that it does NOT tell the pipeline "create a thread just for me
+/// and my tasks". In the event of multiple running apps/pipelines, SimDB
+/// may try to share threads for some TaskGroups.
+///
 class TaskGroup : public Runnable
 {
 public:
@@ -37,7 +53,7 @@ public:
             prev_task->setOutputQueue(task->getInputQueue());
         }
 
-        requires_db_ |= dynamic_cast<const DatabaseTask*>(task.get()) != nullptr;
+        requires_db_ |= task->requiresDatabase();
         tasks_.emplace_back(std::move(task));
         return this;
     }
@@ -69,9 +85,9 @@ public:
     {
         for (auto& task : tasks_)
         {
-            if (auto db_task = dynamic_cast<DatabaseTask*>(task.get()))
+            if (task->requiresDatabase())
             {
-                db_task->setDatabaseManager(db_mgr);
+                task->setDatabaseManager(db_mgr);
             }
         }
     }
@@ -93,14 +109,12 @@ public:
         return nullptr;
     }
 
-    void print(std::ostream& os, int indent = 0) const override
+    void print(std::ostream& os, int indent = 0) const
     {
         Runnable::print(os, indent);
-        indent += 4;
-
         for (const auto& task : tasks_)
         {
-            task->print(os, indent);
+            task->print(os, indent + 4);
         }
     }
 

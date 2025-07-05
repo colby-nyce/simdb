@@ -1,3 +1,5 @@
+// <PipelineThread.hpp> -*- C++ -*-
+
 #pragma once
 
 #include "simdb/pipeline/PipelineRunnable.hpp"
@@ -10,9 +12,13 @@
 
 namespace simdb::pipeline {
 
+/// Timer thread which runs a set of Runnables in the background.
 class Thread
 {
 public:
+    /// Create a thread with an "interval" in milliseconds. This value says
+    /// how long the thread should sleep if none of its Runnables had any
+    /// work to do.
     Thread(const size_t interval_milliseconds = 100)
         : interval_ms_(interval_milliseconds)
     {
@@ -131,6 +137,9 @@ private:
     uint64_t num_times_slept_ = 0;
 };
 
+/// The database thread is used to ensure that Runnable::run()
+/// methods are grouped inside BEGIN/COMMIT TRANSACTION blocks
+/// for much better performance.
 class DatabaseThread : public Thread
 {
 public:

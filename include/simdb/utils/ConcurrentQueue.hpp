@@ -13,7 +13,8 @@ namespace simdb
  *
  * \brief Thread-safe wrapper around std::queue
  */
-template <typename T> class ConcurrentQueue
+template <typename T>
+class ConcurrentQueue
 {
 public:
     /// Push an item to the back of the queue.
