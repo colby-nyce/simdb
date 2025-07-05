@@ -6,6 +6,7 @@
 
 namespace simdb::utils {
 
+/// Generate a random vector of numbers. Used primarily by unit tests.
 template <typename T>
 inline std::vector<T> generateRandomData(size_t size, T min = T(0), T max = T(100))
 {

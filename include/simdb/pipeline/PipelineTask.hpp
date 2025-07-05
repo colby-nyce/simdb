@@ -10,24 +10,19 @@ namespace simdb::pipeline {
 
 class QueueBase;
 
+/// Base class for all pipeline tasks.
 class TaskBase : public Runnable
 {
 public:
     virtual QueueBase* getInputQueue() = 0;
     virtual QueueBase* getOutputQueue() = 0;
     virtual void setOutputQueue(QueueBase* q) = 0;
+    virtual bool requiresDatabase() const = 0;
+    virtual void setDatabaseManager(DatabaseManager*) {}
 };
 
-class DatabaseTask : public TaskBase
-{
-public:
-    void setDatabaseManager(DatabaseManager* db_mgr) { db_mgr_ = db_mgr; }
-    DatabaseManager* getDatabaseManager() const { return db_mgr_; }
-
-private:
-    DatabaseManager* db_mgr_ = nullptr;
-};
-
+/// Unspecialized template class to operate on a <TaskIn> data type
+/// and output a <TaskOut> data type.
 template <typename TaskIn, typename TaskOut>
 class Task : public TaskBase
 {
@@ -60,6 +55,11 @@ public:
         }
     }
 
+    bool requiresDatabase() const override
+    {
+        return false;
+    }
+
     bool run() override
     {
         if (!output_queue_)
@@ -88,15 +88,16 @@ private:
     PipelineQueue<TaskOut>* output_queue_ = nullptr;
 };
 
+/// Specialization for pipeline tasks that terminate at the database.
 template <typename DatabaseIn>
-class Task<DatabaseQueue<DatabaseIn>, void> : public DatabaseTask
+class Task<DatabaseQueue<DatabaseIn>, void> : public TaskBase
 {
 public:
     using StdFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
-    Task(StdFunc func) : db_func_(func) {}
+    Task(DatabaseManager* db_mgr, StdFunc func) : db_mgr_(db_mgr), db_func_(func) {}
 
     using FreeFunc = void (*)(DatabaseIn&&, DatabaseManager*);
-    Task(FreeFunc func)
+    Task(DatabaseManager* db_mgr, FreeFunc func) : db_mgr_(db_mgr)
     {
         db_func_ = [free_func = func](DatabaseIn&& in, DatabaseManager* db_mgr)
         {
@@ -119,13 +120,23 @@ public:
         throw DBException("Cannot set downstream tasks - must terminate at database");
     }
 
+    bool requiresDatabase() const override
+    {
+        return true;
+    }
+
+    void setDatabaseManager(DatabaseManager* db_mgr) override
+    {
+        db_mgr_ = db_mgr;
+    }
+
     bool run() override
     {
         DatabaseIn in;
         bool ran = false;
         while (input_queue_.get().try_pop(in))
         {
-            db_func_(std::move(in), getDatabaseManager());
+            db_func_(std::move(in), db_mgr_);
             ran = true;
         }
         return ran;
@@ -137,60 +148,17 @@ private:
         return "DatabaseQueue<" + demangle_type<DatabaseIn>() + ", void>";
     }
 
+    DatabaseManager* db_mgr_ = nullptr;
     StdFunc db_func_;
     PipelineQueue<DatabaseIn> input_queue_;
-};
-
-template <typename TaskIn>
-class Task<TaskIn, void> : public TaskBase
-{
-public:
-    using Func = std::function<void(TaskIn&&)>;
-
-    Task(Func func)
-        : func_(func)
-    {}
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override
-    {
-        return nullptr;
-    }
-
-    void setOutputQueue(QueueBase*) override
-    {
-        throw DBException("Cannot have downstream tasks: Task<T,void>");
-    }
-
-    bool run() override
-    {
-        TaskIn in;
-        bool ran = false;
-        while (input_queue_.get().try_pop(in))
-        {
-            func_(std::move(in));
-            ran = true;
-        }
-        return ran;
-    }
-
-private:
-    std::string getName_() const override
-    {
-        return "Task<" + demangle_type<TaskIn>() + ", void>";
-    }
-
-    Func func_;
-    PipelineQueue<TaskIn> input_queue_;
 };
 
 template <typename Input>
 class Buffer {};
 
+/// Pipeline task specialization. Implements a simple buffer that accepts
+/// data one at a time, and will only output a vector of that data when
+/// the buffer is full.
 template <typename DataT>
 class Task<DataT, Buffer<DataT>> : public TaskBase
 {
@@ -217,6 +185,11 @@ public:
         {
             throw DBException("Invalid data type");
         }
+    }
+
+    bool requiresDatabase() const override
+    {
+        return false;
     }
 
     bool run() override
@@ -252,6 +225,9 @@ private:
 template <typename FunctionOut>
 class Function {};
 
+/// Pipeline task specialization. Implements a simple function call
+/// which can be either a std::function or a free function with the
+/// given I/O data types.
 template <typename FunctionIn, typename FunctionOut>
 class Task<FunctionIn, Function<FunctionOut>> : public TaskBase
 {
@@ -288,6 +264,11 @@ public:
         {
             throw DBException("Invalid data type");
         }
+    }
+
+    bool requiresDatabase() const override
+    {
+        return false;
     }
 
     bool run() override

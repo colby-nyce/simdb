@@ -1,3 +1,5 @@
+// <AppRegistration.hpp> -*- C++ -*-
+
 #pragma once
 
 #include "simdb/apps/AppManager.hpp"

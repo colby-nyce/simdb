@@ -4,6 +4,11 @@
 
 namespace simdb::pipeline {
 
+/// SimDB pipelines are used to create high-performance multi-stage
+/// data processors en route to the database. Unlike other pipeline
+/// libraries, SimDB enforces move-only semantics for performance.
+/// There are no limitations regarding I/O data type changes from
+/// one stage/filter/transform to the next.
 class Pipeline
 {
 public:

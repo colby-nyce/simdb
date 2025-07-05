@@ -122,7 +122,7 @@ public:
         auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, simdb::pipeline::Function<CompressedBytes>>(CompressBytes);
 
         // Thread 3
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes>, void>(WriteCompressedBytes);
+        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes>, void>(db_mgr_, WriteCompressedBytes);
 
         // Thread 1 tasks
         pipeline->createTaskGroup("DotProduct")

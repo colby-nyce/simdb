@@ -1,3 +1,5 @@
+// <AppManager.hpp> -*- C++ -*-
+
 #pragma once
 
 #include "simdb/apps/App.hpp"
@@ -11,19 +13,17 @@
 namespace simdb
 {
 
-/// @brief Singleton class that manages all SimDB applications.
-///
 /// This class is responsible for registering, enabling, instantiating,
 /// and managing the lifecycle of all SimDB applications running in a
 /// simulation.
 class AppManager
 {
 public:
-    /// Register an app as early as possible (doesn't create it yet) Register
-    /// your app by adding this macro to a translation unit at file scope:
+    /// Register an app as early as possible (doesn't create it yet).
+    /// Register your app by adding this macro to your source file:
     ///
-    ///   class MyApp : public simdb::App { ... };
-    ///   REGISTER_SIMDB_APPLICATION(MyApp); 
+    ///   class MyApp : public simdb::App { ... };     <<< header
+    ///   REGISTER_SIMDB_APPLICATION(MyApp);           <<< source
     template <typename AppT>
     static void registerApp()
     {
@@ -178,7 +178,9 @@ public:
             });
     }
 
-    /// Call this once after all postInit().
+    /// Call this once after all postInit(). This will create all pipelines
+    /// for all enabled apps, and share resources between them to not create
+    /// too many threads in total.
     void openPipelines()
     {
         for (const auto& [key, app] : apps_)

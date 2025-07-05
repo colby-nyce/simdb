@@ -1,3 +1,5 @@
+// <App.hpp> -*- C++ -*-
+
 #pragma once
 
 #include <memory>
