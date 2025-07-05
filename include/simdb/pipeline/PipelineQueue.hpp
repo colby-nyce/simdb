@@ -1,3 +1,5 @@
+// <PipelineQueue.hpp> -*- C++ -*-
+
 #pragma once
 
 #include "simdb/utils/ConcurrentQueue.hpp"

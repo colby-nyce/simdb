@@ -1,3 +1,5 @@
+// <PipelineThread.hpp> -*- C++ -*-
+
 #pragma once
 
 #include "simdb/pipeline/PipelineRunnable.hpp"
