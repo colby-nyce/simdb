@@ -3,9 +3,9 @@
 #pragma once
 
 #include "simdb/schema/SchemaDef.hpp"
-#include "simdb/sqlite/SQLiteConnection.hpp"
-#include "simdb/sqlite/SQLiteQuery.hpp"
-#include "simdb/sqlite/SQLiteTable.hpp"
+#include "simdb/sqlite/Connection.hpp"
+#include "simdb/sqlite/Query.hpp"
+#include "simdb/sqlite/Table.hpp"
 #include <filesystem>
 
 namespace simdb
@@ -46,7 +46,7 @@ inline PragmaPairs getPragmas(JournalMode mode)
  *
  * \brief This class is the primary "entry point" into SimDB connections,
  *        including instantiating schemas, creating records, querying
- *        records, and accessing the underlying SQLiteConnection.
+ *        records, and accessing the underlying Connection.
  */
 class DatabaseManager
 {
@@ -79,7 +79,7 @@ public:
             }
         }
 
-        db_conn_.reset(new SQLiteConnection);
+        db_conn_.reset(new Connection);
         createDatabaseFile_(pragmas);
     }
 
@@ -325,7 +325,7 @@ private:
     /// \return Returns true if successful, false otherwise.
     bool connectToExistingDatabase_(const std::string& db_fpath)
     {
-        db_conn_.reset(new SQLiteConnection);
+        db_conn_.reset(new Connection);
 
         if (db_conn_->openDbFile_(db_fpath).empty())
         {
@@ -400,7 +400,7 @@ private:
     }
 
     /// Database connection.
-    std::shared_ptr<SQLiteConnection> db_conn_;
+    std::shared_ptr<Connection> db_conn_;
 
     /// Schema for this database.
     Schema schema_;

@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/pipeline/PipelineThread.hpp"
-#include "simdb/pipeline/PipelineQueue.hpp"
+#include "simdb/pipeline/Thread.hpp"
+#include "simdb/pipeline/Queue.hpp"
 #include "simdb/pipeline/DatabaseQueue.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include <memory>
@@ -47,7 +47,7 @@ public:
 
     void setOutputQueue(QueueBase* q) override
     {
-        if (auto queue = dynamic_cast<PipelineQueue<TaskOut>*>(q))
+        if (auto queue = dynamic_cast<Queue<TaskOut>*>(q))
         {
             output_queue_ = queue;
         }
@@ -86,8 +86,8 @@ private:
     }
 
     Func func_;
-    PipelineQueue<TaskIn> input_queue_;
-    PipelineQueue<TaskOut>* output_queue_ = nullptr;
+    Queue<TaskIn> input_queue_;
+    Queue<TaskOut>* output_queue_ = nullptr;
 };
 
 /// Specialization for pipeline tasks that terminate at the database.
@@ -152,7 +152,7 @@ private:
 
     DatabaseManager* db_mgr_ = nullptr;
     StdFunc db_func_;
-    PipelineQueue<DatabaseIn> input_queue_;
+    Queue<DatabaseIn> input_queue_;
 };
 
 template <typename Input>
@@ -179,7 +179,7 @@ public:
 
     void setOutputQueue(QueueBase* queue) override
     {
-        if (auto q = dynamic_cast<PipelineQueue<std::vector<DataT>>*>(queue))
+        if (auto q = dynamic_cast<Queue<std::vector<DataT>>*>(queue))
         {
             output_queue_ = q;
         }
@@ -219,8 +219,8 @@ private:
     }
 
     size_t buffer_len_ = 0;
-    PipelineQueue<DataT> input_queue_;
-    PipelineQueue<std::vector<DataT>>* output_queue_ = nullptr;
+    Queue<DataT> input_queue_;
+    Queue<std::vector<DataT>>* output_queue_ = nullptr;
     std::vector<DataT> buffer_;
 };
 
@@ -258,7 +258,7 @@ public:
 
     void setOutputQueue(QueueBase* queue) override
     {
-        if (auto q = dynamic_cast<PipelineQueue<FunctionOut>*>(queue))
+        if (auto q = dynamic_cast<Queue<FunctionOut>*>(queue))
         {
             output_queue_ = q;
         }
@@ -293,8 +293,8 @@ private:
     }
 
     StdFunc func_;
-    PipelineQueue<FunctionIn> input_queue_;
-    PipelineQueue<FunctionOut>* output_queue_ = nullptr;
+    Queue<FunctionIn> input_queue_;
+    Queue<FunctionOut>* output_queue_ = nullptr;
 };
 
 template <typename TaskIn, typename TaskOut, typename... Args>

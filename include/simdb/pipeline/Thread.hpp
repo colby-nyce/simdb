@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/pipeline/PipelineRunnable.hpp"
+#include "simdb/pipeline/Runnable.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <atomic>

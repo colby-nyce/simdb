@@ -1,8 +1,8 @@
-// <SQLiteIterator.hpp> -*- C++ -*-
+// <Iterator.hpp> -*- C++ -*-
 
 #pragma once
 
-#include "simdb/sqlite/SQLiteTransaction.hpp"
+#include "simdb/sqlite/Transaction.hpp"
 
 #include <sqlite3.h>
 #include <string.h>

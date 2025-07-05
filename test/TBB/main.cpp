@@ -1,6 +1,6 @@
 // clang-format off
 
-#include "simdb/pipeline/PipelineThread.hpp"
+#include "simdb/pipeline/Thread.hpp"
 #include "simdb/pipeline/DatabaseQueue.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"

@@ -1,9 +1,9 @@
-// <SQLiteTable.hpp> -*- C++ -*-
+// <Table.hpp> -*- C++ -*-
 
 #pragma once
 
-#include "simdb/sqlite/SQLiteQuery.hpp"
-#include "simdb/sqlite/SQLiteTransaction.hpp"
+#include "simdb/sqlite/Query.hpp"
+#include "simdb/sqlite/Transaction.hpp"
 #include "simdb/sqlite/ValueContainer.hpp"
 
 #include <sqlite3.h>
@@ -205,7 +205,7 @@ private:
 class SqlRecord
 {
 public:
-    SqlRecord(const std::string& table_name, const int32_t db_id, sqlite3* db_conn, SQLiteTransaction* transaction)
+    SqlRecord(const std::string& table_name, const int32_t db_id, sqlite3* db_conn, Transaction* transaction)
         : table_name_(table_name)
         , db_id_(db_id)
         , db_conn_(db_conn)
@@ -314,7 +314,7 @@ private:
     sqlite3* const db_conn_;
 
     // Used for safeTransaction()
-    SQLiteTransaction* const transaction_;
+    Transaction* const transaction_;
 };
 
 /// Run a query on the given table, column, and database ID, and return the property value.

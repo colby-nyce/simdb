@@ -5,7 +5,7 @@
 #include "simdb/apps/App.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
-#include "simdb/pipeline/PipelineThread.hpp"
+#include "simdb/pipeline/Thread.hpp"
 
 #include <map>
 #include <set>
