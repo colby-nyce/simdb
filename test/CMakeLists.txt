@@ -15,7 +15,7 @@ macro(simdb_test target)
 endmacro()
 
 add_subdirectory(SQLite)
-add_subdirectory(PipelineApp)
+add_subdirectory(pipeline)
 
 if(TBB_VERSION)
     add_subdirectory(TBB)
