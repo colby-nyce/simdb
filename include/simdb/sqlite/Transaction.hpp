@@ -1,4 +1,4 @@
-// <SQLiteTransaction.hpp> -*- C++ -*-
+// <Transaction.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -121,17 +121,17 @@ private:
 };
 
 /*!
- * \class SQLiteTransaction
+ * \class Transaction
  *
- * \brief Base class for SQLiteConnection. Made into a base class
+ * \brief Base class for Connection. Made into a base class
  *        to make it easier for SimDB to be a header-only library
  *        that avoids cyclic header includes.
  */
-class SQLiteTransaction
+class Transaction
 {
 public:
     /// Destructor
-    virtual ~SQLiteTransaction() = default;
+    virtual ~Transaction() = default;
 
     /// Execute the functor inside BEGIN/COMMIT TRANSACTION.
     void safeTransaction(const TransactionFunc& transaction)
@@ -243,7 +243,7 @@ private:
         /// Open database connection
         sqlite3* db_conn_ = nullptr;
 
-        /// Reference to SQLiteTransaction::in_transaction_flag_
+        /// Reference to Transaction::in_transaction_flag_
         bool& in_transaction_flag_;
 
         /// Wraps the user's code in a std::function

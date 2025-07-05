@@ -1,9 +1,9 @@
-// <SQLiteConnection.hpp> -*- C++ -*-
+// <Connection.hpp> -*- C++ -*-
 
 #pragma once
 
 #include "simdb/sqlite/Constraints.hpp"
-#include "simdb/sqlite/SQLiteTransaction.hpp"
+#include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/FloatCompare.hpp"
 
 #include <sqlite3.h>
@@ -100,15 +100,15 @@ inline void fuzzyMatch(sqlite3_context* context, int, sqlite3_value** argv)
 }
 
 /*!
- * \class SQLiteConnection
+ * \class Connection
  *
  * \brief This class instantiates the SQLite schema and issues database commands.
  */
-class SQLiteConnection : public SQLiteTransaction
+class Connection : public Transaction
 {
 public:
     /// Close the sqlite3 connection.
-    ~SQLiteConnection()
+    ~Connection()
     {
         if (db_conn_)
         {
@@ -198,7 +198,7 @@ public:
 
 private:
     /// Private constructor. Called by friend class DatabaseManager.
-    SQLiteConnection()
+    Connection()
     {
     }
 

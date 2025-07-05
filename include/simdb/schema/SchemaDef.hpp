@@ -350,7 +350,7 @@ private:
     /// Use an auto-incrementing primary key for this table by default.
     bool use_auto_inc_primary_key_ = true;
 
-    friend class SQLiteConnection;
+    friend class Connection;
 };
 
 /*!

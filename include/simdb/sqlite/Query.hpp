@@ -1,4 +1,4 @@
-// <SQLiteQuery.hpp> -*- C++ -*-
+// <Query.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include <iostream>
 #include <limits>
 #include "simdb/sqlite/Constraints.hpp"
-#include "simdb/sqlite/SQLiteIterator.hpp"
+#include "simdb/sqlite/Iterator.hpp"
 
 namespace simdb
 {
