@@ -14,7 +14,7 @@ macro(simdb_test target)
     target_include_directories(${target} PRIVATE ${SIMDB_BASE}/test)
 endmacro()
 
-add_subdirectory(SQLite)
+add_subdirectory(sqlite)
 add_subdirectory(pipeline)
 
 if(TBB_VERSION)
