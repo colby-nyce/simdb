@@ -16,7 +16,3 @@ endmacro()
 
 add_subdirectory(sqlite)
 add_subdirectory(pipeline)
-
-if(TBB_VERSION)
-    add_subdirectory(TBB)
-endif()
