@@ -1,14 +1,9 @@
 #pragma once
 
+#include "simdb/utils/Demangle.hpp"
 #include <functional>
 
 namespace simdb::pipeline {
-
-template <typename T>
-struct is_pod
-{
-    static inline constexpr bool value = std::is_trivial_v<T> && std::is_standard_layout_v<T>;
-};
 
 /// Function task element.
 template <typename FunctionIn, typename FunctionOut>
@@ -20,6 +15,11 @@ public:
 
     using StdFunction = std::function<FunctionOut(FunctionIn&&)>;
     Function(StdFunction func) : func_(func) {}
+
+    std::string getName() const
+    {
+        return "Function<" + demangle_type<FunctionIn>() + ", " + demangle_type<FunctionOut>() + ">";
+    }
 
     bool operator()(FunctionIn&& in, ConcurrentQueue<FunctionOut>& out)
     {

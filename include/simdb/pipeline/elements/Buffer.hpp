@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simdb/utils/ConcurrentQueue.hpp"
+#include "simdb/utils/Demangle.hpp"
 #include <vector>
 
 namespace simdb::pipeline {
@@ -17,6 +18,11 @@ public:
         : buffer_len_(buffer_len)
     {
         buffer_.reserve(buffer_len);
+    }
+
+    std::string getName() const
+    {
+        return "Buffer<" + demangle_type<Input>() + ">";
     }
 
     bool operator()(InputType&& in, ConcurrentQueue<OutputType>& out)

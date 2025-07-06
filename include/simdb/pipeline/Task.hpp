@@ -85,7 +85,7 @@ public:
 private:
     std::string getName_() const override
     {
-        return "Buffer<" + demangle_type<InputType>() + ">";
+        return element_.getName();
     }
 
     Queue<InputType> input_queue_;
