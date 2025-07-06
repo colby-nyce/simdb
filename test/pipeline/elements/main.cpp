@@ -7,7 +7,7 @@
 #include "simdb/pipeline/elements/DatabaseQueue.hpp"
 #include "SimDBTester.hpp"
 
-// This test creates a SimDB app with a pipeline that contains all
+// This test creates a SimDB app with a pipeline that contains some
 // pipeline elements that are provided by SimDB, as well as showing
 // how you can define your own element class if the built-in ones
 // aren't sufficient.
@@ -19,6 +19,12 @@
 //
 // As well as a user-defined element:
 //   - CircularBuffer
+//
+// The pipeline design:
+//
+// int -> itoa() -> buffer(5) -> hashval -> circbuf(10) -> DB
+//        *******************    **********************    *******************
+//        Thread 1               Thread 2                  Thread 3
 //
 template <typename DataT, size_t BufferLen>
 class CircularBuffer
@@ -130,6 +136,11 @@ private:
     bool full_ = false;
 };
 
+std::string ITOA(const size_t val)
+{
+    return (val <= 127) ? std::string(1, static_cast<char>(val)) : "?";
+}
+
 class PipelineElementApp : public simdb::App
 {
 public:
@@ -170,19 +181,18 @@ public:
 
         // Thread 1 tasks --------------------------------------------------------------------------
 
-        // Task 1: take size_t and return std::string
-        auto itoa_task = simdb::pipeline::createTask<simdb::pipeline::Function<size_t, std::string>>(
-            [](size_t&& val) -> std::string
-            {
-                return (val <= 127) ? std::string(1, static_cast<char>(val)) : "?";
-            });
+        // *** Note the use of Function below. You can provide the function impl via a free
+        // *** function, std::function, or a lambda.
+
+        // Task 1: take size_t and return std::string (using free function)
+        auto itoa_task = simdb::pipeline::createTask<simdb::pipeline::Function<size_t, std::string>>(ITOA);
 
         // Task 2: take std::string from prev task and output std::vector<std::string> when full
         auto buffer_task = simdb::pipeline::createTask<simdb::pipeline::Buffer<std::string>>(5);
 
         // Thread 2 tasks --------------------------------------------------------------------------
 
-        // Task 3: take std::vector<std::string> from prev task and output a hashval size_t
+        // Task 3: take std::vector<std::string> from prev task and output a hashval size_t (using lambda)
         auto hashval_task = simdb::pipeline::createTask<simdb::pipeline::Function<std::vector<std::string>, size_t>>(
             [](std::vector<std::string>&& in) -> size_t
             {
