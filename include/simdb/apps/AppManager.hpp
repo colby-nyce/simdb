@@ -287,6 +287,24 @@ public:
     /// Call this after the simulation loop ends for post-processing tasks.
     void postSim(DatabaseManager* db_mgr)
     {
+        std::cout << "************ Shutting down pipelines for all SimDB apps on database: "
+                  << db_mgr->getDatabaseFilePath() << " ************\n\n";
+
+        auto it = non_db_threads_.find(db_mgr);
+        if (it != non_db_threads_.end())
+        {
+            for (const auto& pipeline : it->second)
+            {
+                pipeline->close();
+            }
+        }
+
+        auto it2 = db_threads_.find(db_mgr);
+        if (it2 != db_threads_.end())
+        {
+            it2->second->close();
+        }
+
         db_mgr->safeTransaction(
             [&]()
             {
@@ -305,9 +323,6 @@ public:
         {
             app->teardown();
         }
-
-        std::cout << "************ Shutting down pipelines for all SimDB apps on database: "
-                  << db_mgr->getDatabaseFilePath() << " ************\n\n";
 
         auto it = non_db_threads_.find(db_mgr);
         if (it != non_db_threads_.end())

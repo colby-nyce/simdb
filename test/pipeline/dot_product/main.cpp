@@ -2,6 +2,9 @@
 
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
+#include "simdb/pipeline/elements/Buffer.hpp"
+#include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseQueue.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/Random.hpp"
 #include "SimDBTester.hpp"
@@ -23,7 +26,6 @@ using BufferedDotProdInputs = std::vector<DotProdInput>;
 using DotProductValue = double;
 using BufferedDotProductValues = std::vector<DotProductValue>;
 using CompressedBytes = std::vector<char>;
-using CompressionQueue = simdb::pipeline::DatabaseQueue<CompressedBytes>;
 
 static constexpr size_t DOT_PROD_ARRAY_LEN = 2;
 static constexpr size_t DOT_PROD_BUFLEN = 1000;
@@ -78,8 +80,8 @@ void WriteCompressedBytes(CompressedBytes&& in, simdb::DatabaseManager* db_mgr)
     // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
     // going on.
     db_mgr->INSERT(SQL_TABLE("DotProducts"),
-                    SQL_COLUMNS("Blob"),
-                    SQL_VALUES(std::move(in)));
+                   SQL_COLUMNS("Blob"),
+                   SQL_VALUES(std::move(in)));
 }
 
 class DotProductApp : public simdb::App
@@ -114,15 +116,15 @@ public:
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
         // Thread 1
-        auto dot_prod_task1 = simdb::pipeline::createTask<DotProdInput, simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
-        auto dot_prod_task2 = simdb::pipeline::createTask<BufferedDotProdInputs, simdb::pipeline::Function<double>>(CalcDotProduct);
-        auto dot_prod_task3 = simdb::pipeline::createTask<double, simdb::pipeline::Buffer<double>>(DOT_PROD_BUFLEN);
+        auto dot_prod_task1 = simdb::pipeline::createTask<simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
+        auto dot_prod_task2 = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProdInputs, double>>(CalcDotProduct);
+        auto dot_prod_task3 = simdb::pipeline::createTask<simdb::pipeline::Buffer<double>>(DOT_PROD_BUFLEN);
 
         // Thread 2
-        auto zlib_task = simdb::pipeline::createTask<BufferedDotProductValues, simdb::pipeline::Function<CompressedBytes>>(CompressBytes);
+        auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProductValues, CompressedBytes>>(CompressBytes);
 
         // Thread 3
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes>, void>(db_mgr_, WriteCompressedBytes);
+        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes, void>>(WriteCompressedBytes);
 
         // Thread 1 tasks
         pipeline->createTaskGroup("DotProduct")

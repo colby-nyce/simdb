@@ -4,6 +4,7 @@
 
 #include "simdb/pipeline/Runnable.hpp"
 #include "simdb/pipeline/Thread.hpp"
+#include "simdb/pipeline/Task.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Demangle.hpp"
 
@@ -42,10 +43,16 @@ namespace simdb::pipeline {
 ///     stringsQ.process("HelloWorld");
 ///     db_thread.close();
 ///
+template <typename DatabaseIn, typename DatabaseOut>
+class DatabaseQueue;
+
 template <typename DatabaseIn>
-class DatabaseQueue : public Runnable
+class DatabaseQueue<DatabaseIn, void> : public Runnable
 {
 public:
+    using InputType = DatabaseIn;
+    using OutputType = void;
+
     /// Function to be called as often as there is data available.
     /// Invoked on the database thread.
     using DatabaseFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
@@ -93,6 +100,62 @@ private:
     DatabaseFunc db_func_;
     DatabaseManager* db_mgr_ = nullptr;
     ConcurrentQueue<DatabaseIn> input_queue_;
+};
+
+/// Specialization for pipeline tasks that terminate at the database.
+template <typename DatabaseIn>
+class Task<DatabaseQueue<DatabaseIn, void>> : public TaskBase
+{
+public:
+    using StdFunction = std::function<void(DatabaseIn&&, DatabaseManager*)>;
+    Task(StdFunction func) : func_(func) {}
+
+    QueueBase* getInputQueue() override
+    {
+        return &input_queue_;
+    }
+
+    QueueBase* getOutputQueue() override
+    {
+        return nullptr;
+    }
+
+    void setOutputQueue(QueueBase*) override
+    {
+        throw DBException("Cannot set downstream tasks - must terminate at database");
+    }
+
+    bool requiresDatabase() const override
+    {
+        return true;
+    }
+
+    void setDatabaseManager(DatabaseManager* db_mgr) override
+    {
+        db_mgr_ = db_mgr;
+    }
+
+    bool run() override
+    {
+        DatabaseIn in;
+        bool ran = false;
+        while (input_queue_.get().try_pop(in))
+        {
+            func_(std::move(in), db_mgr_);
+            ran = true;
+        }
+        return ran;
+    }
+
+private:
+    std::string getName_() const override
+    {
+        return "DatabaseQueue<" + demangle_type<DatabaseIn>() + ", void>";
+    }
+
+    StdFunction func_;
+    DatabaseManager* db_mgr_ = nullptr;
+    Queue<DatabaseIn> input_queue_;
 };
 
 } // namespace simdb::pipeline
