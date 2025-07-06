@@ -145,7 +145,7 @@ public:
     {
         using dt = simdb::SqlDataType;
 
-        // We are going to send random doubles down the pipeline, do a bunch
+        // We are going to send random ints down the pipeline, do a bunch
         // of transformations on them, and generate a hash value.
         auto& dp_tbl = schema.addTable("Pipeout");
         dp_tbl.addColumn("HashVal", dt::int32_t);
@@ -163,7 +163,7 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Create a pipeline which takes random integers from 0-127 and processes them like so:
+        // Create a pipeline which takes random integers and processes them like so:
         // int -> itoa() -> buffer(5) -> hashval -> circbuf(10) -> DB
         //        *******************    **********************    *******************
         //        Thread 1               Thread 2                  Thread 3
@@ -276,8 +276,7 @@ int main(int argc, char** argv)
 
     // Simulate...
     auto app = app_mgr.getApp<PipelineElementApp>(&db_mgr);
-    constexpr size_t STEPS = 10000;
-    for (size_t i = 1; i <= STEPS; ++i)
+    for (size_t i = 1; i <= 10000; ++i)
     {
         app->process(rand() % 256);
     }
