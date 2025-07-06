@@ -1,7 +1,7 @@
 // clang-format off
 
 #include "simdb/pipeline/Thread.hpp"
-#include "simdb/pipeline/DatabaseQueue.hpp"
+#include "simdb/pipeline/elements/DatabaseQueue.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
 
@@ -40,7 +40,7 @@ int main()
 
     simdb::pipeline::DatabaseThread db_thread(&db_mgr);
 
-    simdb::pipeline::DatabaseQueue<TimestampedBytes> db_queue(db_thread,
+    simdb::pipeline::DatabaseQueue<TimestampedBytes, void> db_queue(db_thread,
         [](TimestampedBytes&& bytes, simdb::DatabaseManager* db_mgr)
         {
             // We designed this pipeline to be fast, but that means that the
