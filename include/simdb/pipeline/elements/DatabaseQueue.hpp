@@ -14,7 +14,7 @@ template <typename DatabaseIn, typename DatabaseOut>
 class DatabaseQueue {};
 
 template <typename DatabaseIn, typename DatabaseOut>
-class Task<DatabaseQueue<DatabaseIn, DatabaseOut>> : public TaskBase
+class Task<DatabaseQueue<DatabaseIn, DatabaseOut>> : public NonTerminalDatabaseTask
 {
 public:
     using DbFunc = std::function<void(DatabaseIn&&, ConcurrentQueue<DatabaseOut>&, DatabaseManager*)>;
@@ -42,23 +42,13 @@ public:
         }
     }
 
-    bool requiresDatabase() const override
-    {
-        return true;
-    }
-
-    void setDatabaseManager(DatabaseManager* db_mgr) override
-    {
-        db_mgr_ = db_mgr;
-    }
-
     bool run() override
     {
         DatabaseIn in;
         bool ran = false;
         while (input_queue_.get().try_pop(in))
         {
-            func_(std::move(in), output_queue_->get(), db_mgr_);
+            func_(std::move(in), output_queue_->get(), getDatabaseManager_());
             ran = true;
         }
         return ran;
@@ -71,13 +61,12 @@ private:
     }
 
     DbFunc func_;
-    DatabaseManager* db_mgr_ = nullptr;
     Queue<DatabaseIn> input_queue_;
     Queue<DatabaseOut>* output_queue_ = nullptr;
 };
 
 template <typename DatabaseIn>
-class Task<DatabaseQueue<DatabaseIn, void>> : public TaskBase
+class Task<DatabaseQueue<DatabaseIn, void>> : public TerminalDatabaseTask
 {
 public:
     using DbFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
@@ -88,33 +77,13 @@ public:
         return &input_queue_;
     }
 
-    QueueBase* getOutputQueue() override
-    {
-        return nullptr;
-    }
-
-    void setOutputQueue(QueueBase*) override
-    {
-        throw DBException("Cannot set output queue - this is a terminating DB task");
-    }
-
-    bool requiresDatabase() const override
-    {
-        return true;
-    }
-
-    void setDatabaseManager(DatabaseManager* db_mgr) override
-    {
-        db_mgr_ = db_mgr;
-    }
-
     bool run() override
     {
         DatabaseIn in;
         bool ran = false;
         while (input_queue_.get().try_pop(in))
         {
-            func_(std::move(in), db_mgr_);
+            func_(std::move(in), getDatabaseManager_());
             ran = true;
         }
         return ran;
@@ -127,7 +96,6 @@ private:
     }
 
     DbFunc func_;
-    DatabaseManager* db_mgr_ = nullptr;
     Queue<DatabaseIn> input_queue_;
 };
 

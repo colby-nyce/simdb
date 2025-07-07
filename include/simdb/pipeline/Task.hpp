@@ -20,7 +20,105 @@ public:
     virtual QueueBase* getOutputQueue() = 0;
     virtual void setOutputQueue(QueueBase* q) = 0;
     virtual bool requiresDatabase() const = 0;
-    virtual void setDatabaseManager(DatabaseManager*) {}
+    virtual void setDatabaseManager(DatabaseManager*) = 0;
+};
+
+/// Base class for all terminal non-database tasks.
+class TerminalNonDatabaseTask : public TaskBase
+{
+public:
+    QueueBase* getOutputQueue() override final
+    {
+        return nullptr;
+    }
+
+private:
+    void setOutputQueue(QueueBase*) override final
+    {
+        throw DBException("Cannot set output queue on terminal task");
+    }
+
+    bool requiresDatabase() const override final
+    {
+        return false;
+    }
+
+    void setDatabaseManager(DatabaseManager*) override final
+    {
+        throw DBException("Cannot give database to a non-database task");
+    }
+};
+
+/// Base class for all non-terminal, non-database tasks.
+class NonTerminalNonDatabaseTask : public TaskBase
+{
+private:
+    bool requiresDatabase() const override final
+    {
+        return false;
+    }
+
+    void setDatabaseManager(DatabaseManager*) override final
+    {
+        throw DBException("Cannot give database to a non-database task");
+    }
+};
+
+/// Base class for all terminal database tasks.
+class TerminalDatabaseTask : public TaskBase
+{
+public:
+    QueueBase* getOutputQueue() override final
+    {
+        return nullptr;
+    }
+
+protected:
+    DatabaseManager* getDatabaseManager_() const
+    {
+        return db_mgr_;
+    }
+
+private:
+    void setOutputQueue(QueueBase*) override final
+    {
+        throw DBException("Cannot set output queue on terminal task");
+    }
+
+    bool requiresDatabase() const override final
+    {
+        return true;
+    }
+
+    void setDatabaseManager(DatabaseManager* db_mgr) override final
+    {
+        db_mgr_ = db_mgr;
+    }
+
+    DatabaseManager* db_mgr_ = nullptr;
+};
+
+/// Base class for all non-terminal database tasks.
+class NonTerminalDatabaseTask : public TaskBase
+{
+protected:
+    DatabaseManager* getDatabaseManager_() const
+    {
+        return db_mgr_;
+    }
+
+private:
+    bool requiresDatabase() const override final
+    {
+        return true;
+    }
+
+    void setDatabaseManager(DatabaseManager* db_mgr) override final
+    {
+        db_mgr_ = db_mgr;
+    }
+
+    DatabaseManager* db_mgr_ = nullptr;
 };
 
 template <typename Element>
