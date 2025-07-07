@@ -119,7 +119,7 @@ public:
         return nullptr;
     }
 
-    void print(std::ostream& os, int indent = 0) const
+    void print(std::ostream& os, int indent = 0) const override
     {
         Runnable::print(os, indent);
         for (const auto& task : tasks_)
