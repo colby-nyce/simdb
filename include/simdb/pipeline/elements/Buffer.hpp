@@ -11,7 +11,7 @@ template <typename Input>
 class Buffer {};
 
 template <typename Input>
-class Task<Buffer<Input>> : public NonTerminalNonDatabaseTask
+class Task<Buffer<Input>> : public NonTerminalNonDatabaseTask<Input>
 {
 public:
     using InputType = Input;
@@ -21,11 +21,6 @@ public:
         : buffer_len_(buffer_len)
     {
         buffer_.reserve(buffer_len);
-    }
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
     }
 
     QueueBase* getOutputQueue() override
@@ -54,7 +49,7 @@ public:
 
         InputType in;
         bool ran = false;
-        while (input_queue_.get().try_pop(in))
+        while (this->input_queue_.get().try_pop(in))
         {
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)
@@ -75,7 +70,6 @@ private:
 
     size_t buffer_len_;
     OutputType buffer_;
-    Queue<InputType> input_queue_;
     Queue<OutputType>* output_queue_ = nullptr;
 };
 

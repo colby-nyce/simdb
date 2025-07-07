@@ -11,16 +11,11 @@ class Function {};
 
 /// Specialization for non-terminating functions.
 template <typename FunctionIn, typename FunctionOut>
-class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalNonDatabaseTask
+class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalNonDatabaseTask<FunctionIn>
 {
 public:
     using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
     Task(Func func) : func_(func) {}
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
 
     QueueBase* getOutputQueue() override
     {
@@ -43,7 +38,7 @@ public:
     {
         FunctionIn in;
         bool ran = false;
-        while (input_queue_.get().try_pop(in))
+        while (this->input_queue_.get().try_pop(in))
         {
             func_(std::move(in), output_queue_->get());
             ran = true;
@@ -58,28 +53,22 @@ private:
     }
 
     Func func_;
-    Queue<FunctionIn> input_queue_;
     Queue<FunctionOut>* output_queue_ = nullptr;
 };
 
 /// Specialization for terminating functions.
 template <typename FunctionIn>
-class Task<Function<FunctionIn, void>> : public TerminalNonDatabaseTask
+class Task<Function<FunctionIn, void>> : public TerminalNonDatabaseTask<FunctionIn>
 {
 public:
     using Func = std::function<void(FunctionIn&&)>;
     Task(Func func) : func_(func) {}
 
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
-
     bool run() override
     {
         FunctionIn in;
         bool ran = false;
-        while (input_queue_.get().try_pop(in))
+        while (this->input_queue_.get().try_pop(in))
         {
             func_(std::move(in));
             ran = true;
@@ -94,7 +83,6 @@ private:
     }
 
     Func func_;
-    Queue<FunctionIn> input_queue_;
 };
 
 } // namespace simdb::pipeline

@@ -31,16 +31,11 @@
 namespace simdb::pipeline {
 
 template <typename DataT, size_t BufferLen>
-class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalNonDatabaseTask
+class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalNonDatabaseTask<DataT>
 {
 public:
     using InputType = DataT;
     using OutputType = DataT;
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
 
     QueueBase* getOutputQueue() override
     {
@@ -63,7 +58,7 @@ public:
     {
         InputType in;
         bool ran = false;
-        while (input_queue_.get().try_pop(in))
+        while (this->input_queue_.get().try_pop(in))
         {
             if (circ_buf_.full())
             {
@@ -83,7 +78,6 @@ private:
     }
 
     simdb::CircularBuffer<InputType, BufferLen> circ_buf_;
-    Queue<InputType> input_queue_;
     Queue<OutputType>* output_queue_ = nullptr;
 };
 

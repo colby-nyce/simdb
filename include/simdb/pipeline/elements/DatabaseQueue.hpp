@@ -14,16 +14,11 @@ template <typename DatabaseIn, typename DatabaseOut>
 class DatabaseQueue {};
 
 template <typename DatabaseIn, typename DatabaseOut>
-class Task<DatabaseQueue<DatabaseIn, DatabaseOut>> : public NonTerminalDatabaseTask
+class Task<DatabaseQueue<DatabaseIn, DatabaseOut>> : public NonTerminalDatabaseTask<DatabaseIn>
 {
 public:
     using DbFunc = std::function<void(DatabaseIn&&, ConcurrentQueue<DatabaseOut>&, DatabaseManager*)>;
     Task(DbFunc func) : func_(func) {}
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
 
     QueueBase* getOutputQueue() override
     {
@@ -46,9 +41,9 @@ public:
     {
         DatabaseIn in;
         bool ran = false;
-        while (input_queue_.get().try_pop(in))
+        while (this->input_queue_.get().try_pop(in))
         {
-            func_(std::move(in), output_queue_->get(), getDatabaseManager_());
+            func_(std::move(in), output_queue_->get(), this->getDatabaseManager_());
             ran = true;
         }
         return ran;
@@ -61,29 +56,23 @@ private:
     }
 
     DbFunc func_;
-    Queue<DatabaseIn> input_queue_;
     Queue<DatabaseOut>* output_queue_ = nullptr;
 };
 
 template <typename DatabaseIn>
-class Task<DatabaseQueue<DatabaseIn, void>> : public TerminalDatabaseTask
+class Task<DatabaseQueue<DatabaseIn, void>> : public TerminalDatabaseTask<DatabaseIn>
 {
 public:
     using DbFunc = std::function<void(DatabaseIn&&, DatabaseManager*)>;
     Task(DbFunc func) : func_(func) {}
 
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
-
     bool run() override
     {
         DatabaseIn in;
         bool ran = false;
-        while (input_queue_.get().try_pop(in))
+        while (this->input_queue_.get().try_pop(in))
         {
-            func_(std::move(in), getDatabaseManager_());
+            func_(std::move(in), this->getDatabaseManager_());
             ran = true;
         }
         return ran;
@@ -96,7 +85,6 @@ private:
     }
 
     DbFunc func_;
-    Queue<DatabaseIn> input_queue_;
 };
 
 } // namespace simdb::pipeline
