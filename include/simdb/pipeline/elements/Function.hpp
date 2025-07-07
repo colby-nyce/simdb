@@ -7,29 +7,114 @@ namespace simdb::pipeline {
 
 /// Function task element.
 template <typename FunctionIn, typename FunctionOut>
-class Function
+class Function {};
+
+/// Specialization for non-terminating functions.
+template <typename FunctionIn, typename FunctionOut>
+class Task<Function<FunctionIn, FunctionOut>> : public TaskBase
 {
 public:
-    using InputType = FunctionIn;
-    using OutputType = FunctionOut;
+    using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
+    Task(Func func) : func_(func) {}
 
-    using StdFunction = std::function<FunctionOut(FunctionIn&&)>;
-    Function(StdFunction func) : func_(func) {}
+    QueueBase* getInputQueue() override
+    {
+        return &input_queue_;
+    }
 
-    std::string getName() const
+    QueueBase* getOutputQueue() override
+    {
+        return output_queue_;
+    }
+
+    void setOutputQueue(QueueBase* queue) override
+    {
+        if (auto q = dynamic_cast<Queue<FunctionOut>*>(queue))
+        {
+            output_queue_ = q;
+        }
+        else
+        {
+            throw DBException("Invalid data type");
+        }
+    }
+
+    bool requiresDatabase() const override
+    {
+        return false;
+    }
+
+    bool run() override
+    {
+        FunctionIn in;
+        bool ran = false;
+        while (input_queue_.get().try_pop(in))
+        {
+            func_(std::move(in), output_queue_->get());
+            ran = true;
+        }
+        return ran;
+    }
+
+private:
+    std::string getName_() const override
     {
         return "Function<" + demangle_type<FunctionIn>() + ", " + demangle_type<FunctionOut>() + ">";
     }
 
-    bool operator()(FunctionIn&& in, ConcurrentQueue<FunctionOut>& out)
+    Func func_;
+    Queue<FunctionIn> input_queue_;
+    Queue<FunctionOut>* output_queue_ = nullptr;
+};
+
+/// Specialization for terminating functions.
+template <typename FunctionIn>
+class Task<Function<FunctionIn, void>> : public TaskBase
+{
+public:
+    using Func = std::function<void(FunctionIn&&)>;
+    Task(Func func) : func_(func) {}
+
+    QueueBase* getInputQueue() override
     {
-        FunctionOut data = func_(std::move(in));
-        out.emplace(std::move(data));
+        return &input_queue_;
+    }
+
+    QueueBase* getOutputQueue() override
+    {
+        return nullptr;
+    }
+
+    void setOutputQueue(QueueBase*) override
+    {
+        throw DBException("Cannot set output queue - this is a terminating function");
+    }
+
+    bool requiresDatabase() const override
+    {
         return false;
     }
 
+    bool run() override
+    {
+        FunctionIn in;
+        bool ran = false;
+        while (input_queue_.get().try_pop(in))
+        {
+            func_(std::move(in));
+            ran = true;
+        }
+        return ran;
+    }
+
 private:
-    StdFunction func_;
+    std::string getName_() const override
+    {
+        return "Function<" + demangle_type<FunctionIn>() + ", void>";
+    }
+
+    Func func_;
+    Queue<FunctionIn> input_queue_;
 };
 
 } // namespace simdb::pipeline

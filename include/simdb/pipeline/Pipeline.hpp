@@ -24,6 +24,11 @@ public:
         return db_mgr_;
     }
 
+    std::string getName() const
+    {
+        return pipeline_name_;
+    }
+
     TaskGroup* createTaskGroup(const std::string& description = "")
     {
         auto prev = task_groups_.empty() ? nullptr : task_groups_.back().get();

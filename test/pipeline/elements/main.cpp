@@ -136,9 +136,10 @@ private:
     bool full_ = false;
 };
 
-std::string ITOA(const size_t val)
+void ITOA(size_t&& val, simdb::ConcurrentQueue<std::string>& out)
 {
-    return (val <= 127) ? std::string(1, static_cast<char>(val)) : "?";
+    std::string o = (val <= 127) ? std::string(1, static_cast<char>(val)) : "?";
+    out.emplace(std::move(o));
 }
 
 class PipelineElementApp : public simdb::App
@@ -183,7 +184,6 @@ public:
 
         // *** Note the use of Function below. You can provide the function impl via a free
         // *** function, std::function, or a lambda.
-
         // Task 1: take size_t and return std::string (using free function)
         auto itoa_task = simdb::pipeline::createTask<simdb::pipeline::Function<size_t, std::string>>(ITOA);
 
@@ -194,7 +194,7 @@ public:
 
         // Task 3: take std::vector<std::string> from prev task and output a hashval size_t (using lambda)
         auto hashval_task = simdb::pipeline::createTask<simdb::pipeline::Function<std::vector<std::string>, size_t>>(
-            [](std::vector<std::string>&& in) -> size_t
+            [](std::vector<std::string>&& in, simdb::ConcurrentQueue<size_t>& out)
             {
                 size_t seed = 0;
                 std::hash<std::string> hasher;
@@ -203,7 +203,7 @@ public:
                     seed ^= hasher(str) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
                 }
 
-                return seed;
+                out.push(seed);
             }
         );
 
@@ -243,7 +243,6 @@ public:
         {
             throw simdb::DBException("Pipeline failed to build");
         }
-
         return pipeline;
     }
 

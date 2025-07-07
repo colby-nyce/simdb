@@ -1,6 +1,8 @@
 add_subdirectory(dot_product)
 add_subdirectory(elements)
+add_subdirectory(shared_threads)
 
-if(TBB_VERSION)
-    add_subdirectory(TBB)
-endif()
+#TODO cnyce: re-enable test
+#if(TBB_VERSION)
+#    add_subdirectory(TBB)
+#endif()

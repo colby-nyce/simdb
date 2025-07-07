@@ -58,6 +58,16 @@ public:
         return this;
     }
 
+    std::vector<TaskBase*> getTasks()
+    {
+        std::vector<TaskBase*> tasks;
+        for (auto& task : tasks_)
+        {
+            tasks.push_back(task.get());
+        }
+        return tasks;
+    }
+
     QueueBase* getInputQueue()
     {
         if (tasks_.empty())
