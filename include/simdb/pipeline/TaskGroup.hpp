@@ -1,4 +1,4 @@
-// <PipelineTaskGroup.hpp> -*- C++ -*-
+// <TaskGroup.hpp> -*- C++ -*-
 
 #pragma once
 

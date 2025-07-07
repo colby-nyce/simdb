@@ -1,4 +1,4 @@
-// <PipelineTask.hpp> -*- C++ -*-
+// <Task.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -23,76 +23,14 @@ public:
     virtual void setDatabaseManager(DatabaseManager*) {}
 };
 
-/// Template the concrete tasks on things like Buffer, Function, Hub, or DatabaseQueue.
-/// You can also write your own pipeline element similar to Buffer/Function/etc.
-///
-/// See test/pipeline/elements/PipelineElements.cpp
-/// See simdb/pipeline/elements/*.hpp
-///
 template <typename Element>
-class Task : public TaskBase
-{
-public:
-    using InputType = typename Element::InputType;
-    using OutputType = typename Element::OutputType;
+class Task;
 
-    template <typename... Args>
-    Task(Args&&... args) : element_(std::forward<Args>(args)...) {}
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override
-    {
-        return output_queue_;
-    }
-
-    void setOutputQueue(QueueBase* queue) override
-    {
-        if (auto q = dynamic_cast<Queue<OutputType>*>(queue))
-        {
-            output_queue_ = q;
-        }
-        else
-        {
-            throw DBException("Invalid data type");
-        }
-    }
-
-    bool requiresDatabase() const override
-    {
-        return false;
-    }
-
-    bool run() override
-    {
-        if (!output_queue_)
-        {
-            throw DBException("Output queue not set!");
-        }        
-
-        InputType in;
-        bool ran = false;
-        while (input_queue_.get().try_pop(in))
-        {
-            ran |= element_(std::move(in), output_queue_->get());
-        }
-        return ran;
-    }
-
-private:
-    std::string getName_() const override
-    {
-        return element_.getName();
-    }
-
-    Queue<InputType> input_queue_;
-    Queue<OutputType>* output_queue_ = nullptr;
-    Element element_;
-};
-
+/// Template the concrete tasks on things like Buffer, Function, Hub,
+/// or DatabaseQueue. You can also create your own pipeline element by
+/// specializing the Task class similar to Function.hpp, Buffer.hpp,
+/// or the CircularBuffer in test/pipeline/elements/main.cpp
+///
 template <typename Element, typename... Args>
 inline std::unique_ptr<Task<Element>> createTask(Args&&... args)
 {
