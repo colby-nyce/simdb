@@ -1,7 +1,9 @@
 #pragma once
 
-#include "simdb/pipeline/Task.hpp"
 #include <array>
+#include <cstddef>
+
+namespace simdb {
 
 template <typename DataT, size_t BufferLen>
 class CircularBuffer
@@ -88,68 +90,4 @@ private:
     bool full_ = false;
 };
 
-namespace simdb::pipeline {
-
-template <typename DataT, size_t BufferLen>
-class Task<CircularBuffer<DataT, BufferLen>> : public TaskBase
-{
-public:
-    using InputType = DataT;
-    using OutputType = DataT;
-
-    QueueBase* getInputQueue() override
-    {
-        return &input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override
-    {
-        return output_queue_;
-    }
-
-    void setOutputQueue(QueueBase* queue) override
-    {
-        if (auto q = dynamic_cast<Queue<OutputType>*>(queue))
-        {
-            output_queue_ = q;
-        }
-        else
-        {
-            throw DBException("Invalid data type");
-        }
-    }
-
-    bool requiresDatabase() const override
-    {
-        return false;
-    }
-
-    bool run() override
-    {
-        InputType in;
-        bool ran = false;
-        while (input_queue_.get().try_pop(in))
-        {
-            if (circ_buf_.full())
-            {
-                output_queue_->get().emplace(std::move(circ_buf_.pop()));
-                ran = true;
-            }
-            circ_buf_.push(std::move(in));
-        }
-
-        return ran;
-    }
-
-private:
-    std::string getName_() const override
-    {
-        return "CircularBuffer<" + demangle_type<DataT>() + ", " + std::to_string(BufferLen) + ">";
-    }
-
-    CircularBuffer<InputType, BufferLen> circ_buf_;
-    Queue<InputType> input_queue_;
-    Queue<OutputType>* output_queue_ = nullptr;
-};
-
-} // namespace simdb::pipeline
+} // namespace simdb

@@ -5,6 +5,7 @@
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
 #include "simdb/pipeline/elements/DatabaseQueue.hpp"
+#include "simdb/utils/CircularBuffer.hpp"
 #include "SimDBTester.hpp"
 
 // This test creates a SimDB app with a pipeline that contains some
@@ -26,7 +27,72 @@
 //        *******************    **********************    *******************
 //        Thread 1               Thread 2                  Thread 3
 //
-#include "CircularBuffer.hpp"
+
+namespace simdb::pipeline {
+
+template <typename DataT, size_t BufferLen>
+class Task<simdb::CircularBuffer<DataT, BufferLen>> : public TaskBase
+{
+public:
+    using InputType = DataT;
+    using OutputType = DataT;
+
+    QueueBase* getInputQueue() override
+    {
+        return &input_queue_;
+    }
+
+    QueueBase* getOutputQueue() override
+    {
+        return output_queue_;
+    }
+
+    void setOutputQueue(QueueBase* queue) override
+    {
+        if (auto q = dynamic_cast<Queue<OutputType>*>(queue))
+        {
+            output_queue_ = q;
+        }
+        else
+        {
+            throw DBException("Invalid data type");
+        }
+    }
+
+    bool requiresDatabase() const override
+    {
+        return false;
+    }
+
+    bool run() override
+    {
+        InputType in;
+        bool ran = false;
+        while (input_queue_.get().try_pop(in))
+        {
+            if (circ_buf_.full())
+            {
+                output_queue_->get().emplace(std::move(circ_buf_.pop()));
+                ran = true;
+            }
+            circ_buf_.push(std::move(in));
+        }
+
+        return ran;
+    }
+
+private:
+    std::string getName_() const override
+    {
+        return "CircularBuffer<" + demangle_type<DataT>() + ", " + std::to_string(BufferLen) + ">";
+    }
+
+    simdb::CircularBuffer<InputType, BufferLen> circ_buf_;
+    Queue<InputType> input_queue_;
+    Queue<OutputType>* output_queue_ = nullptr;
+};
+
+} // namespace simdb::pipeline
 
 void ITOA(size_t&& val, simdb::ConcurrentQueue<std::string>& out)
 {
@@ -100,7 +166,7 @@ public:
         );
 
         // Task 4: take hashval size_t and push to a circular buffer (user-defined element)
-        auto circbuf_task = simdb::pipeline::createTask<CircularBuffer<size_t, 10>>();
+        auto circbuf_task = simdb::pipeline::createTask<simdb::CircularBuffer<size_t, 10>>();
 
         // Thread 3 tasks --------------------------------------------------------------------------
 
