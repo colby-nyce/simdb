@@ -11,7 +11,7 @@ template <typename Input>
 class Buffer {};
 
 template <typename Input>
-class Task<Buffer<Input>> : public TaskBase
+class Task<Buffer<Input>> : public NonTerminalNonDatabaseTask
 {
 public:
     using InputType = Input;
@@ -43,11 +43,6 @@ public:
         {
             throw DBException("Invalid data type");
         }
-    }
-
-    bool requiresDatabase() const override
-    {
-        return false;
     }
 
     bool run() override

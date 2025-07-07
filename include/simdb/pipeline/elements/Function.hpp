@@ -11,7 +11,7 @@ class Function {};
 
 /// Specialization for non-terminating functions.
 template <typename FunctionIn, typename FunctionOut>
-class Task<Function<FunctionIn, FunctionOut>> : public TaskBase
+class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalNonDatabaseTask
 {
 public:
     using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
@@ -39,11 +39,6 @@ public:
         }
     }
 
-    bool requiresDatabase() const override
-    {
-        return false;
-    }
-
     bool run() override
     {
         FunctionIn in;
@@ -69,7 +64,7 @@ private:
 
 /// Specialization for terminating functions.
 template <typename FunctionIn>
-class Task<Function<FunctionIn, void>> : public TaskBase
+class Task<Function<FunctionIn, void>> : public TerminalNonDatabaseTask
 {
 public:
     using Func = std::function<void(FunctionIn&&)>;
@@ -78,21 +73,6 @@ public:
     QueueBase* getInputQueue() override
     {
         return &input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override
-    {
-        return nullptr;
-    }
-
-    void setOutputQueue(QueueBase*) override
-    {
-        throw DBException("Cannot set output queue - this is a terminating function");
-    }
-
-    bool requiresDatabase() const override
-    {
-        return false;
     }
 
     bool run() override

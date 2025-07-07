@@ -31,7 +31,7 @@
 namespace simdb::pipeline {
 
 template <typename DataT, size_t BufferLen>
-class Task<simdb::CircularBuffer<DataT, BufferLen>> : public TaskBase
+class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalNonDatabaseTask
 {
 public:
     using InputType = DataT;
@@ -57,11 +57,6 @@ public:
         {
             throw DBException("Invalid data type");
         }
-    }
-
-    bool requiresDatabase() const override
-    {
-        return false;
     }
 
     bool run() override
