@@ -434,10 +434,10 @@ public:
                 std::cout << "---- Pipeline (app): " << pipeline->getName() << "\n";
                 for (auto group : pipeline->getTaskGroups())
                 {
-                    std::cout << "------ TaskGroup (thread): " << group->getName() << "\n";
+                    std::cout << "------ TaskGroup (thread): " << group->getDescription() << "\n";
                     for (auto task : group->getTasks())
                     {
-                        std::cout << "-------- Task: " << task->getName() << "\n";
+                        std::cout << "-------- Task: " << task->getDescription() << "\n";
                     }
                 }
             }

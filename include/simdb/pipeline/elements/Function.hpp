@@ -11,28 +11,11 @@ class Function {};
 
 /// Specialization for non-terminating functions.
 template <typename FunctionIn, typename FunctionOut>
-class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalNonDatabaseTask<FunctionIn>
+class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalNonDatabaseTask<FunctionIn, FunctionOut>
 {
 public:
     using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
     Task(Func func) : func_(func) {}
-
-    QueueBase* getOutputQueue() override
-    {
-        return output_queue_;
-    }
-
-    void setOutputQueue(QueueBase* queue) override
-    {
-        if (auto q = dynamic_cast<Queue<FunctionOut>*>(queue))
-        {
-            output_queue_ = q;
-        }
-        else
-        {
-            throw DBException("Invalid data type");
-        }
-    }
 
     bool run() override
     {
@@ -40,20 +23,19 @@ public:
         bool ran = false;
         while (this->input_queue_.get().try_pop(in))
         {
-            func_(std::move(in), output_queue_->get());
+            func_(std::move(in), this->output_queue_->get());
             ran = true;
         }
         return ran;
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         return "Function<" + demangle_type<FunctionIn>() + ", " + demangle_type<FunctionOut>() + ">";
     }
 
     Func func_;
-    Queue<FunctionOut>* output_queue_ = nullptr;
 };
 
 /// Specialization for terminating functions.
@@ -77,7 +59,7 @@ public:
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         return "Function<" + demangle_type<FunctionIn>() + ", void>";
     }

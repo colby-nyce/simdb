@@ -14,28 +14,11 @@ template <typename DatabaseIn, typename DatabaseOut>
 class DatabaseQueue {};
 
 template <typename DatabaseIn, typename DatabaseOut>
-class Task<DatabaseQueue<DatabaseIn, DatabaseOut>> : public NonTerminalDatabaseTask<DatabaseIn>
+class Task<DatabaseQueue<DatabaseIn, DatabaseOut>> : public NonTerminalDatabaseTask<DatabaseIn, DatabaseOut>
 {
 public:
     using DbFunc = std::function<void(DatabaseIn&&, ConcurrentQueue<DatabaseOut>&, DatabaseManager*)>;
     Task(DbFunc func) : func_(func) {}
-
-    QueueBase* getOutputQueue() override
-    {
-        return output_queue_;
-    }
-
-    void setOutputQueue(QueueBase* queue) override
-    {
-        if (auto q = dynamic_cast<Queue<DatabaseOut>*>(queue))
-        {
-            output_queue_ = q;
-        }
-        else
-        {
-            throw DBException("Invalid data type");
-        }
-    }
 
     bool run() override
     {
@@ -43,20 +26,19 @@ public:
         bool ran = false;
         while (this->input_queue_.get().try_pop(in))
         {
-            func_(std::move(in), output_queue_->get(), this->getDatabaseManager_());
+            func_(std::move(in), this->output_queue_->get(), this->getDatabaseManager_());
             ran = true;
         }
         return ran;
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         return "DatabaseQueue<" + demangle_type<DatabaseIn>() + ", " + demangle_type<DatabaseOut>() + ">";
     }
 
     DbFunc func_;
-    Queue<DatabaseOut>* output_queue_ = nullptr;
 };
 
 template <typename DatabaseIn>
@@ -79,7 +61,7 @@ public:
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         return "DatabaseQueue<" + demangle_type<DatabaseIn>() + ", void>";
     }

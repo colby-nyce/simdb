@@ -13,14 +13,14 @@ class Runnable
 public:
     virtual ~Runnable() = default;
 
-    /// Get the name of this runnable. Used for reporting purposes,
-    /// e.g. the pipeline self-profiler report.
-    std::string getName() const
+    /// Get this runnable's description. Used for reporting purposes,
+    /// e.g. the pipeline self-profile report.
+    std::string getDescription() const
     {
-        return !name_.empty() ? name_ : getName_();
+        return !name_.empty() ? name_ : getDescription_();
     }
 
-    /// Set/overwrite the name of this runnable. See getName().
+    /// Set/overwrite the name of this runnable. See getDescription().
     void setName(const std::string& name)
     {
         name_ = name;
@@ -33,11 +33,11 @@ public:
     /// Print info about this runnable for reporting purposes.
     virtual void print(std::ostream& os, int indent) const
     {
-        os << std::string(indent, ' ') << getName() << "\n";
+        os << std::string(indent, ' ') << getDescription() << "\n";
     }
 
 private:
-    virtual std::string getName_() const = 0;
+    virtual std::string getDescription_() const = 0;
     std::string name_;
 };
 

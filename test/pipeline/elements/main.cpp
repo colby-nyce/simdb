@@ -31,28 +31,11 @@
 namespace simdb::pipeline {
 
 template <typename DataT, size_t BufferLen>
-class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalNonDatabaseTask<DataT>
+class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalNonDatabaseTask<DataT, DataT>
 {
 public:
     using InputType = DataT;
     using OutputType = DataT;
-
-    QueueBase* getOutputQueue() override
-    {
-        return output_queue_;
-    }
-
-    void setOutputQueue(QueueBase* queue) override
-    {
-        if (auto q = dynamic_cast<Queue<OutputType>*>(queue))
-        {
-            output_queue_ = q;
-        }
-        else
-        {
-            throw DBException("Invalid data type");
-        }
-    }
 
     bool run() override
     {
@@ -62,7 +45,7 @@ public:
         {
             if (circ_buf_.full())
             {
-                output_queue_->get().emplace(std::move(circ_buf_.pop()));
+                this->output_queue_->get().emplace(std::move(circ_buf_.pop()));
                 ran = true;
             }
             circ_buf_.push(std::move(in));
@@ -72,13 +55,12 @@ public:
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         return "CircularBuffer<" + demangle_type<DataT>() + ", " + std::to_string(BufferLen) + ">";
     }
 
     simdb::CircularBuffer<InputType, BufferLen> circ_buf_;
-    Queue<OutputType>* output_queue_ = nullptr;
 };
 
 } // namespace simdb::pipeline
