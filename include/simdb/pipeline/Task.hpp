@@ -24,13 +24,22 @@ public:
 };
 
 /// Base class for all terminal non-database tasks.
+template <typename InputType>
 class TerminalNonDatabaseTask : public TaskBase
 {
 public:
+    QueueBase* getInputQueue() override final
+    {
+        return &this->input_queue_;
+    }
+
     QueueBase* getOutputQueue() override final
     {
         return nullptr;
     }
+
+protected:
+    Queue<InputType> input_queue_;
 
 private:
     void setOutputQueue(QueueBase*) override final
@@ -47,11 +56,22 @@ private:
     {
         throw DBException("Cannot give database to a non-database task");
     }
+
 };
 
 /// Base class for all non-terminal, non-database tasks.
+template <typename InputType>
 class NonTerminalNonDatabaseTask : public TaskBase
 {
+public:
+    QueueBase* getInputQueue() override final
+    {
+        return &this->input_queue_;
+    }
+
+protected:
+    Queue<InputType> input_queue_;
+
 private:
     bool requiresDatabase() const override final
     {
@@ -62,12 +82,19 @@ private:
     {
         throw DBException("Cannot give database to a non-database task");
     }
+
 };
 
 /// Base class for all terminal database tasks.
+template <typename InputType>
 class TerminalDatabaseTask : public TaskBase
 {
 public:
+    QueueBase* getInputQueue() override final
+    {
+        return &this->input_queue_;
+    }
+
     QueueBase* getOutputQueue() override final
     {
         return nullptr;
@@ -78,6 +105,8 @@ protected:
     {
         return db_mgr_;
     }
+
+    Queue<InputType> input_queue_;
 
 private:
     void setOutputQueue(QueueBase*) override final
@@ -99,13 +128,22 @@ private:
 };
 
 /// Base class for all non-terminal database tasks.
+template <typename InputType>
 class NonTerminalDatabaseTask : public TaskBase
 {
+public:
+    QueueBase* getInputQueue() override final
+    {
+        return &this->input_queue_;
+    }
+
 protected:
     DatabaseManager* getDatabaseManager_() const
     {
         return db_mgr_;
     }
+
+    Queue<InputType> input_queue_;
 
 private:
     bool requiresDatabase() const override final
