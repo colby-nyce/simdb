@@ -30,7 +30,7 @@ using CompressedBytes = std::vector<char>;
 static constexpr size_t DOT_PROD_ARRAY_LEN = 2;
 static constexpr size_t DOT_PROD_BUFLEN = 1000;
 
-double CalcDotProduct(BufferedDotProdInputs&& in)
+double GetDotProduct(const BufferedDotProdInputs& in)
 {
     if (in.empty())
     {
@@ -67,11 +67,16 @@ double CalcDotProduct(BufferedDotProdInputs&& in)
     return sum;
 }
 
-CompressedBytes CompressBytes(BufferedDotProductValues&& in)
+void SendDotProduct(BufferedDotProdInputs&& in, simdb::ConcurrentQueue<double>& out)
+{
+    out.push(GetDotProduct(in));
+}
+
+void CompressBytes(BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out)
 {
     CompressedBytes compressed;
     simdb::compressData(in, compressed);
-    return compressed;
+    out.emplace(std::move(compressed));
 }
 
 void WriteCompressedBytes(CompressedBytes&& in, simdb::DatabaseManager* db_mgr)
@@ -117,7 +122,7 @@ public:
 
         // Thread 1
         auto dot_prod_task1 = simdb::pipeline::createTask<simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
-        auto dot_prod_task2 = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProdInputs, double>>(CalcDotProduct);
+        auto dot_prod_task2 = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProdInputs, double>>(SendDotProduct);
         auto dot_prod_task3 = simdb::pipeline::createTask<simdb::pipeline::Buffer<double>>(DOT_PROD_BUFLEN);
 
         // Thread 2
@@ -216,7 +221,7 @@ int main(int argc, char** argv)
             mat.push_back(sent.at(i+j));
         }
 
-        dot_products.push_back(CalcDotProduct(std::move(mat)));
+        dot_products.push_back(GetDotProduct(std::move(mat)));
         if (dot_products.size() == DOT_PROD_BUFLEN)
         {
             buffered_dot_products.push_back(dot_products);

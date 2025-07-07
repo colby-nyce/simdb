@@ -1,0 +1,157 @@
+diff --git a/include/simdb/apps/AppManager.hpp b/include/simdb/apps/AppManager.hpp
+index 6438f09..91d158f 100644
+--- a/include/simdb/apps/AppManager.hpp
++++ b/include/simdb/apps/AppManager.hpp
+@@ -183,38 +183,19 @@ public:
+     /// too many threads in total.
+     void openPipelines()
+     {
++        if (!pipelines_.empty())
++        {
++            throw DBException("Pipelines already open");
++        }
++
+         for (const auto& [key, app] : apps_)
+         {
+             if (auto pipeline = app->createPipeline())
+             {
+-                // For pipelines which require the DB, verify that their DB tasks all occur
+-                // at the end of the pipeline. This may be relaxed in the future.
+-                if (pipeline->requiresDatabase())
+-                {
+-                    bool processing_db_tasks = true;
+-                    auto all_groups = pipeline->getTaskGroups();
+-                    for (auto it = all_groups.rbegin(); it != all_groups.rend(); ++it)
+-                    {
+-                        if ((*it)->requiresDatabase())
+-                        {
+-                            if (!processing_db_tasks)
+-                            {
+-                                throw DBException("Database tasks must be at the end of the pipeline");
+-                            }
+-                        }
+-                        else
+-                        {
+-                            processing_db_tasks = false;
+-                        }
+-                    }
+-                }
+-
+                 pipelines_[pipeline->getDatabaseManager()].emplace_back(std::move(pipeline));
+             }
+         }
+ 
+-        std::vector<pipeline::Thread*> all_threads;
+-
+         // Setup all the database threads we will need.
+         for (auto& [db_mgr, pipelines] : pipelines_)
+         {
+@@ -227,20 +208,40 @@ public:
+                         throw DBException("Database mismatch");
+                     }
+ 
+-                    auto& db_thread = db_threads_[db_mgr];
+-                    if (!db_thread)
++                    pipeline::DatabaseThread* database_thread = nullptr;
++                    for (auto& thread : threads_[db_mgr])
++                    {
++                        if (auto db_thread = dynamic_cast<pipeline::DatabaseThread*>(thread.get()))
++                        {
++                            database_thread = db_thread;
++                            break;
++                        }
++                    }
++
++                    if (!database_thread)
+                     {
+-                        db_thread = std::make_unique<pipeline::DatabaseThread>(db_mgr);
+-                        all_threads.emplace_back(db_thread.get());
++                        threads_[db_mgr].emplace_back(std::make_unique<pipeline::DatabaseThread>(db_mgr));
++                        database_thread = dynamic_cast<pipeline::DatabaseThread*>(threads_[db_mgr].back().get());
+                     }
+ 
+-                    auto db_group = pipeline->getTaskGroups().back();
+-                    db_group->setDatabaseManager(db_mgr);
+-                    db_thread->addRunnable(db_group);
++                    bool one_db_thread = false;
++                    for (auto group : pipeline->getTaskGroups())
++                    {
++                        if (group->requiresDatabase())
++                        {
++                            if (one_db_thread)
++                            {
++                                throw DBException("Cannot use more than one database thread");
++                            }
++                            group->setDatabaseManager(db_mgr);
++                            database_thread->addRunnable(group);
++                            one_db_thread = true;
++                        }
++                    }
+                 }
+             }
+         }
+-
++#if 0
+         // Setup all the non-database threads
+         for (auto& [db_mgr, pipelines] : pipelines_)
+         {
+@@ -282,11 +283,14 @@ public:
+         {
+             thread->open();
+         }
++#endif
+     }
+ 
+     /// Call this after the simulation loop ends for post-processing tasks.
+     void postSim(DatabaseManager* db_mgr)
+     {
++        (void)db_mgr;
++#if 0
+         std::cout << "************ Shutting down pipelines for all SimDB apps on database: "
+                   << db_mgr->getDatabaseFilePath() << " ************\n\n";
+ 
+@@ -313,12 +317,15 @@ public:
+                     app->postSim();
+                 }
+             });
++#endif
+     }
+ 
+     /// Call this after the simulation ends for resource cleanup tasks
+     /// such as closing files, releasing memory, etc.
+     void teardown(DatabaseManager* db_mgr)
+     {
++        (void)db_mgr;
++#if 0
+         for (auto app : getApps_(db_mgr))
+         {
+             app->teardown();
+@@ -346,6 +353,7 @@ public:
+         {
+             pipelines_.erase(it3);
+         }
++#endif
+     }
+ 
+     /// Delete all instantiated apps. This may be needed since AppManager
+@@ -377,8 +385,8 @@ public:
+         else
+         {
+             apps_.clear();
+-            non_db_threads_.clear();
+-            db_threads_.clear();
++            //non_db_threads_.clear();
++            //db_threads_.clear();
+             pipelines_.clear();
+         }
+     }
+@@ -413,8 +421,7 @@ private:
+     std::map<DatabaseManager*, std::vector<std::unique_ptr<pipeline::Pipeline>>> pipelines_;
+ 
+     /// Instantiated threads.
+-    std::map<DatabaseManager*, std::unique_ptr<pipeline::DatabaseThread>> db_threads_;
+-    std::map<DatabaseManager*, std::vector<std::unique_ptr<pipeline::Thread>>> non_db_threads_;
++    std::map<DatabaseManager*, std::vector<std::unique_ptr<pipeline::Thread>>> threads_;
+ };
+ 
+ } // namespace simdb

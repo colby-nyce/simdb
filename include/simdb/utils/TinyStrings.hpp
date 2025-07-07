@@ -32,7 +32,7 @@ public:
         }
     }
 
-    uint32_t operator[](const std::string& s)
+    std::pair<uint32_t, bool> insert(const std::string& s)
     {
         DeferredLock<std::mutex> lock(mutex_);
         if constexpr (MutexProtect)
@@ -43,15 +43,23 @@ public:
         auto iter = map_->find(s);
         if (iter == map_->end())
         {
-            uint32_t id = map_->size();
-            map_->insert({s, id});
-            unserialized_map_.insert({id, s});
-            return id;
+            return std::make_pair(getStringID_(s), true);
         }
         else
         {
-            return iter->second;
+            return std::make_pair(getStringID_(s), false);
         }
+    }
+
+    uint32_t getStringID(const std::string& s)
+    {
+        DeferredLock<std::mutex> lock(mutex_);
+        if constexpr (MutexProtect)
+        {
+            lock.lock();
+        }
+
+        return getStringID_(s);
     }
 
     /// Serialize the current string map to the database.
@@ -78,6 +86,22 @@ public:
     }
 
 private:
+    uint32_t getStringID_(const std::string& s)
+    {
+        auto iter = map_->find(s);
+        if (iter == map_->end())
+        {
+            uint32_t id = map_->size();
+            map_->insert({s, id});
+            unserialized_map_.insert({id, s});
+            return id;
+        }
+        else
+        {
+            return iter->second;
+        }
+    }
+
     using string_map_t = std::shared_ptr<std::unordered_map<std::string, uint32_t>>;
     using unserialized_string_map_t = std::unordered_map<uint32_t, std::string>;
 

@@ -183,104 +183,264 @@ public:
     /// too many threads in total.
     void openPipelines()
     {
+        if (!pipelines_.empty())
+        {
+            throw DBException("Pipelines already open");
+        }
+
         for (const auto& [key, app] : apps_)
         {
             if (auto pipeline = app->createPipeline())
             {
-                // For pipelines which require the DB, verify that their DB tasks all occur
-                // at the end of the pipeline. This may be relaxed in the future.
-                if (pipeline->requiresDatabase())
+                // Verify that there is at most one TaskGroup that is configured to
+                // work with the database. We don't allow pipelines to try to access
+                // the database (DatabaseManager) from multiple threads.
+                size_t num_db_threads = 0;
+                for (auto group : pipeline->getTaskGroups())
                 {
-                    bool processing_db_tasks = true;
-                    auto all_groups = pipeline->getTaskGroups();
-                    for (auto it = all_groups.rbegin(); it != all_groups.rend(); ++it)
-                    {
-                        if ((*it)->requiresDatabase())
-                        {
-                            if (!processing_db_tasks)
-                            {
-                                throw DBException("Database tasks must be at the end of the pipeline");
-                            }
-                        }
-                        else
-                        {
-                            processing_db_tasks = false;
-                        }
-                    }
+                    num_db_threads += group->requiresDatabase() ? 1 : 0;
+                }
+
+                if (num_db_threads > 1)
+                {
+                    throw DBException() <<
+                        "You cannot access the DatabaseManager from multiple TaskGroups " <<
+                        "(at most one DatabaseThread per pipeline)";
                 }
 
                 pipelines_[pipeline->getDatabaseManager()].emplace_back(std::move(pipeline));
             }
         }
 
-        std::vector<pipeline::Thread*> all_threads;
-
-        // Setup all the database threads we will need.
+        // Figure out how many threads we need for pre-database task groups. If one
+        // app needs 3 pre-DB TaskGroups, and another needs 2, then we will create 3
+        // threads total for pre-DB task groups and share them.
+        std::map<DatabaseManager*, size_t> num_pre_db_threads_needed;
         for (auto& [db_mgr, pipelines] : pipelines_)
         {
             for (auto& pipeline : pipelines)
             {
-                if (pipeline->requiresDatabase())
-                {
-                    if (pipeline->getDatabaseManager() != db_mgr)
-                    {
-                        throw DBException("Database mismatch");
-                    }
-
-                    auto& db_thread = db_threads_[db_mgr];
-                    if (!db_thread)
-                    {
-                        db_thread = std::make_unique<pipeline::DatabaseThread>(db_mgr);
-                        all_threads.emplace_back(db_thread.get());
-                    }
-
-                    auto db_group = pipeline->getTaskGroups().back();
-                    db_group->setDatabaseManager(db_mgr);
-                    db_thread->addRunnable(db_group);
-                }
-            }
-        }
-
-        // Setup all the non-database threads
-        for (auto& [db_mgr, pipelines] : pipelines_)
-        {
-            size_t num_non_db_threads_needed = 0;
-            for (auto& pipeline : pipelines)
-            {
-                auto pipeline_non_db_threads = pipeline->getTaskGroups().size();
-                if (pipeline->requiresDatabase())
-                {
-                    --pipeline_non_db_threads;
-                }
-                num_non_db_threads_needed = std::max(num_non_db_threads_needed, pipeline_non_db_threads);
-            }
-
-            for (size_t i = 0; i < num_non_db_threads_needed; ++i)
-            {
-                non_db_threads_[db_mgr].emplace_back(std::make_unique<pipeline::Thread>());
-                all_threads.emplace_back(non_db_threads_[db_mgr].back().get());
-            }
-        }
-
-        // Add the non-database tasks to the appropriate thread.
-        for (auto& [db_mgr, pipelines] : pipelines_)
-        {
-            for (auto& pipeline : pipelines)
-            {
-                size_t thread_idx = 0;
+                size_t num_pre_db_threads = 0;
                 for (auto group : pipeline->getTaskGroups())
                 {
                     if (!group->requiresDatabase())
                     {
-                        non_db_threads_[db_mgr][thread_idx++]->addRunnable(group);
+                        ++num_pre_db_threads;
                     }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                auto it = num_pre_db_threads_needed.find(db_mgr);
+                if (it == num_pre_db_threads_needed.end())
+                {
+                    it = num_pre_db_threads_needed.insert({db_mgr, num_pre_db_threads}).first;
+                }
+
+                it->second = std::max(it->second, num_pre_db_threads);
+            }
+        }
+
+        // Figure out how many threads we need for DB task groups.
+        std::map<DatabaseManager*, size_t> num_db_threads_needed;
+        for (auto& [db_mgr, pipelines] : pipelines_)
+        {
+            num_db_threads_needed[db_mgr] = 0;
+            for (auto& pipeline : pipelines)
+            {
+                if (pipeline->requiresDatabase())
+                {
+                    num_db_threads_needed[db_mgr] = 1;
+                    break;
                 }
             }
         }
 
-        for (auto& thread : all_threads)
+        // Figure out how many threads we need for post-DB task groups.
+        std::map<DatabaseManager*, size_t> num_post_db_threads_needed;
+        for (auto& [db_mgr, pipelines] : pipelines_)
         {
-            thread->open();
+            for (auto& pipeline : pipelines)
+            {
+                size_t num_post_db_threads = 0;
+                bool found_db_group = false;
+                for (auto group : pipeline->getTaskGroups())
+                {
+                    if (found_db_group && !group->requiresDatabase())
+                    {
+                        ++num_post_db_threads;
+                    }
+                    else if (found_db_group && group->requiresDatabase())
+                    {
+                        throw DBException() <<
+                            "You cannot access the DatabaseManager from multiple TaskGroups " <<
+                            "(at most one DatabaseThread per pipeline)";
+                    }
+                    else if (group->requiresDatabase())
+                    {
+                        found_db_group = true;
+                    }
+                }
+
+                auto it = num_post_db_threads_needed.find(db_mgr);
+                if (it == num_post_db_threads_needed.end())
+                {
+                    it = num_post_db_threads_needed.insert({db_mgr, num_post_db_threads}).first;
+                }
+
+                it->second = std::max(it->second, num_post_db_threads);
+            }
+        }
+
+        auto get_count = [](const auto& map, DatabaseManager* db_mgr) -> size_t
+        {
+            auto it = map.find(db_mgr);
+            if (it == map.end())
+            {
+                throw DBException("Invalid map/key");
+            }
+            return it->second;
+        };
+
+        for (auto& [db_mgr, pipelines] : pipelines_)
+        {
+            auto num_pre_db_threads = get_count(num_pre_db_threads_needed, db_mgr);
+            auto num_db_threads = get_count(num_db_threads_needed, db_mgr);
+            auto num_post_db_threads = get_count(num_post_db_threads_needed, db_mgr);
+
+            for (size_t i = 0; i < num_pre_db_threads; ++i)
+            {
+                threads_[db_mgr].emplace_back(std::make_unique<pipeline::Thread>());
+            }
+
+            if (num_db_threads)
+            {
+                assert(num_db_threads == 1);
+                threads_[db_mgr].emplace_back(std::make_unique<pipeline::DatabaseThread>(db_mgr));
+            }
+
+            for (size_t i = 0; i < num_post_db_threads; ++i)
+            {
+                threads_[db_mgr].emplace_back(std::make_unique<pipeline::Thread>());
+            }
+        }
+
+        for (auto& [db_mgr, pipelines] : pipelines_)
+        {
+            for (auto& pipeline : pipelines)
+            {
+                std::vector<pipeline::TaskGroup*> groups = pipeline->getTaskGroups();
+
+                std::vector<pipeline::TaskGroup*> pre_db_groups;
+                for (auto group : groups)
+                {
+                    if (!group->requiresDatabase())
+                    {
+                        pre_db_groups.push_back(group);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                pipeline::TaskGroup* db_group = nullptr;
+                for (auto group : groups)
+                {
+                    if (group->requiresDatabase())
+                    {
+                        assert(db_group == nullptr);
+                        db_group = group;
+                    }
+                }
+
+                std::vector<pipeline::TaskGroup*> post_db_groups;
+                bool found_db_group = false;
+                for (auto group : groups)
+                {
+                    if (group->requiresDatabase())
+                    {
+                        found_db_group = true;
+                    }
+                    else if (found_db_group)
+                    {
+                        post_db_groups.push_back(group);
+                    }
+                }
+
+                auto thread_it = threads_[db_mgr].begin();
+                for (auto group : pre_db_groups)
+                {
+                    if (thread_it == threads_[db_mgr].end())
+                    {
+                        throw DBException("Internal logic error while connecting threads and runnables");
+                    }
+
+                    (*thread_it)->addRunnable(group);
+                    ++thread_it;
+                }
+
+                if (db_group)
+                {
+                    while (thread_it != threads_[db_mgr].end())
+                    {
+                        if (dynamic_cast<pipeline::DatabaseThread*>(thread_it->get()))
+                        {
+                            break;
+                        }
+                        ++thread_it;
+                    }
+                    
+                    if (thread_it == threads_[db_mgr].end())
+                    {
+                        throw DBException("Internal logic error while connecting threads and runnables");
+                    }
+
+                    db_group->setDatabaseManager(db_mgr);
+                    (*thread_it)->addRunnable(db_group);
+                    ++thread_it;
+                }
+
+                for (auto group : post_db_groups)
+                {
+                    if (thread_it == threads_[db_mgr].end())
+                    {
+                        throw DBException("Internal logic error while connecting threads and runnables");
+                    }
+
+                    (*thread_it)->addRunnable(group);
+                    ++thread_it;
+                }
+            }
+        }
+
+        for (auto& [db_mgr, threads] : threads_)
+        {
+            for (auto& thread : threads)
+            {
+                thread->open();
+            }
+        }
+
+        // Print final thread/task configuration.
+        std::cout << "\nSimDB app pipeline configuration" << (pipelines_.size() == 1 ? ":" : "s:") << "\n";
+        for (auto& [db_mgr, pipelines] : pipelines_)
+        {
+            std::cout << "-- Database: " << db_mgr->getDatabaseFilePath() << "\n";
+            for (auto& pipeline : pipelines)
+            {
+                std::cout << "---- Pipeline (app): " << pipeline->getName() << "\n";
+                for (auto group : pipeline->getTaskGroups())
+                {
+                    std::cout << "------ TaskGroup (thread): " << group->getName() << "\n";
+                    for (auto task : group->getTasks())
+                    {
+                        std::cout << "-------- Task: " << task->getName() << "\n";
+                    }
+                }
+            }
         }
     }
 
@@ -290,19 +450,13 @@ public:
         std::cout << "************ Shutting down pipelines for all SimDB apps on database: "
                   << db_mgr->getDatabaseFilePath() << " ************\n\n";
 
-        auto it = non_db_threads_.find(db_mgr);
-        if (it != non_db_threads_.end())
+        auto it = threads_.find(db_mgr);
+        if (it != threads_.end())
         {
-            for (const auto& pipeline : it->second)
+            for (auto& thread : it->second)
             {
-                pipeline->close();
+                thread->close();
             }
-        }
-
-        auto it2 = db_threads_.find(db_mgr);
-        if (it2 != db_threads_.end())
-        {
-            it2->second->close();
         }
 
         db_mgr->safeTransaction(
@@ -324,27 +478,20 @@ public:
             app->teardown();
         }
 
-        auto it = non_db_threads_.find(db_mgr);
-        if (it != non_db_threads_.end())
+        auto it = threads_.find(db_mgr);
+        if (it != threads_.end())
         {
             for (const auto& pipeline : it->second)
             {
                 pipeline->printPerfReport(std::cout);
             }
-            non_db_threads_.erase(it);
+            threads_.erase(it);
         }
 
-        auto it2 = db_threads_.find(db_mgr);
-        if (it2 != db_threads_.end())
+        auto it2 = pipelines_.find(db_mgr);
+        if (it2 != pipelines_.end())
         {
-            it2->second->printPerfReport(std::cout);
-            db_threads_.erase(it2);
-        }
-
-        auto it3 = pipelines_.find(db_mgr);
-        if (it3 != pipelines_.end())
-        {
-            pipelines_.erase(it3);
+            pipelines_.erase(it2);
         }
     }
 
@@ -377,8 +524,7 @@ public:
         else
         {
             apps_.clear();
-            non_db_threads_.clear();
-            db_threads_.clear();
+            threads_.clear();
             pipelines_.clear();
         }
     }
@@ -413,8 +559,7 @@ private:
     std::map<DatabaseManager*, std::vector<std::unique_ptr<pipeline::Pipeline>>> pipelines_;
 
     /// Instantiated threads.
-    std::map<DatabaseManager*, std::unique_ptr<pipeline::DatabaseThread>> db_threads_;
-    std::map<DatabaseManager*, std::vector<std::unique_ptr<pipeline::Thread>>> non_db_threads_;
+    std::map<DatabaseManager*, std::vector<std::unique_ptr<pipeline::Thread>>> threads_;
 };
 
 } // namespace simdb
