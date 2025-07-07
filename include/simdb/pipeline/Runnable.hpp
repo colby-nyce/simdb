@@ -1,4 +1,4 @@
-// <PipelineRunnable.hpp> -*- C++ -*-
+// <Runnable.hpp> -*- C++ -*-
 
 #pragma once
 
