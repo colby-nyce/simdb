@@ -29,7 +29,7 @@ class Task;
 /// Template the concrete tasks on things like Buffer, Function, Hub,
 /// or DatabaseQueue. You can also create your own pipeline element by
 /// specializing the Task class similar to Function.hpp, Buffer.hpp,
-/// or the CircularBuffer in test/pipeline/elements/main.cpp
+/// or test/pipeline/elements/CircularBuffer.hpp
 ///
 template <typename Element, typename... Args>
 inline std::unique_ptr<Task<Element>> createTask(Args&&... args)
