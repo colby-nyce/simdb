@@ -8,10 +8,15 @@
 namespace simdb::pipeline {
 
 template <typename Input>
-class Buffer {};
+class Buffer
+{
+public:
+    using InputType = Input;
+    using OutputType = std::vector<Input>;
+};
 
 template <typename Input>
-class Task<Buffer<Input>> : public NonTerminalNonDatabaseTask<Input>
+class Task<Buffer<Input>> : public NonTerminalNonDatabaseTask<Input, typename Buffer<Input>::OutputType>
 {
 public:
     using InputType = Input;
@@ -23,26 +28,9 @@ public:
         buffer_.reserve(buffer_len);
     }
 
-    QueueBase* getOutputQueue() override
-    {
-        return output_queue_;
-    }
-
-    void setOutputQueue(QueueBase* queue) override
-    {
-        if (auto q = dynamic_cast<Queue<OutputType>*>(queue))
-        {
-            output_queue_ = q;
-        }
-        else
-        {
-            throw DBException("Invalid data type");
-        }
-    }
-
     bool run() override
     {
-        if (!output_queue_)
+        if (!this->output_queue_)
         {
             throw DBException("Output queue not set!");
         }
@@ -54,7 +42,7 @@ public:
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)
             {
-                output_queue_->get().emplace(std::move(buffer_));
+                this->output_queue_->get().emplace(std::move(buffer_));
                 ran = true;
             }
         }
@@ -63,14 +51,13 @@ public:
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         return "Buffer<" + demangle_type<Input>() + ">";
     }
 
     size_t buffer_len_;
     OutputType buffer_;
-    Queue<OutputType>* output_queue_ = nullptr;
 };
 
 } // namespace simdb::pipeline

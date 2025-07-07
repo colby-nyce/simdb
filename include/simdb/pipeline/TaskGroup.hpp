@@ -31,7 +31,7 @@ public:
 
     TaskGroup* addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
     {
-        std::string task_name = pipeline_name_ + "." + task->getName();
+        std::string task_name = pipeline_name_ + "." + task->getDescription();
         if (!description.empty())
         {
             task_name += " (" + description + ")";
@@ -139,7 +139,7 @@ public:
     }
 
 private:
-    std::string getName_() const override
+    std::string getDescription_() const override
     {
         std::string name = "TaskGroup for pipeline '" + pipeline_name_ + "'";
         if (!description_.empty())
