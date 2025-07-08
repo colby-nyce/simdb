@@ -201,27 +201,26 @@ int main(int argc, char** argv)
 {
     DB_INIT;
 
-    simdb::AppManager app_mgr;
+    simdb::DatabaseManager db_mgr("test.db");
+    simdb::AppManager app_mgr(&db_mgr);
     app_mgr.enableApp(PipelineElementApp::NAME);
 
-    simdb::DatabaseManager db_mgr("test.db");
-
     // Setup...
-    app_mgr.createEnabledApps(&db_mgr);
-    app_mgr.createSchemas(&db_mgr);
-    app_mgr.postInit(&db_mgr, argc, argv);
+    app_mgr.createEnabledApps();
+    app_mgr.createSchemas();
+    app_mgr.postInit(argc, argv);
     app_mgr.openPipelines();
 
     // Simulate...
-    auto app = app_mgr.getApp<PipelineElementApp>(&db_mgr);
+    auto app = app_mgr.getApp<PipelineElementApp>();
     for (size_t i = 1; i <= 10000; ++i)
     {
         app->process(rand() % 256);
     }
 
     // Finish...
-    app_mgr.postSim(&db_mgr);
-    app_mgr.teardown(&db_mgr);
+    app_mgr.postSim();
+    app_mgr.teardown();
     app_mgr.destroy();
 
     // This MUST be put at the end of unit test files' main() function.

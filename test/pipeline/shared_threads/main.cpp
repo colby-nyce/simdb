@@ -341,25 +341,24 @@ int main(int argc, char** argv)
 {
     DB_INIT;
 
-    simdb::AppManager app_mgr;
+    simdb::DatabaseManager db_mgr("test.db");
+    simdb::AppManager app_mgr(&db_mgr);
     app_mgr.enableApp(App1::NAME);
     app_mgr.enableApp(App2::NAME);
     app_mgr.enableApp(App3::NAME);
     app_mgr.enableApp(App4::NAME);
 
-    simdb::DatabaseManager db_mgr("test.db");
-
     // Setup...
-    app_mgr.createEnabledApps(&db_mgr);
-    app_mgr.createSchemas(&db_mgr);
-    app_mgr.postInit(&db_mgr, argc, argv);
+    app_mgr.createEnabledApps();
+    app_mgr.createSchemas();
+    app_mgr.postInit(argc, argv);
     app_mgr.openPipelines();
 
     // Simulate...
-    auto app1 = app_mgr.getApp<App1>(&db_mgr);
-    auto app2 = app_mgr.getApp<App2>(&db_mgr);
-    auto app3 = app_mgr.getApp<App3>(&db_mgr);
-    auto app4 = app_mgr.getApp<App4>(&db_mgr);
+    auto app1 = app_mgr.getApp<App1>();
+    auto app2 = app_mgr.getApp<App2>();
+    auto app3 = app_mgr.getApp<App3>();
+    auto app4 = app_mgr.getApp<App4>();
     for (size_t i = 1; i <= 10000; ++i)
     {
         const uint64_t rndval = rand() % 100;
@@ -370,8 +369,8 @@ int main(int argc, char** argv)
     }
 
     // Finish...
-    app_mgr.postSim(&db_mgr);
-    app_mgr.teardown(&db_mgr);
+    app_mgr.postSim();
+    app_mgr.teardown();
     app_mgr.destroy();
 
     // This MUST be put at the end of unit test files' main() function.
