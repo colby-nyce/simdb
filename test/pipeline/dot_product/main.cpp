@@ -181,19 +181,18 @@ int main(int argc, char** argv)
 {
     DB_INIT;
 
-    simdb::AppManager app_mgr;
+    simdb::DatabaseManager db_mgr("test.db");
+    simdb::AppManager app_mgr(&db_mgr);
     app_mgr.enableApp(DotProductApp::NAME);
 
-    simdb::DatabaseManager db_mgr("test.db");
-
     // Setup...
-    app_mgr.createEnabledApps(&db_mgr);
-    app_mgr.createSchemas(&db_mgr);
-    app_mgr.postInit(&db_mgr, argc, argv);
+    app_mgr.createEnabledApps();
+    app_mgr.createSchemas();
+    app_mgr.postInit(argc, argv);
     app_mgr.openPipelines();
 
     // Simulate...
-    auto app = app_mgr.getApp<DotProductApp>(&db_mgr);
+    auto app = app_mgr.getApp<DotProductApp>();
     constexpr size_t STEPS = 10000;
     std::vector<std::vector<double>> sent;
     for (size_t i = 1; i <= STEPS; ++i)
@@ -205,8 +204,8 @@ int main(int argc, char** argv)
     }
 
     // Finish...
-    app_mgr.postSim(&db_mgr);
-    app_mgr.teardown(&db_mgr);
+    app_mgr.postSim();
+    app_mgr.teardown();
     app_mgr.destroy();
 
     // Validate...
