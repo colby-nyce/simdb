@@ -39,7 +39,7 @@ public:
 
         InputType in;
         bool ran = false;
-        while (this->input_queue_.get().try_pop(in))
+        while (this->input_queue_->get().try_pop(in))
         {
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)

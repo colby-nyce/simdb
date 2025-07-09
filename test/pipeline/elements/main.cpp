@@ -41,7 +41,7 @@ public:
     {
         InputType in;
         bool ran = false;
-        while (this->input_queue_.get().try_pop(in))
+        while (this->input_queue_->get().try_pop(in))
         {
             if (circ_buf_.full())
             {

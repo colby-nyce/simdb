@@ -23,7 +23,7 @@ public:
     {
         FunctionIn in;
         bool ran = false;
-        while (this->input_queue_.get().try_pop(in))
+        while (this->input_queue_->get().try_pop(in))
         {
             func_(std::move(in), this->output_queue_->get());
             ran = true;
@@ -52,7 +52,7 @@ public:
     {
         FunctionIn in;
         bool ran = false;
-        while (this->input_queue_.get().try_pop(in))
+        while (this->input_queue_->get().try_pop(in))
         {
             func_(std::move(in));
             ran = true;
