@@ -35,8 +35,7 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Thread 1
-
+        // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
             {
@@ -44,19 +43,24 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("PreDB_Thread1")
-            ->addTask(std::move(doubler_task));
-
-        // Thread 2
-
+        // Thread 2 task
         auto tripler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, void>>(
             [this](uint64_t&& in) { final_pipeline_values_.push_back(in); }
         );
 
+        // Connect tasks -------------------------------------------------------------------
+        *doubler_task >> *tripler_task;
+
+        // Get the pipeline input (head) ---------------------------------------------------
+        pipeline_head_ = doubler_task->getTypedInputQueue<uint64_t>();
+
+        // Assign threads (task groups) ----------------------------------------------------
+        pipeline->createTaskGroup("PreDB_Thread1")
+            ->addTask(std::move(doubler_task));
+
         pipeline->createTaskGroup("PreDB_Thread2")
             ->addTask(std::move(tripler_task));
 
-        pipeline_head_ = pipeline->getPipelineInput<uint64_t>();
         return pipeline;
     }
 
@@ -94,8 +98,7 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Thread 1:
-
+        // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
             {
@@ -103,11 +106,7 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("PreDB_Thread1")
-            ->addTask(std::move(doubler_task));
-
-        // Thread 2:
-
+        // Thread 2 task
         auto tripler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
             {
@@ -115,11 +114,7 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("PreDB_Thread2")
-            ->addTask(std::move(tripler_task));
-
-        // Thread 3:
-
+        // Thread 3 task
         auto halver_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
             {
@@ -127,11 +122,7 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("PreDB_Thread3")
-            ->addTask(std::move(halver_task));
-
-        // Thread 4 (database thread)
-
+        // Thread 4 task (database thread)
         auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<uint64_t, int>>(
             [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::DatabaseManager* db_mgr)
             {
@@ -144,11 +135,7 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("Database_Thread")
-            ->addTask(std::move(db_task));
-
-        // Thread 5
-
+        // Thread 5 task
         auto stdout_task = simdb::pipeline::createTask<simdb::pipeline::Function<int, void>>(
             [](int&& id)
             {
@@ -156,10 +143,31 @@ public:
             }
         );
 
+        // Connect tasks -------------------------------------------------------------------
+
+        *doubler_task >> *tripler_task >> *halver_task >> *db_task >> *stdout_task;
+
+        // Get the pipeline input (head) ---------------------------------------------------
+
+        pipeline_head_ = doubler_task->getTypedInputQueue<uint64_t>();
+
+        // Assign threads (task groups) ----------------------------------------------------
+
+        pipeline->createTaskGroup("PreDB_Thread1")
+            ->addTask(std::move(doubler_task));
+
+        pipeline->createTaskGroup("PreDB_Thread2")
+            ->addTask(std::move(tripler_task));
+
+        pipeline->createTaskGroup("PreDB_Thread3")
+            ->addTask(std::move(halver_task));
+
+        pipeline->createTaskGroup("Database_Thread")
+            ->addTask(std::move(db_task));
+
         pipeline->createTaskGroup("PostDB_Thread1")
             ->addTask(std::move(stdout_task));
 
-        pipeline_head_ = pipeline->getPipelineInput<uint64_t>();
         return pipeline;
     }
 
@@ -196,7 +204,7 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Thread 1 (database thread)
+        // Thread 1 tasks (database thread)
 
         using PreBufferIn = uint64_t;
         using PreBufferOut = std::vector<PreBufferIn>;
@@ -231,12 +239,7 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("Database_Thread")
-            ->addTask(std::move(buffer_task))
-            ->addTask(std::move(zlib_task))
-            ->addTask(std::move(db_task));
-
-        // Thread 2
+        // Thread 2 task
 
         using TallyIn = DatabaseOut;
         using TallyOut = std::pair<size_t, size_t>; // Total records created, avg # bytes
@@ -252,10 +255,7 @@ public:
             }
         );
 
-        pipeline->createTaskGroup("PostDB_Thread1")
-            ->addTask(std::move(running_tally_task));
-
-        // Thread 3
+        // Thread 3 task
 
         using ReportIn = TallyOut;
         using ReportOut = void;
@@ -267,10 +267,27 @@ public:
             }
         );
 
+        // Connect tasks -------------------------------------------------------------------
+
+        *buffer_task >> *zlib_task >> *db_task >> *running_tally_task >> *report_task;
+
+        // Get the pipeline input (head) ---------------------------------------------------
+
+        pipeline_head_ = buffer_task->getTypedInputQueue<uint64_t>();
+
+        // Assign threads (task groups) ----------------------------------------------------
+
+        pipeline->createTaskGroup("Database_Thread")
+            ->addTask(std::move(buffer_task))
+            ->addTask(std::move(zlib_task))
+            ->addTask(std::move(db_task));
+
+        pipeline->createTaskGroup("PostDB_Thread1")
+            ->addTask(std::move(running_tally_task));
+
         pipeline->createTaskGroup("PostDB_Thread2")
             ->addTask(std::move(report_task));
 
-        pipeline_head_ = pipeline->getPipelineInput<uint64_t>();
         return pipeline;
     }
 
@@ -302,8 +319,7 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Thread 1
-
+        // Thread 1 task
         auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<std::string, void>>(
             [this](std::string&& in, simdb::DatabaseManager*) mutable
             {
@@ -312,10 +328,13 @@ public:
             }
         );
 
+        // Get the pipeline input (head) ---------------------------------------------------
+        pipeline_head_ = db_task->getTypedInputQueue<std::string>();
+
+        // Assign threads (task groups) ----------------------------------------------------
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(db_task));
 
-        pipeline_head_ = pipeline->getPipelineInput<std::string>();
         return pipeline;
     }
 

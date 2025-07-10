@@ -10,8 +10,6 @@
 
 namespace simdb::pipeline {
 
-class QueueBase;
-
 /// Base class for all pipeline tasks.
 class TaskBase : public Runnable
 {
@@ -21,6 +19,32 @@ public:
     virtual void setOutputQueue(QueueBase* q) = 0;
     virtual bool requiresDatabase() const = 0;
     virtual void setDatabaseManager(DatabaseManager*) = 0;
+
+    template <typename Input>
+    ConcurrentQueue<Input>* getTypedInputQueue(bool expect_valid = true)
+    {
+        if (!getInputQueue() && expect_valid)
+        {
+            throw DBException("No input queue");
+        }
+
+        if (auto q = dynamic_cast<Queue<Input>*>(getInputQueue()))
+        {
+            return &q->get();
+        }
+        else if (expect_valid)
+        {
+            throw DBException("Invalid data type");
+        }
+
+        return nullptr;
+    }
+
+    TaskBase& operator>>(TaskBase& next)
+    {
+        setOutputQueue(next.getInputQueue());
+        return next;
+    }
 };
 
 /// Base class for all terminal non-database tasks.

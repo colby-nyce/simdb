@@ -20,6 +20,8 @@ public:
     using DbFunc = std::function<void(DatabaseIn&&, ConcurrentQueue<DatabaseOut>&, DatabaseManager*)>;
     Task(DbFunc func) : func_(func) {}
 
+    using TaskBase::getTypedInputQueue;
+
     bool run() override
     {
         DatabaseIn in;

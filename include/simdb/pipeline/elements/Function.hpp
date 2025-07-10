@@ -17,6 +17,8 @@ public:
     using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
     Task(Func func) : func_(func) {}
 
+    using TaskBase::getTypedInputQueue;
+
     bool run() override
     {
         FunctionIn in;

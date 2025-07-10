@@ -13,17 +13,16 @@ class Runnable
 public:
     virtual ~Runnable() = default;
 
-    /// Get this runnable's description. Used for reporting purposes,
-    /// e.g. the pipeline self-profile report.
+    /// Get this runnable's description.
     std::string getDescription() const
     {
-        return !name_.empty() ? name_ : getDescription_();
+        return !description_.empty() ? description_ : getDescription_();
     }
 
-    /// Set/overwrite the name of this runnable. See getDescription().
-    void setName(const std::string& name)
+    /// Set/overwrite the this runnable's description.
+    void setDescription(const std::string& desc)
     {
-        name_ = name;
+        description_ = desc;
     }
 
     /// Flush and process everything. Return true if the runnable
@@ -38,7 +37,7 @@ public:
 
 private:
     virtual std::string getDescription_() const = 0;
-    std::string name_;
+    std::string description_;
 };
 
 } // namespace simdb::pipeline

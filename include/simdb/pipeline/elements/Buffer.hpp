@@ -28,6 +28,8 @@ public:
         buffer_.reserve(buffer_len);
     }
 
+    using TaskBase::getTypedInputQueue;
+
     bool run() override
     {
         if (!this->output_queue_)

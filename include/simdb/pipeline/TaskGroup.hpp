@@ -23,35 +23,19 @@ namespace simdb::pipeline {
 class TaskGroup : public Runnable
 {
 public:
-    TaskGroup(const std::string& pipeline_name, TaskGroup* prev = nullptr, const std::string& description = "")
+    TaskGroup(const std::string& pipeline_name, const std::string& description = "")
         : pipeline_name_(pipeline_name)
-        , prev_group_(prev)
         , description_(description)
     {}
 
     TaskGroup* addTask(std::unique_ptr<TaskBase> task, const std::string& description = "")
     {
-        std::string task_name = pipeline_name_ + "." + task->getDescription();
+        std::string task_desc = pipeline_name_ + "." + task->getDescription();
         if (!description.empty())
         {
-            task_name += " (" + description + ")";
+            task_desc += " (" + description + ")";
         }
-        task->setName(task_name);
-
-        TaskBase* prev_task = nullptr;
-        if (!tasks_.empty())
-        {
-            prev_task = tasks_.back().get();
-        }
-        else if (prev_group_ && !prev_group_->tasks_.empty())
-        {
-            prev_task = prev_group_->tasks_.back().get();
-        }
-
-        if (prev_task)
-        {
-            prev_task->setOutputQueue(task->getInputQueue());
-        }
+        task->setDescription(task_desc);
 
         requires_db_ |= task->requiresDatabase();
         tasks_.emplace_back(std::move(task));
@@ -68,24 +52,6 @@ public:
         return tasks;
     }
 
-    QueueBase* getInputQueue()
-    {
-        if (tasks_.empty())
-        {
-            return nullptr;
-        }
-        return tasks_[0]->getInputQueue();
-    }
-
-    void setOutputQueue(QueueBase* queue)
-    {
-        if (tasks_.empty())
-        {
-            throw DBException("Cannot set output queue - no tasks assigned to group");
-        }
-        tasks_.back()->setOutputQueue(queue);
-    }
-
     bool requiresDatabase() const
     {
         return requires_db_;
@@ -93,6 +59,8 @@ public:
 
     void setDatabaseManager(DatabaseManager* db_mgr)
     {
+        assert(requiresDatabase());
+
         for (auto& task : tasks_)
         {
             if (task->requiresDatabase())
@@ -100,23 +68,6 @@ public:
                 task->setDatabaseManager(db_mgr);
             }
         }
-    }
-
-    template <typename Input>
-    ConcurrentQueue<Input>* getPipelineInput()
-    {
-        if (tasks_.empty())
-        {
-            return nullptr;
-        }
-
-        auto task = tasks_[0].get();
-        auto queue = task->getInputQueue();
-        if (auto q = dynamic_cast<Queue<Input>*>(queue))
-        {
-            return &q->get();
-        }
-        return nullptr;
     }
 
     void print(std::ostream& os, int indent = 0) const override
@@ -150,7 +101,6 @@ private:
     }
 
     std::string pipeline_name_;
-    TaskGroup* prev_group_ = nullptr;
     std::string description_;
     std::vector<std::unique_ptr<TaskBase>> tasks_;
     bool requires_db_ = false;
