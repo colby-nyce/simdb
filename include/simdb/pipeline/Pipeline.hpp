@@ -31,8 +31,7 @@ public:
 
     TaskGroup* createTaskGroup(const std::string& description = "")
     {
-        auto prev = task_groups_.empty() ? nullptr : task_groups_.back().get();
-        auto group = std::make_unique<TaskGroup>(pipeline_name_, prev, description);
+        auto group = std::make_unique<TaskGroup>(pipeline_name_, description);
         task_groups_.emplace_back(std::move(group));
         return task_groups_.back().get();
     }
@@ -45,17 +44,6 @@ public:
             groups.push_back(group.get());
         }
         return groups;
-    }
-
-    template <typename Input>
-    ConcurrentQueue<Input>* getPipelineInput()
-    {
-        if (task_groups_.empty())
-        {
-            return nullptr;
-        }
-
-        return task_groups_[0]->getPipelineInput<Input>();
     }
 
     bool requiresDatabase() const

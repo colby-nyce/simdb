@@ -152,6 +152,16 @@ public:
             }
         );
 
+        // Connect tasks ---------------------------------------------------------------------------
+
+        *itoa_task >> *buffer_task >> *hashval_task >> *circbuf_task >> *sqlite_task;
+
+        // Get the pipeline input (head) -----------------------------------------------------------
+
+        pipeline_head_ = itoa_task->getTypedInputQueue<size_t>();
+
+        // Assign threads (task groups) ------------------------------------------------------------
+
         // Thread 1 tasks
         pipeline->createTaskGroup("PreProcess")
             ->addTask(std::move(itoa_task))
@@ -166,12 +176,6 @@ public:
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(sqlite_task));
 
-        // Finalize
-        pipeline_head_ = pipeline->getPipelineInput<size_t>();
-        if (!pipeline_head_)
-        {
-            throw simdb::DBException("Pipeline failed to build");
-        }
         return pipeline;
     }
 

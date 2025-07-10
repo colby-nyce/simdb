@@ -120,16 +120,23 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Thread 1
+        // Create all tasks -------------------------------------------------------------
+
         auto dot_prod_task1 = simdb::pipeline::createTask<simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
         auto dot_prod_task2 = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProdInputs, double>>(SendDotProduct);
         auto dot_prod_task3 = simdb::pipeline::createTask<simdb::pipeline::Buffer<double>>(DOT_PROD_BUFLEN);
-
-        // Thread 2
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProductValues, CompressedBytes>>(CompressBytes);
-
-        // Thread 3
         auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes, void>>(WriteCompressedBytes);
+
+        // Connect tasks ----------------------------------------------------------------
+
+        *dot_prod_task1 >> *dot_prod_task2 >> *dot_prod_task3 >> *zlib_task >> *sqlite_task;
+
+        // Get the pipeline input (head) ------------------------------------------------
+
+        pipeline_head_ = dot_prod_task1->getTypedInputQueue<DotProdInput>();
+
+        // Assign threads (task groups) -------------------------------------------------
 
         // Thread 1 tasks
         pipeline->createTaskGroup("DotProduct")
@@ -144,13 +151,6 @@ public:
         // Thread 3 tasks
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(sqlite_task));
-
-        // Finalize
-        pipeline_head_ = pipeline->getPipelineInput<DotProdInput>();
-        if (!pipeline_head_)
-        {
-            throw simdb::DBException("Pipeline failed to build");
-        }
 
         return pipeline;
     }
