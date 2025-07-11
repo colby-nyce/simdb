@@ -82,10 +82,18 @@ public:
     bool run() override
     {
         bool ran = false;
-        for (auto& task : tasks_)
+        bool task_ran = false;
+        do
         {
-            ran |= task->run();
-        }
+            task_ran = false;
+            for (auto& task : tasks_)
+            {
+                task_ran |= task->run();
+            }
+
+            ran |= task_ran;
+        } while(task_ran);
+
         return ran;
     }
 

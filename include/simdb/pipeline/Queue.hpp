@@ -14,6 +14,7 @@ class QueueBase
 public:
     virtual ~QueueBase() = default;
     virtual std::string stringifiedType() const = 0;
+    virtual size_t size() const = 0;
 };
 
 /// Wrapper around a concurrent queue which is used by
@@ -31,8 +32,19 @@ public:
         return demangle_type<T>();
     }
 
+    size_t size() const override
+    {
+        return queue_.size();
+    }
+
 private:
     ConcurrentQueue<T> queue_;
 };
+
+template <typename InputType>
+using InputQueuePtr = std::unique_ptr<Queue<InputType>>;
+
+template <typename InputType>
+inline InputQueuePtr<InputType> makeQueue() { return std::make_unique<Queue<InputType>>(); }
 
 } // namespace simdb::pipeline

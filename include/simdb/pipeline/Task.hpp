@@ -15,7 +15,6 @@ class TaskBase : public Runnable
 {
 public:
     virtual QueueBase* getInputQueue() = 0;
-    virtual QueueBase* getOutputQueue() = 0;
     virtual void setOutputQueue(QueueBase* q) = 0;
     virtual bool requiresDatabase() const = 0;
     virtual void setDatabaseManager(DatabaseManager*) = 0;
@@ -52,18 +51,17 @@ template <typename InputType>
 class TerminalNonDatabaseTask : public TaskBase
 {
 public:
+    TerminalNonDatabaseTask(InputQueuePtr<InputType> input_queue = nullptr)
+        : input_queue_(input_queue ? std::move(input_queue) : makeQueue<InputType>())
+    {}
+
     QueueBase* getInputQueue() override final
     {
-        return &this->input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return nullptr;
+        return this->input_queue_.get();
     }
 
 protected:
-    Queue<InputType> input_queue_;
+    InputQueuePtr<InputType> input_queue_;
 
 private:
     void setOutputQueue(QueueBase*) override final
@@ -80,7 +78,6 @@ private:
     {
         throw DBException("Cannot give database to a non-database task");
     }
-
 };
 
 /// Base class for all non-terminal, non-database tasks.
@@ -88,14 +85,13 @@ template <typename InputType, typename OutputType>
 class NonTerminalNonDatabaseTask : public TaskBase
 {
 public:
+    NonTerminalNonDatabaseTask(InputQueuePtr<InputType> input_queue = nullptr)
+        : input_queue_(input_queue ? std::move(input_queue) : makeQueue<InputType>())
+    {}
+
     QueueBase* getInputQueue() override final
     {
-        return &this->input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return this->output_queue_;
+        return this->input_queue_.get();
     }
 
     void setOutputQueue(QueueBase* queue) override final
@@ -111,7 +107,7 @@ public:
     }
 
 protected:
-    Queue<InputType> input_queue_;
+    InputQueuePtr<InputType> input_queue_;
     Queue<OutputType>* output_queue_ = nullptr;
 
 private:
@@ -132,14 +128,13 @@ template <typename InputType>
 class TerminalDatabaseTask : public TaskBase
 {
 public:
+    TerminalDatabaseTask(InputQueuePtr<InputType> input_queue = nullptr)
+        : input_queue_(input_queue ? std::move(input_queue) : makeQueue<InputType>())
+    {}
+
     QueueBase* getInputQueue() override final
     {
-        return &this->input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return nullptr;
+        return this->input_queue_.get();
     }
 
 protected:
@@ -148,7 +143,7 @@ protected:
         return db_mgr_;
     }
 
-    Queue<InputType> input_queue_;
+    InputQueuePtr<InputType> input_queue_;
 
 private:
     void setOutputQueue(QueueBase*) override final
@@ -174,14 +169,13 @@ template <typename InputType, typename OutputType>
 class NonTerminalDatabaseTask : public TaskBase
 {
 public:
+    NonTerminalDatabaseTask(InputQueuePtr<InputType> input_queue = nullptr)
+        : input_queue_(input_queue ? std::move(input_queue) : makeQueue<InputType>())
+    {}
+
     QueueBase* getInputQueue() override final
     {
-        return &this->input_queue_;
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return this->output_queue_;
+        return this->input_queue_.get();
     }
 
     void setOutputQueue(QueueBase* queue) override final
@@ -202,7 +196,7 @@ protected:
         return db_mgr_;
     }
 
-    Queue<InputType> input_queue_;
+    InputQueuePtr<InputType> input_queue_;
     Queue<OutputType>* output_queue_ = nullptr;
 
 private:

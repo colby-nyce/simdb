@@ -55,9 +55,11 @@ public:
         pipeline_head_ = doubler_task->getTypedInputQueue<uint64_t>();
 
         // Assign threads (task groups) ----------------------------------------------------
+        // Thread 1:
         pipeline->createTaskGroup("PreDB_Thread1")
             ->addTask(std::move(doubler_task));
 
+        // Thread 2:
         pipeline->createTaskGroup("PreDB_Thread2")
             ->addTask(std::move(tripler_task));
 
@@ -144,27 +146,29 @@ public:
         );
 
         // Connect tasks -------------------------------------------------------------------
-
         *doubler_task >> *tripler_task >> *halver_task >> *db_task >> *stdout_task;
 
         // Get the pipeline input (head) ---------------------------------------------------
-
         pipeline_head_ = doubler_task->getTypedInputQueue<uint64_t>();
 
         // Assign threads (task groups) ----------------------------------------------------
-
+        // Thread 1
         pipeline->createTaskGroup("PreDB_Thread1")
             ->addTask(std::move(doubler_task));
 
+        // Thread 2
         pipeline->createTaskGroup("PreDB_Thread2")
             ->addTask(std::move(tripler_task));
 
+        // Thread 3
         pipeline->createTaskGroup("PreDB_Thread3")
             ->addTask(std::move(halver_task));
 
+        // Thread 4
         pipeline->createTaskGroup("Database_Thread")
             ->addTask(std::move(db_task));
 
+        // Thread 5
         pipeline->createTaskGroup("PostDB_Thread1")
             ->addTask(std::move(stdout_task));
 
@@ -268,23 +272,23 @@ public:
         );
 
         // Connect tasks -------------------------------------------------------------------
-
         *buffer_task >> *zlib_task >> *db_task >> *running_tally_task >> *report_task;
 
         // Get the pipeline input (head) ---------------------------------------------------
-
         pipeline_head_ = buffer_task->getTypedInputQueue<uint64_t>();
 
         // Assign threads (task groups) ----------------------------------------------------
-
+        // Thread 1:
         pipeline->createTaskGroup("Database_Thread")
             ->addTask(std::move(buffer_task))
             ->addTask(std::move(zlib_task))
             ->addTask(std::move(db_task));
 
+        // Thread 2:
         pipeline->createTaskGroup("PostDB_Thread1")
             ->addTask(std::move(running_tally_task));
 
+        // Thread 3:
         pipeline->createTaskGroup("PostDB_Thread2")
             ->addTask(std::move(report_task));
 
@@ -332,6 +336,7 @@ public:
         pipeline_head_ = db_task->getTypedInputQueue<std::string>();
 
         // Assign threads (task groups) ----------------------------------------------------
+        // Thread 1:
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(db_task));
 

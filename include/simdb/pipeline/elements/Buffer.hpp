@@ -39,13 +39,13 @@ public:
 
         InputType in;
         bool ran = false;
-        while (this->input_queue_.get().try_pop(in))
+        if (this->input_queue_->get().try_pop(in))
         {
+            ran = true;
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)
             {
                 this->output_queue_->get().emplace(std::move(buffer_));
-                ran = true;
             }
         }
 

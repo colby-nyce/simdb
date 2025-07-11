@@ -186,4 +186,21 @@ template <typename T, size_t N> struct is_contiguous<std::array<T,N>> : std::tru
 {
 };
 
+// TypeAt<N, Ts...> gets the N-th type in the parameter pack Ts...
+template <std::size_t N, typename... Ts>
+struct TypeAt;
+
+template <typename T, typename... Ts>
+struct TypeAt<0, T, Ts...>
+{
+    using type = T;
+};
+
+template <std::size_t N, typename T, typename... Ts>
+struct TypeAt<N, T, Ts...>
+{
+    static_assert(N < sizeof...(Ts) + 1, "Index out of bounds");
+    using type = typename TypeAt<N - 1, Ts...>::type;
+};
+
 } // namespace simdb::meta_utils
