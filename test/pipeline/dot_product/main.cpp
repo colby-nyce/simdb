@@ -183,8 +183,7 @@ int main(int argc, char** argv)
 
 
     simdb::DatabaseManager db_mgr("test.db");
-    std::ostringstream msgout, errout;
-    simdb::AppManager app_mgr(&db_mgr, &msgout, &errout);
+    simdb::AppManager app_mgr(&db_mgr);
     app_mgr.enableApp(DotProductApp::NAME);
 
     // Setup...
@@ -249,8 +248,6 @@ int main(int argc, char** argv)
     {
         EXPECT_EQUAL(expected_blobs[i++], blob);
     }
-
-    EXPECT_TRUE(errout.str().empty());
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

@@ -407,6 +407,38 @@ public:
         msg_log_ << "************ Shutting down pipelines for all SimDB apps on database: "
                  << db_mgr_->getDatabaseFilePath() << " ************\n\n";
 
+        // Wait until the pipeline is finished
+        std::vector<const simdb::pipeline::QueueBase*> input_queues;
+        for (const auto& pipeline : pipelines_)
+        {
+            for (const auto group : pipeline->getTaskGroups())
+            {
+                for (const auto task : group->getTasks())
+                {
+                    input_queues.push_back(task->getInputQueue());
+                }
+            }
+        }
+
+        while (true)
+        {
+            bool all_empty = true;
+            for (const auto q : input_queues)
+            {
+                if (q->size() > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    all_empty = false;
+                    break;
+                }
+            }
+
+            if (all_empty)
+            {
+                break;
+            }
+        }
+
         for (auto& thread : threads_)
         {
             thread->close();
@@ -432,22 +464,6 @@ public:
         {
             app->teardown();
         }
-
-        for (const auto& pipeline : pipelines_)
-        {
-            for (const auto group : pipeline->getTaskGroups())
-            {
-                for (const auto task : group->getTasks())
-                {
-                    if (task->getInputQueue()->size())
-                    {
-                        err_log_ << "WARNING: Task still has data at its input queue:\n  -- ";
-                        err_log_ << task->getDescription() << "\n";
-                    }
-                }
-            }
-        }
-
         pipelines_.clear();
     }
 
