@@ -427,6 +427,22 @@ public:
         {
             app->teardown();
         }
+
+        for (const auto& pipeline : pipelines_)
+        {
+            for (const auto group : pipeline->getTaskGroups())
+            {
+                for (const auto task : group->getTasks())
+                {
+                    if (task->getInputQueue()->size())
+                    {
+                        std::cout << "WARNING: Task still has data at its input queue:\n  -- ";
+                        std::cout << task->getDescription() << "\n";
+                    }
+                }
+            }
+        }
+
         pipelines_.clear();
     }
 

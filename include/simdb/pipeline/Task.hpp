@@ -15,7 +15,6 @@ class TaskBase : public Runnable
 {
 public:
     virtual QueueBase* getInputQueue() = 0;
-    virtual QueueBase* getOutputQueue() = 0;
     virtual void setOutputQueue(QueueBase* q) = 0;
     virtual bool requiresDatabase() const = 0;
     virtual void setDatabaseManager(DatabaseManager*) = 0;
@@ -47,12 +46,6 @@ public:
     }
 };
 
-template <typename InputType>
-using InputQueuePtr = std::unique_ptr<Queue<InputType>>;
-
-template <typename InputType>
-inline InputQueuePtr<InputType> makeQueue() { return std::make_unique<Queue<InputType>>(); }
-
 /// Base class for all terminal non-database tasks.
 template <typename InputType>
 class TerminalNonDatabaseTask : public TaskBase
@@ -65,11 +58,6 @@ public:
     QueueBase* getInputQueue() override final
     {
         return this->input_queue_.get();
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return nullptr;
     }
 
 protected:
@@ -104,11 +92,6 @@ public:
     QueueBase* getInputQueue() override final
     {
         return this->input_queue_.get();
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return this->output_queue_;
     }
 
     void setOutputQueue(QueueBase* queue) override final
@@ -154,11 +137,6 @@ public:
         return this->input_queue_.get();
     }
 
-    QueueBase* getOutputQueue() override final
-    {
-        return nullptr;
-    }
-
 protected:
     DatabaseManager* getDatabaseManager_() const
     {
@@ -198,11 +176,6 @@ public:
     QueueBase* getInputQueue() override final
     {
         return this->input_queue_.get();
-    }
-
-    QueueBase* getOutputQueue() override final
-    {
-        return this->output_queue_;
     }
 
     void setOutputQueue(QueueBase* queue) override final

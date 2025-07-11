@@ -120,35 +120,35 @@ public:
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Create all tasks -------------------------------------------------------------
-
+        // Thread 1 tasks
         auto dot_prod_task1 = simdb::pipeline::createTask<simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
         auto dot_prod_task2 = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProdInputs, double>>(SendDotProduct);
         auto dot_prod_task3 = simdb::pipeline::createTask<simdb::pipeline::Buffer<double>>(DOT_PROD_BUFLEN);
+
+        // Thread 2 task
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProductValues, CompressedBytes>>(CompressBytes);
+
+        // Thread 3 task
         auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes, void>>(WriteCompressedBytes);
 
-        // Connect tasks ----------------------------------------------------------------
-
+        // Connect tasks -------------------------------------------------------------------
         *dot_prod_task1 >> *dot_prod_task2 >> *dot_prod_task3 >> *zlib_task >> *sqlite_task;
 
-        // Get the pipeline input (head) ------------------------------------------------
-
+        // Get the pipeline input (head) ---------------------------------------------------
         pipeline_head_ = dot_prod_task1->getTypedInputQueue<DotProdInput>();
 
-        // Assign threads (task groups) -------------------------------------------------
-
-        // Thread 1 tasks
+        // Assign threads (task groups) ----------------------------------------------------
+        // Thread 1:
         pipeline->createTaskGroup("DotProduct")
             ->addTask(std::move(dot_prod_task1))
             ->addTask(std::move(dot_prod_task2))
             ->addTask(std::move(dot_prod_task3));
 
-        // Thread 2 tasks
+        // Thread 2:
         pipeline->createTaskGroup("Compression")
             ->addTask(std::move(zlib_task));
 
-        // Thread 3 tasks
+        // Thread 3:
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(sqlite_task));
 

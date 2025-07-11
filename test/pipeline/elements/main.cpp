@@ -39,16 +39,21 @@ public:
 
     bool run() override
     {
+        if (!this->output_queue_)
+        {
+            throw DBException("Output queue not set!");
+        }
+
         InputType in;
         bool ran = false;
-        while (this->input_queue_->get().try_pop(in))
+        if (this->input_queue_->get().try_pop(in))
         {
             if (circ_buf_.full())
             {
                 this->output_queue_->get().emplace(std::move(circ_buf_.pop()));
-                ran = true;
             }
             circ_buf_.push(std::move(in));
+            ran = true;
         }
 
         return ran;
@@ -153,26 +158,23 @@ public:
         );
 
         // Connect tasks ---------------------------------------------------------------------------
-
         *itoa_task >> *buffer_task >> *hashval_task >> *circbuf_task >> *sqlite_task;
 
         // Get the pipeline input (head) -----------------------------------------------------------
-
         pipeline_head_ = itoa_task->getTypedInputQueue<size_t>();
 
         // Assign threads (task groups) ------------------------------------------------------------
-
-        // Thread 1 tasks
+        // Thread 1:
         pipeline->createTaskGroup("PreProcess")
             ->addTask(std::move(itoa_task))
             ->addTask(std::move(buffer_task));
 
-        // Thread 2 tasks
+        // Thread 2:
         pipeline->createTaskGroup("Hasher")
             ->addTask(std::move(hashval_task))
             ->addTask(std::move(circbuf_task));
 
-        // Thread 3 tasks
+        // Thread 3:
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(sqlite_task));
 

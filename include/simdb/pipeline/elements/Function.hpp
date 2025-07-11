@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simdb/utils/Demangle.hpp"
+#include "simdb/pipeline/Queue.hpp"
 #include <functional>
 
 namespace simdb::pipeline {
@@ -21,9 +22,14 @@ public:
 
     bool run() override
     {
+        if (!this->output_queue_)
+        {
+            throw DBException("Output queue not set!");
+        }
+
         FunctionIn in;
         bool ran = false;
-        while (this->input_queue_->get().try_pop(in))
+        if (this->input_queue_->get().try_pop(in))
         {
             func_(std::move(in), this->output_queue_->get());
             ran = true;
@@ -46,13 +52,16 @@ class Task<Function<FunctionIn, void>> : public TerminalNonDatabaseTask<Function
 {
 public:
     using Func = std::function<void(FunctionIn&&)>;
-    Task(Func func) : func_(func) {}
+    Task(Func func, InputQueuePtr<FunctionIn> input_queue = nullptr)
+        : TerminalNonDatabaseTask<FunctionIn>(std::move(input_queue))
+        , func_(func)
+    {}
 
     bool run() override
     {
         FunctionIn in;
         bool ran = false;
-        while (this->input_queue_->get().try_pop(in))
+        if (this->input_queue_->get().try_pop(in))
         {
             func_(std::move(in));
             ran = true;
