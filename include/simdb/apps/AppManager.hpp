@@ -9,6 +9,7 @@
 
 #include <map>
 #include <set>
+#include <iostream>
 
 namespace simdb
 {
@@ -36,8 +37,10 @@ public:
     }
 
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr)
+    AppManager(DatabaseManager* db_mgr, std::ostream* msg_log = &std::cout, std::ostream* err_log = &std::cerr)
         : db_mgr_(db_mgr)
+        , msg_log_(msg_log)
+        , err_log_(err_log)
     {}
 
     /// After parsing command line arguments or configuration files,
@@ -381,16 +384,18 @@ public:
         }
 
         // Print final thread/task configuration.
-        std::cout << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
+
+
+        msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
         for (auto& pipeline : pipelines_)
         {
-            std::cout << "---- Pipeline (app): " << pipeline->getName() << "\n";
+            msg_log_ << "---- Pipeline (app): " << pipeline->getName() << "\n";
             for (auto group : pipeline->getTaskGroups())
             {
-                std::cout << "------ TaskGroup (thread): " << group->getDescription() << "\n";
+                msg_log_ << "------ TaskGroup (thread): " << group->getDescription() << "\n";
                 for (auto task : group->getTasks())
                 {
-                    std::cout << "-------- Task: " << task->getDescription() << "\n";
+                    msg_log_ << "-------- Task: " << task->getDescription() << "\n";
                 }
             }
         }
@@ -399,8 +404,8 @@ public:
     /// Call this after the simulation loop ends for post-processing tasks.
     void postSim()
     {
-        std::cout << "************ Shutting down pipelines for all SimDB apps on database: "
-                  << db_mgr_->getDatabaseFilePath() << " ************\n\n";
+        msg_log_ << "************ Shutting down pipelines for all SimDB apps on database: "
+                 << db_mgr_->getDatabaseFilePath() << " ************\n\n";
 
         for (auto& thread : threads_)
         {
@@ -436,8 +441,8 @@ public:
                 {
                     if (task->getInputQueue()->size())
                     {
-                        std::cout << "WARNING: Task still has data at its input queue:\n  -- ";
-                        std::cout << task->getDescription() << "\n";
+                        err_log_ << "WARNING: Task still has data at its input queue:\n  -- ";
+                        err_log_ << task->getDescription() << "\n";
                     }
                 }
             }
@@ -485,6 +490,40 @@ private:
 
     /// Associated database.
     DatabaseManager* db_mgr_ = nullptr;
+
+    /// Simple wrapper around std::ostream* for conditional logging
+    class Logger
+    {
+    public:
+        Logger(std::ostream* out) : out_(out) {}
+
+        template <typename T>
+        Logger& operator<<(const T& msg)
+        {
+            if (out_)
+            {
+                *out_ << msg;
+                out_->flush();
+            }
+            return *this;
+        }
+
+        Logger& operator<<(const char* msg)
+        {
+            if (out_)
+            {
+                *out_ << msg;
+                out_->flush();
+            }
+            return *this;
+        }
+
+    private:
+        std::ostream* out_ = nullptr;
+    };
+
+    Logger msg_log_;
+    Logger err_log_;
 };
 
 } // namespace simdb

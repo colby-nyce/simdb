@@ -366,7 +366,8 @@ int main(int argc, char** argv)
     DB_INIT;
 
     simdb::DatabaseManager db_mgr("test.db");
-    simdb::AppManager app_mgr(&db_mgr);
+    std::ostringstream msgout, errout;
+    simdb::AppManager app_mgr(&db_mgr, &msgout, &errout);
     app_mgr.enableApp(App1::NAME);
     app_mgr.enableApp(App2::NAME);
     app_mgr.enableApp(App3::NAME);
@@ -396,6 +397,8 @@ int main(int argc, char** argv)
     app_mgr.postSim();
     app_mgr.teardown();
     app_mgr.destroy();
+
+    EXPECT_TRUE(errout.str().empty());
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;
