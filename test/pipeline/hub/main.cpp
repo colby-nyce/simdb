@@ -157,22 +157,6 @@ public:
     }
 };
 
-using InstEvents = std::vector<InstEvent>;
-
-struct InstEventsRange
-{
-    InstEvents events;
-    InstEventUID start_uid;
-    InstEventUID end_uid;
-};
-
-struct CompressedInstEventsRange
-{
-    std::vector<char> all_event_bytes;
-    InstEventUID start_uid;
-    InstEventUID end_uid;
-};
-
 class MultiStageCache : public simdb::App
 {
 public:
@@ -207,8 +191,8 @@ public:
             cached_evts_.emplace_back(std::move(evt));
         }
 
-        // This method is called on the same thread as addToCache() in order to
-        // reduce thread contention (fighting over mutex_).
+        // This method's data queue is fed by the database pipeline task, and consumed
+        // on the same thread as addToCache() to reduce contention over mutex_.
         void evictFromCache(const InstructionEventUIDRange& uid_range)
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -282,6 +266,15 @@ public:
         auto buffer_task = simdb::pipeline::createTask<simdb::pipeline::Buffer<InstEvent>>(100);
 
         // This task takes buffered events and preps them for efficient DB insertion
+        using InstEvents = std::vector<InstEvent>;
+
+        struct InstEventsRange
+        {
+            InstEvents events;
+            InstEventUID start_uid;
+            InstEventUID end_uid;
+        };
+
         auto range_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEvents, InstEventsRange>>(
             [](InstEvents&& evts, simdb::ConcurrentQueue<InstEventsRange>& out)
             {
@@ -304,6 +297,13 @@ public:
         );
 
         // This task takes a range of events and performs zlib compression on them
+        struct CompressedInstEventsRange
+        {
+            std::vector<char> all_event_bytes;
+            InstEventUID start_uid;
+            InstEventUID end_uid;
+        };
+
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEventsRange, CompressedInstEventsRange>>(
             [](InstEventsRange&& evts, simdb::ConcurrentQueue<CompressedInstEventsRange>& out)
             {
