@@ -148,12 +148,12 @@ public:
 
         // Task 5: take the hashval size_t emitted from the circular buffer and write to the database
         auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<size_t, void>>(
-            [](size_t&& in, simdb::DatabaseManager* db_mgr)
+            SQL_TABLE("Pipeout"),
+            SQL_COLUMNS("HashVal"),
+            [](size_t&& in, simdb::PreparedINSERT* inserter)
             {
-                db_mgr->INSERT(
-                    SQL_TABLE("Pipeout"),
-                    SQL_COLUMNS("HashVal"),
-                    SQL_VALUES(in));
+                inserter->setColumnValue(0, in);
+                inserter->createRecord();
             }
         );
 
