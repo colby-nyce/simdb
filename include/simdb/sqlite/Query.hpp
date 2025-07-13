@@ -413,6 +413,21 @@ public:
         throw DBException(sqlite3_errmsg(db_conn_));
     }
 
+    /// DELETE all records that match the query's current WHERE constraints.
+    void deleteResultSet()
+    {
+        std::ostringstream oss;
+        oss << "DELETE FROM " << table_name_ << " ";
+        appendConstraintClauses_(oss);
+
+        const auto cmd = oss.str();
+        auto stmt = SQLitePreparedStatement(db_conn_, cmd);
+        if (SQLiteReturnCode(sqlite3_step(stmt) != SQLITE_DONE))
+        {
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+    }
+
     /// Execute the query.
     SqlResultIterator getResultSet()
     {
