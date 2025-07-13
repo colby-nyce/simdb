@@ -126,14 +126,13 @@ public:
 
         // Thread 4 task (database thread)
         auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<uint64_t, int>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::DatabaseManager* db_mgr)
+            SQL_TABLE("App2Data"),
+            SQL_COLUMNS("IntVal"),
+            [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::PreparedINSERT* inserter)
             {
-                auto record = db_mgr->INSERT(
-                    SQL_TABLE("App2Data"),
-                    SQL_COLUMNS("IntVal"),
-                    SQL_VALUES(in));
-
-                out.push(record->getId());
+                inserter->setColumnValue(0, in);
+                auto record_id = inserter->createRecord();
+                out.push(record_id);
             }
         );
 
@@ -231,14 +230,13 @@ public:
         using DatabaseOut = std::pair<int, size_t>; // Database record ID, # compressed bytes
 
         auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<DatabaseIn, DatabaseOut>>(
-            [](DatabaseIn&& in, simdb::ConcurrentQueue<DatabaseOut>& out, simdb::DatabaseManager* db_mgr)
+            SQL_TABLE("App3Data"),
+            SQL_COLUMNS("DataBlob"),
+            [](DatabaseIn&& in, simdb::ConcurrentQueue<DatabaseOut>& out, simdb::PreparedINSERT* inserter)
             {
-                auto record = db_mgr->INSERT(
-                    SQL_TABLE("App3Data"),
-                    SQL_COLUMNS("DataBlob"),
-                    SQL_VALUES(in));
-
-                DatabaseOut o = std::make_pair(record->getId(), in.size());
+                inserter->setColumnValue(0, in);
+                auto record_id = inserter->createRecord();
+                DatabaseOut o = std::make_pair(record_id, in.size());
                 out.emplace(std::move(o));
             }
         );
@@ -325,8 +323,13 @@ public:
 
         // Thread 1 task
         auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<std::string, void>>(
-            [this](std::string&& in, simdb::DatabaseManager*) mutable
+            SQL_TABLE("TinyStringIDs"),
+            SQL_COLUMNS("StringValue", "StringID"),
+            [this](std::string&& in, simdb::PreparedINSERT* inserter) mutable
             {
+                // TODO cnyce: use prepared inserter for TinyStrings
+                (void)inserter;
+
                 tiny_strings_.insert(in);
                 tiny_strings_.serialize();
             }

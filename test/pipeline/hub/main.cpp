@@ -325,12 +325,14 @@ public:
 
         // This task writes compressed events to disk and sends out eviction notices
         auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedInstEventsRange, InstructionEventUIDRange>>(
-            [cache = cache_](CompressedInstEventsRange&& evts, simdb::ConcurrentQueue<InstructionEventUIDRange>& out, simdb::DatabaseManager* db_mgr)
+            SQL_TABLE("CompressedEvents"),
+            SQL_COLUMNS("StartUID", "EndUID", "CompressedEvtBytes"),
+            [cache = cache_](CompressedInstEventsRange&& evts, simdb::ConcurrentQueue<InstructionEventUIDRange>& out, simdb::PreparedINSERT* inserter)
             {
-                db_mgr->INSERT(
-                    SQL_TABLE("CompressedEvents"),
-                    SQL_COLUMNS("StartUID", "EndUID", "CompressedEvtBytes"),
-                    SQL_VALUES(evts.start_uid, evts.end_uid, evts.all_event_bytes));
+                inserter->setColumnValue(0, evts.start_uid);
+                inserter->setColumnValue(1, evts.end_uid);
+                inserter->setColumnValue(2, evts.all_event_bytes);
+                inserter->createRecord();
 
                 InstructionEventUIDRange uid_range = std::make_pair(evts.start_uid, evts.end_uid);
                 out.emplace(std::move(uid_range));
