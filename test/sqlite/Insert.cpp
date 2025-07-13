@@ -18,9 +18,10 @@ int main()
     EXPECT_TRUE(db_mgr.appendSchema(schema));
 
     // Verify INSERT for integer types
-    auto record1 = db_mgr.INSERT(SQL_TABLE("IntegerTypes"),
-                                 SQL_COLUMNS("SomeInt32", "SomeInt64"),
-                                 SQL_VALUES(TEST_INT32, TEST_INT64));
+    auto record1 = db_mgr.INSERT(
+        SQL_TABLE("IntegerTypes"),
+        SQL_COLUMNS("SomeInt32", "SomeInt64"),
+        SQL_VALUES(TEST_INT32, TEST_INT64));
 
     EXPECT_EQUAL(record1->getPropertyInt32("SomeInt32"), TEST_INT32);
     EXPECT_EQUAL(record1->getPropertyInt64("SomeInt64"), TEST_INT64);
@@ -32,9 +33,10 @@ int main()
     EXPECT_EQUAL(record1->getPropertyInt64("SomeInt64"), TEST_INT64 / 2);
 
     // Verify INSERT for floating-point types
-    auto record2 = db_mgr.INSERT(SQL_TABLE("FloatingPointTypes"),
-                                 SQL_COLUMNS("SomeDouble"),
-                                 SQL_VALUES(TEST_DOUBLE));
+    auto record2 = db_mgr.INSERT(
+        SQL_TABLE("FloatingPointTypes"),
+        SQL_COLUMNS("SomeDouble"),
+        SQL_VALUES(TEST_DOUBLE));
 
     EXPECT_EQUAL(record2->getPropertyDouble("SomeDouble"), TEST_DOUBLE);
 
@@ -42,9 +44,10 @@ int main()
     EXPECT_EQUAL(record2->getPropertyDouble("SomeDouble"), TEST_DOUBLE / 2);
 
     // Verify INSERT for string types
-    auto record3 = db_mgr.INSERT(SQL_TABLE("StringTypes"),
-                                 SQL_COLUMNS("SomeString"),
-                                 SQL_VALUES(TEST_STRING));
+    auto record3 = db_mgr.INSERT(
+        SQL_TABLE("StringTypes"),
+        SQL_COLUMNS("SomeString"),
+        SQL_VALUES(TEST_STRING));
 
     EXPECT_EQUAL(record3->getPropertyString("SomeString"), TEST_STRING);
 
@@ -52,18 +55,20 @@ int main()
     EXPECT_EQUAL(record3->getPropertyString("SomeString"), TEST_STRING + "2");
 
     // Verify INSERT for blob types
-    auto record4 = db_mgr.INSERT(SQL_TABLE("BlobTypes"),
-                                 SQL_COLUMNS("SomeBlob"),
-                                 SQL_VALUES(TEST_VECTOR));
+    auto record4 = db_mgr.INSERT(
+        SQL_TABLE("BlobTypes"),
+        SQL_COLUMNS("SomeBlob"),
+        SQL_VALUES(TEST_VECTOR));
 
     EXPECT_EQUAL(record4->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR);
 
     record4->setPropertyBlob("SomeBlob", TEST_VECTOR2);
     EXPECT_EQUAL(record4->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR2);
 
-    auto record5 = db_mgr.INSERT(SQL_TABLE("BlobTypes"),
-                                 SQL_COLUMNS("SomeBlob"),
-                                 SQL_VALUES(TEST_BLOB));
+    auto record5 = db_mgr.INSERT(
+        SQL_TABLE("BlobTypes"),
+        SQL_COLUMNS("SomeBlob"),
+        SQL_VALUES(TEST_BLOB));
 
     EXPECT_EQUAL(record5->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR);
 
@@ -72,9 +77,10 @@ int main()
 
     simdb::SqlBlob blob(TEST_VECTOR);
     {
-        auto record6 = db_mgr.INSERT(SQL_TABLE("BlobTypes"),
-                                     SQL_COLUMNS("SomeBlob"),
-                                     SQL_VALUES(blob));
+        auto record6 = db_mgr.INSERT(
+            SQL_TABLE("BlobTypes"),
+            SQL_COLUMNS("SomeBlob"),
+            SQL_VALUES(blob));
 
         EXPECT_EQUAL(record6->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR);
     }
@@ -82,13 +88,15 @@ int main()
     // Verify that bug is fixed: SQL_VALUES(..., <blob column>, ...)
     // would not compile when a blob (or vector) value was used in the
     // middle the SQL_VALUES (or anywhere but the last supplied value).
-    db_mgr.INSERT(SQL_TABLE("MixAndMatch"),
-                  SQL_COLUMNS("SomeBlob", "SomeString"),
-                  SQL_VALUES(TEST_VECTOR, "foo"));
+    db_mgr.INSERT(
+        SQL_TABLE("MixAndMatch"),
+        SQL_COLUMNS("SomeBlob", "SomeString"),
+        SQL_VALUES(TEST_VECTOR, "foo"));
 
-    db_mgr.INSERT(SQL_TABLE("MixAndMatch"),
-                  SQL_COLUMNS("SomeInt32", "SomeBlob", "SomeString"),
-                  SQL_VALUES(10, TEST_BLOB, "foo"));
+    db_mgr.INSERT(
+        SQL_TABLE("MixAndMatch"),
+        SQL_COLUMNS("SomeInt32", "SomeBlob", "SomeString"),
+        SQL_VALUES(10, TEST_BLOB, "foo"));
 
     // Verify setDefaultValue()
     auto record6 = db_mgr.INSERT(SQL_TABLE("DefaultValues"));
