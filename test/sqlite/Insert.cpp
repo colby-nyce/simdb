@@ -105,6 +105,45 @@ int main()
     EXPECT_EQUAL(record6->getPropertyString("DefaultString"), TEST_STRING);
     EXPECT_WITHIN_EPSILON(record6->getPropertyDouble("DefaultDouble"), TEST_DOUBLE);
 
+    // Verify the PreparedINSERT class
+    simdb::Schema schema2;
+    using dt = simdb::SqlDataType;
+
+    auto& high_volume_data_tbl = schema2.addTable("HighVolumeBlobs");
+    high_volume_data_tbl.addColumn("StartTick", dt::int64_t);
+    high_volume_data_tbl.addColumn("EndTick", dt::int64_t);
+    high_volume_data_tbl.addColumn("DataBlob", dt::blob_t);
+    db_mgr.appendSchema(schema2);
+
+    auto high_volume_insert = db_mgr.prepareINSERT(
+        SQL_TABLE("HighVolumeBlobs"),
+        SQL_COLUMNS("StartTick", "EndTick", "DataBlob"));
+
+    auto data_vec = TEST_VECTOR;
+    high_volume_insert->setColumnValue(0, 100);
+    high_volume_insert->setColumnValue(1, 500);
+    high_volume_insert->setColumnValue(2, data_vec);
+
+    auto high_volume_record_id1 = high_volume_insert->createRecord();
+
+    data_vec.front() = 123;
+    data_vec.back() = 456;
+    high_volume_insert->setColumnValue(0, 501);
+    high_volume_insert->setColumnValue(1, 1000);
+    high_volume_insert->setColumnValue(2, data_vec);
+
+    auto high_volume_record_id2 = high_volume_insert->createRecord();
+
+    auto high_volume_record1 = db_mgr.findRecord("HighVolumeBlobs", high_volume_record_id1);
+    EXPECT_EQUAL(high_volume_record1->getPropertyInt64("StartTick"), 100);
+    EXPECT_EQUAL(high_volume_record1->getPropertyInt64("EndTick"), 500);
+    EXPECT_EQUAL(high_volume_record1->getPropertyBlob<int>("DataBlob"), TEST_VECTOR);
+
+    auto high_volume_record2 = db_mgr.findRecord("HighVolumeBlobs", high_volume_record_id2);
+    EXPECT_EQUAL(high_volume_record2->getPropertyInt64("StartTick"), 501);
+    EXPECT_EQUAL(high_volume_record2->getPropertyInt64("EndTick"), 1000);
+    EXPECT_EQUAL(high_volume_record2->getPropertyBlob<int>("DataBlob"), data_vec);
+
     REPORT_ERROR;
     return ERROR_CODE;
 }

@@ -87,6 +87,10 @@ public:
             sqlite3_finalize(stmt);
             throw SafeTransactionSilentException();
         }
+        else if (!stmt)
+        {
+            throw DBException("Invalid prepared statement for cmd: ") << cmd;
+        }
 
         stmt_ = stmt;
     }
@@ -95,6 +99,14 @@ public:
         : stmt_(stmt)
     {
     }
+
+    SQLitePreparedStatement(SQLitePreparedStatement&& other)
+        : stmt_(other.stmt_)
+    {
+        other.stmt_ = nullptr;
+    }
+
+    SQLitePreparedStatement(const SQLitePreparedStatement& other) = delete;
 
     ~SQLitePreparedStatement()
     {

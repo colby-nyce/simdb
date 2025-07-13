@@ -135,6 +135,56 @@ private:
 
 using ValueContainerBasePtr = std::shared_ptr<ValueContainerBase>;
 
+template <typename T> inline
+typename std::enable_if<std::is_integral<T>::value && sizeof(T) <= sizeof(int32_t), ValueContainerBasePtr>::type
+createValueContainer(T val)
+{
+    return ValueContainerBasePtr(new Integral32ValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_integral<T>::value && sizeof(T) == sizeof(int64_t), ValueContainerBasePtr>::type
+createValueContainer(T val)
+{
+    return ValueContainerBasePtr(new Integral64ValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_floating_point<T>::value, ValueContainerBasePtr>::type createValueContainer(T val)
+{
+    return ValueContainerBasePtr(new FloatingPointValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_same<typename std::decay<T>::type, const char*>::value, ValueContainerBasePtr>::type
+createValueContainer(T val)
+{
+    return ValueContainerBasePtr(new StringValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_same<T, std::string>::value, ValueContainerBasePtr>::type createValueContainer(const T& val)
+{
+    return ValueContainerBasePtr(new StringValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_same<T, SqlBlob>::value, ValueContainerBasePtr>::type createValueContainer(const T& val)
+{
+    return ValueContainerBasePtr(new BlobValueContainer(val));
+}
+
+template <typename T> inline ValueContainerBasePtr createValueContainer(const std::vector<T>& val)
+{
+    return ValueContainerBasePtr(new VectorValueContainer<T>(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_same<T, ValueContainerBasePtr>::value, ValueContainerBasePtr>::type createValueContainer(T val)
+{
+    return val;
+}
+
 enum class ValueReaderTypes
 {
     BACKPOINTER,

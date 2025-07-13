@@ -73,6 +73,11 @@ public:
         oss << ") ";
     }
 
+    const std::list<std::string>& getColNames() const
+    {
+        return col_names_;
+    }
+
 private:
     std::list<std::string> col_names_;
 };
@@ -90,24 +95,24 @@ public:
     SqlValues(T val, Rest... rest)
         : SqlValues(std::forward<Rest>(rest)...)
     {
-        col_vals_.emplace_front(createValueContainer_<T>(val));
+        col_vals_.emplace_front(createValueContainer<T>(val));
     }
 
     template <typename T, typename... Rest>
     SqlValues(const std::vector<T>& val, Rest... rest)
         : SqlValues(std::forward<Rest>(rest)...)
     {
-        col_vals_.emplace_front(createValueContainer_(val));
+        col_vals_.emplace_front(createValueContainer(val));
     }
 
     template <typename T> SqlValues(T val)
     {
-        col_vals_.emplace_front(createValueContainer_<T>(val));
+        col_vals_.emplace_front(createValueContainer<T>(val));
     }
 
     template <typename T> SqlValues(const std::vector<T>& val)
     {
-        col_vals_.emplace_front(createValueContainer_(val));
+        col_vals_.emplace_front(createValueContainer(val));
     }
 
     void writeValsForINSERT(std::ostringstream& oss) const
@@ -139,56 +144,6 @@ public:
     }
 
 private:
-    template <typename T>
-    typename std::enable_if<std::is_integral<T>::value && sizeof(T) <= sizeof(int32_t), ValueContainerBasePtr>::type
-    createValueContainer_(T val)
-    {
-        return ValueContainerBasePtr(new Integral32ValueContainer(val));
-    }
-
-    template <typename T>
-    typename std::enable_if<std::is_integral<T>::value && sizeof(T) == sizeof(int64_t), ValueContainerBasePtr>::type
-    createValueContainer_(T val)
-    {
-        return ValueContainerBasePtr(new Integral64ValueContainer(val));
-    }
-
-    template <typename T>
-    typename std::enable_if<std::is_floating_point<T>::value, ValueContainerBasePtr>::type createValueContainer_(T val)
-    {
-        return ValueContainerBasePtr(new FloatingPointValueContainer(val));
-    }
-
-    template <typename T>
-    typename std::enable_if<std::is_same<typename std::decay<T>::type, const char*>::value, ValueContainerBasePtr>::type
-    createValueContainer_(T val)
-    {
-        return ValueContainerBasePtr(new StringValueContainer(val));
-    }
-
-    template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, ValueContainerBasePtr>::type createValueContainer_(const T& val)
-    {
-        return ValueContainerBasePtr(new StringValueContainer(val));
-    }
-
-    template <typename T>
-    typename std::enable_if<std::is_same<T, SqlBlob>::value, ValueContainerBasePtr>::type createValueContainer_(const T& val)
-    {
-        return ValueContainerBasePtr(new BlobValueContainer(val));
-    }
-
-    template <typename T> ValueContainerBasePtr createValueContainer_(const std::vector<T>& val)
-    {
-        return ValueContainerBasePtr(new VectorValueContainer<T>(val));
-    }
-
-    template <typename T>
-    typename std::enable_if<std::is_same<T, ValueContainerBasePtr>::value, ValueContainerBasePtr>::type createValueContainer_(T val)
-    {
-        return val;
-    }
-
     std::list<std::shared_ptr<ValueContainerBase>> col_vals_;
 };
 
