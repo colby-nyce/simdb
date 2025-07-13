@@ -111,26 +111,28 @@ public:
                               "column with blob data type");
         }
 
-        switch (dt_)
+        if constexpr (std::is_integral_v<T> && sizeof(T) == 64)
         {
-            case SqlDataType::int32_t:
-            case SqlDataType::int64_t:
+            if (dt_ == SqlDataType::int32_t)
             {
-                auto flag = std::integral_constant<bool, std::is_integral<T>::value>();
-                auto err = "Default value type mismatch (expected integer type)";
-                verifyDefaultValueIsCorrectType_(flag, err);
-                break;
+                throw DBException("Cannot assign 64-bit default value to 32-bit column");
             }
+        }
 
-            case SqlDataType::double_t:
+        if constexpr (std::is_integral_v<T>)
+        {
+            if (dt_ == SqlDataType::string_t)
             {
-                auto flag = std::integral_constant<bool, std::is_floating_point<T>::value>();
-                auto err = "Default value type mismatch (expected floating point type)";
-                verifyDefaultValueIsCorrectType_(flag, err);
-                break;
+                throw DBException("Cannot assign integral default value to string column");
             }
+        }
 
-            default: break;
+        if constexpr (std::is_same_v<T, const char*>)
+        {
+            if (dt_ == SqlDataType::int32_t || dt_ == SqlDataType::int64_t)
+            {
+                throw DBException("Cannot assign string default value to an integer column");
+            }
         }
 
         std::ostringstream ss;
@@ -177,21 +179,19 @@ private:
 
     /// Default values are stringified. For non-doubles, e.g. INT and TEXT types,
     /// we use default precision.
-    template <typename T> void writeDefaultValue_(std::ostringstream& oss, const T& val) const
+    template <typename T>
+    typename std::enable_if<std::is_integral_v<T> || std::is_same_v<T, std::string> || std::is_same_v<T, const char*>, void>::type
+    writeDefaultValue_(std::ostringstream& oss, const T& val) const
     {
-        static_assert(std::is_integral<T>::value || std::is_same<T, std::string>::value, "Data type mismatch!");
         oss << val;
     }
 
-    /// This method is called when the correct data type <T> was used in setDefaultValue()
-    void verifyDefaultValueIsCorrectType_(std::true_type, const std::string&)
+    /// Throw for columns that do not support default values.
+    template <typename T>
+    typename std::enable_if<!std::is_integral_v<T> && !std::is_same_v<T, std::string> && !std::is_same_v<T, const char*>, void>::type
+    writeDefaultValue_(std::ostringstream&, const T&) const
     {
-    }
-
-    /// This method is called when the wrong data type <T> was used in setDefaultValue()
-    void verifyDefaultValueIsCorrectType_(std::false_type, const std::string& err)
-    {
-        throw DBException(err);
+        throw DBException("Only INT/REAL/TEXT columns support default values");
     }
 
     /// Column name
@@ -227,6 +227,11 @@ public:
     /// Add a column to this table's schema with a name and data type.
     Table& addColumn(const std::string& name, const SqlDataType dt)
     {
+        if (hasColumn(name))
+        {
+            throw DBException("Table already has a column named ") << name;
+        }
+
         columns_.emplace_back(new Column(name, dt));
         columns_by_name_[name] = columns_.back();
         return *this;
@@ -381,6 +386,15 @@ public:
     /// Combine this schema with the tables from another schema.
     void appendSchema(const Schema& schema)
     {
+        for (const auto& table : schema.getTables())
+        {
+            if (hasTable(table.getName()))
+            {
+                throw DBException("Cannot append schema - it has a table we already have by that name ")
+                    << "(" << table.getName() << ")";
+            }
+        }
+
         for (const auto& table : schema.getTables())
         {
             tables_.push_back(table);

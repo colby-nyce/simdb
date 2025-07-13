@@ -1,1 +1,1 @@
-simdb_test(TBB)
+simdb_test(TBB main.cpp)

@@ -1,1 +1,1 @@
-simdb_test(DotProductPipeline)
+simdb_test(DotProductPipeline main.cpp)
