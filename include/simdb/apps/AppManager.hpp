@@ -384,8 +384,6 @@ public:
         }
 
         // Print final thread/task configuration.
-
-
         msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
         for (auto& pipeline : pipelines_)
         {
@@ -399,6 +397,8 @@ public:
                 }
             }
         }
+
+        msg_log_ << "\n";
     }
 
     /// Call this after the simulation loop ends for post-processing tasks.
@@ -442,6 +442,9 @@ public:
         for (auto& thread : threads_)
         {
             thread->close();
+            std::ostringstream oss;
+            thread->printPerfReport(oss);
+            msg_log_ << oss.str() << "\n\n";
         }
         threads_.clear();
 
