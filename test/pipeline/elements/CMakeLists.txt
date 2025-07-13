@@ -1,1 +1,1 @@
-simdb_test(PipelineElements)
+simdb_test(PipelineElements main.cpp)

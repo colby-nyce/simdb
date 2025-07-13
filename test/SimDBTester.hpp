@@ -547,19 +547,6 @@ private:
 #define TEST_INIT simdb::SimDBTester* simdb::SimDBTester::inst = 0
 
 /**
- * \def DB_INIT
- * \brief Clears all *.db files from previous test runs.
- *        For some collections test, also deletes any dump files.
- */
-#define DB_INIT                                                                                                                            \
-    {                                                                                                                                      \
-        auto __rc = system("rm -f *.db");                                                                                                  \
-        __rc = system("rm -f structs.*");                                                                                                  \
-        __rc = system("rm -f stats.*");                                                                                                    \
-        (void)__rc;                                                                                                                        \
-    }
-
-/**
  * \def EXPECT_REACHED()
  * \brief Add this method to be checked against whether or not it was called
  * at least once. This macro can be placed anywhere inside the function expected

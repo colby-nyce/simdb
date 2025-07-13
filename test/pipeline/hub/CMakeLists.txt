@@ -1,1 +1,1 @@
-simdb_test(PipelineHub)
+simdb_test(PipelineHub main.cpp)

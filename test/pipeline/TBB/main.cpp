@@ -11,8 +11,6 @@ TEST_INIT;
 
 int main()
 {
-    DB_INIT;
-
     tbb::flow::graph g;
 
     // Design a schema to hold compressed stats values.
@@ -23,7 +21,7 @@ int main()
     stat_blob_tbl.addColumn("Tick", dt::int64_t);
     stat_blob_tbl.addColumn("StatBlob", dt::blob_t);
 
-    simdb::DatabaseManager db_mgr("test.db");
+    simdb::DatabaseManager db_mgr("test.db", true);
     db_mgr.appendSchema(schema);
 
     // Design a pipeline that accepts std::vector<double> stats values,

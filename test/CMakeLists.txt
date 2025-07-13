@@ -5,9 +5,9 @@ add_custom_command(
     TARGET simdb_regress 
     POST_BUILD COMMAND ctest -LE --test-action test)
 
-macro(simdb_test target)
+macro(simdb_test target file)
     project(${target})
-    add_executable(${target} main.cpp)
+    add_executable(${target} ${file})
     add_test(NAME ${target}_test COMMAND $<TARGET_FILE:${target}>)
     add_dependencies(simdb_regress ${target})
     target_link_libraries(${target} simdb)

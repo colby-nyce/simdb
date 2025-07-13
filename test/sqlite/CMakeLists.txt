@@ -1,1 +1,5 @@
-simdb_test(SQLite)
+#simdb_test(TODO_Remove main.cpp)
+simdb_test(SQLiteSchema Schema.cpp)
+simdb_test(SQLiteInsert Insert.cpp)
+simdb_test(SQLiteDelete Delete.cpp)
+simdb_test(SQLiteQuery Query.cpp)

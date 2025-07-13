@@ -73,11 +73,6 @@ public:
         oss << ") ";
     }
 
-    const std::list<std::string> getColNames() const
-    {
-        return col_names_;
-    }
-
 private:
     std::list<std::string> col_names_;
 };

@@ -1,1 +1,1 @@
-simdb_test(SharedPipelineThreads)
+simdb_test(SharedPipelineThreads main.cpp)

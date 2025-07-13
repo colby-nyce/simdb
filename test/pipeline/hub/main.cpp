@@ -391,9 +391,7 @@ TEST_INIT;
 
 int main(int argc, char** argv)
 {
-    DB_INIT;
-
-    simdb::DatabaseManager db_mgr("test.db");
+    simdb::DatabaseManager db_mgr("test.db", true);
     simdb::AppManager app_mgr(&db_mgr);
     app_mgr.enableApp(MultiStageCache::NAME);
 
