@@ -3,8 +3,6 @@
 #pragma once
 
 #include "simdb/sqlite/PreparedINSERT.hpp"
-#include "simdb/pipeline/Runnable.hpp"
-#include "simdb/pipeline/Thread.hpp"
 #include "simdb/pipeline/Task.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Demangle.hpp"

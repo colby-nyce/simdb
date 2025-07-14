@@ -78,4 +78,57 @@ private:
     Func func_;
 };
 
+/// Specialization for no-input, non-terminating functions.
+template <typename FunctionOut>
+class Task<Function<void, FunctionOut>> : public TaskBase
+{
+public:
+    /// Return true if your function pushed at least one item to the queue
+    using Func = std::function<bool(ConcurrentQueue<FunctionOut>&)>;
+    Task(Func func) : func_(func) {}
+
+    bool run() override
+    {
+        return func_(this->output_queue_->get());
+    }
+
+protected:
+    Queue<FunctionOut>* output_queue_ = nullptr;
+
+private:
+    QueueBase* getInputQueue() override final
+    {
+        return nullptr;
+    }
+
+    void setOutputQueue(QueueBase* queue) override final
+    {
+        if (auto q = dynamic_cast<Queue<FunctionOut>*>(queue))
+        {
+            this->output_queue_ = q;
+        }
+        else
+        {
+            throw DBException("Invalid data type");
+        }
+    }
+
+    bool requiresDatabase() const override final
+    {
+        return false;
+    }
+
+    void setDatabaseManager(DatabaseManager*) override final
+    {
+        throw DBException("Cannot give database to a non-database task");
+    }
+
+    std::string getDescription_() const override
+    {
+        return "Function<void, " + demangle_type<FunctionOut>() + ">";
+    }
+
+    Func func_;
+};
+
 } // namespace simdb::pipeline
