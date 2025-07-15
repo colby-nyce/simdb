@@ -352,9 +352,6 @@ public:
         // Connect tasks ---------------------------------------------------------------------------
         *new_evt_task >> *buffer_task >> *range_task >> *zlib_task >> *sqlite_task >> *eviction_task;
 
-        // Get the pipeline input (head) -----------------------------------------------------------
-        pipeline_head_ = new_evt_task->getTypedInputQueue<InstEvent>();
-
         // Assign threads (task groups) ------------------------------------------------------------
         // Thread 1:
         pipeline->createTaskGroup("AllOneThread")
