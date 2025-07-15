@@ -404,6 +404,20 @@ public:
     /// Call this after the simulation loop ends for post-processing tasks.
     void postSim()
     {
+        db_mgr_->safeTransaction(
+            [&]()
+            {
+                for (auto app : getApps_())
+                {
+                    app->postSim();
+                }
+            });
+    }
+
+    /// Call this after the simulation ends for resource cleanup tasks
+    /// such as closing files, releasing memory, etc.
+    void teardown()
+    {
         msg_log_ << "************ Shutting down pipelines for all SimDB apps on database: "
                  << db_mgr_->getDatabaseFilePath() << " ************\n\n";
 
@@ -448,21 +462,6 @@ public:
         }
         threads_.clear();
 
-        db_mgr_->safeTransaction(
-            [&]()
-            {
-                for (auto app : getApps_())
-                {
-                    app->postSim();
-                }
-            });
-    }
-
-    /// Call this after the simulation ends for resource cleanup tasks
-    /// such as closing files, releasing memory, etc.
-    void teardown()
-    {
-        assert(threads_.empty());
         for (auto app : getApps_())
         {
             app->teardown();

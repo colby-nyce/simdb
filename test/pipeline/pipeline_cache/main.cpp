@@ -9,50 +9,50 @@
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
 
-// This test creates a SimDB app with a pipeline that implements a multi-stage cache.
+// This test shows how to create a pipeline that implements multi-stage data retrieval.
 // Similar to memory hierarchy, each stage of this cache will be slower than the one
 // "upstream" of it when recreating data originally sent down the pipeline.
 //
 // Simulation thread:
-//   - Use a small circular buffer of raw data not in pipeline yet (fastest)
+//   - Cache incoming data in a mutex-protected std::deque (fastest access)
+//   - Send a copy of the incoming data to the processing thread
 //
 // Processing thread:
-//   - Holds onto copies of the pipeline data until it is committed to disk (fast)
-//   - Performs buffering and compression on input data
+//   - Performs buffering and compression on data
 //   - Sends compressed data to DB thread
+//   - Receives cache eviction notifications from the DB thread, notifies cache
 //
 // Database thread:
-//   - Commits compressed data to the database
-//   - Sends notification back to the cache to evict committed data
-//   - Fallback for data retrieval if not in the circular buffer or cache (slow)
+//   - Commits compressed data to the database and sends eviction notification
+//   - Fallback for data retrieval if not in the cache (slowest access)
 //
-//               _____________________________________
-//               |                ________________   |
-//               |                |              |   |
-//   Simulation  |--|-- copy ---> |     Cache    |<<=|======||
-//   thread      |  |             |______________|   |      ||
-//               |  |             ________________   |      ||      Processing
-//               |  |             |              |   |      ||      thread
-//               |  |-----------> |    Buffer    |   |      ||
-//               |                |______________|   |      ||E
-//               |                      ||||         |      ||V
-//               |                      \\//         |      ||I
-//               |                _______\/_______   |      ||C
-//               |                |              |   |      ||T
-//               |                |     Zlib     |   |      ||
-//               |                |______________|   |      ||
-//               |________________________|__________|      ||
-//                                        |                 ||
-//                                        |                 ||
-//    ---------------------------------------------------------------------------
-//                                        |                 ||
-//               _________________________|___________      ||
-//               |                ________|_______   |      ||
-//               |                |              |   |      ||      Database
-//               |                |    SQLite    |---|------||      thread
-//               |                |______________|   |
-//               |___________________________________|
-//
+//                   ________________________________________________________
+//                   |                ________________                      |
+//                   |                |              |                      |
+//   Simulation -----|--|-- copy ---> |     Cache    |<<========||E         |
+//   thread          |  |             |______________|          ||V         |
+//                   |  |                                       ||I         |
+//  -  -  -  -  -  - |- |-  -  -  -  -  -  -  -  -  -  -  -  -  ||C-  -  -  |  -  -  -
+//                   |  |                                       ||T         |
+//   Processing      |  |             ________________   _______||________  |
+//   thread          |  |             |              |   |               |  |
+//                   |  |-----------> |    Buffer    |   |  EvictionMgr  |  | 
+//                   |                |______________|   |_______________|  |
+//                   |                      ||||                ||          |
+//                   |                      \\//                ||N         |
+//                   |                _______\/_______          ||O         |
+//                   |                |              |          ||T         |
+//                   |                |     Zlib     |          ||I         |
+//                   |                |______________|          ||F         |
+//                   |________________________|_________________||Y_________|
+//                                            |                 || 
+//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  |  -  -  -  -  -  ||E-  -  -  -  -  -  -
+//               _____________________________|___________      ||V
+//   Database    |                    ________|_______   |      ||I
+//   thread      |                    |              |   |      ||C
+//               |                    |    SQLite    |---|------||T
+//               |                    |______________|   |
+//               |_______________________________________|
 //
 enum class RegType : uint64_t
 {
@@ -224,33 +224,35 @@ public:
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
         // Recall the pipeline we want to build:
-        //               _____________________________________
-        //               |                ________________   |
-        //               |                |              |   |
-        //   Simulation  |--|-- copy ---> |     Cache    |<<=|======||
-        //   thread      |  |             |______________|   |      ||
-        //               |  |             ________________   |      ||      Processing
-        //               |  |             |              |   |      ||      thread
-        //               |  |-----------> |    Buffer    |   |      ||
-        //               |                |______________|   |      ||E
-        //               |                      ||||         |      ||V
-        //               |                      \\//         |      ||I
-        //               |                _______\/_______   |      ||C
-        //               |                |              |   |      ||T
-        //               |                |     Zlib     |   |      ||
-        //               |                |______________|   |      ||
-        //               |________________________|__________|      ||
-        //                                        |                 ||
-        //                                        |                 ||
-        //    ---------------------------------------------------------------------------
-        //                                        |                 ||
-        //               _________________________|___________      ||
-        //               |                ________|_______   |      ||
-        //               |                |              |   |      ||      Database
-        //               |                |    SQLite    |---|------||      thread
-        //               |                |______________|   |
-        //               |___________________________________|
+        //                   ________________________________________________________
+        //                   |                ________________                      |
+        //                   |                |              |                      |
+        //   Simulation -----|--|-- copy ---> |     Cache    |<<========||E         |
+        //   thread          |  |             |______________|          ||V         |
+        //                   |  |                                       ||I         |
+        //  -  -  -  -  -  - |- |-  -  -  -  -  -  -  -  -  -  -  -  -  ||C-  -  -  |  -  -  -
+        //                   |  |                                       ||T         |
+        //   Processing      |  |             ________________   _______||________  |
+        //   thread          |  |             |              |   |               |  |
+        //                   |  |-----------> |    Buffer    |   |  EvictionMgr  |  | 
+        //                   |                |______________|   |_______________|  |
+        //                   |                      ||||                ||          |
+        //                   |                      \\//                ||N         |
+        //                   |                _______\/_______          ||O         |
+        //                   |                |              |          ||T         |
+        //                   |                |     Zlib     |          ||I         |
+        //                   |                |______________|          ||F         |
+        //                   |________________________|_________________||Y_________|
+        //                                            |                 || 
+        //  -  -  -  -  -  -  -  -  -  -  -  -  -  -  |  -  -  -  -  -  ||E-  -  -  -  -  -  -
+        //               _____________________________|___________      ||V
+        //   Database    |                    ________|_______   |      ||I
+        //   thread      |                    |              |   |      ||C
+        //               |                    |    SQLite    |---|------||T
+        //               |                    |______________|   |
+        //               |_______________________________________|
         //
+
         cache_ = std::make_shared<Cache>();
 
         // This task gives a copy of an event to the cache and sends the original down the pipeline
@@ -366,25 +368,25 @@ public:
         pipeline->createTaskGroup("Database")
             ->addTask(std::move(sqlite_task));
 
-        pipeline_ = pipeline.get();
         return pipeline;
     }
 
-    void process(InstEvent&& in)
+    void process(InstEvent&& evt)
     {
-        if (circ_buf_.full())
+        // Create a copy before the mutex lock
+        InstEvent evt_copy = evt;
+
+        // Now update the cache and send the copy to the next task
         {
-            pipeline_head_->emplace(std::move(circ_buf_.pop()));
+            std::lock_guard<std::mutex> lock(mutex_);
+            cache_->addToCache(std::move(evt));
         }
-        circ_buf_.push(std::move(in));
     }
 
 private:
-    simdb::CircularBuffer<InstEvent, 10> circ_buf_;
-    simdb::ConcurrentQueue<InstEvent>* pipeline_head_ = nullptr;
-    simdb::pipeline::Pipeline* pipeline_ = nullptr;
     simdb::DatabaseManager* db_mgr_ = nullptr;
     std::shared_ptr<Cache> cache_;
+    std::mutex mutex_;
 };
 
 REGISTER_SIMDB_APPLICATION(MultiStageCache);
