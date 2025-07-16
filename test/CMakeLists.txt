@@ -10,7 +10,7 @@ macro(simdb_test target file)
     add_executable(${target} ${file})
     add_test(NAME ${target}_test COMMAND $<TARGET_FILE:${target}>)
     add_dependencies(simdb_regress ${target})
-    target_link_libraries(${target} simdb)
+    target_link_libraries(${target} PRIVATE simdb)
     target_include_directories(${target} PRIVATE ${SIMDB_BASE}/test)
 endmacro()
 
