@@ -5,12 +5,16 @@
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
 #include "simdb/pipeline/elements/DatabaseQueue.hpp"
+#include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/CircularBuffer.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
+#include <optional>
 
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
+#include <boost/serialization/utility.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 
@@ -37,11 +41,11 @@
 //   Simulation -----|--|-- copy ---> |     Cache    |<<========||E         |
 //   thread          |  |             |______________|          ||V         |
 //                   |  |                                       ||I         |
-//  -  -  -  -  -  - |- |-  -  -  -  -  -  -  -  -  -  -  -  -  ||C-  -  -  |  -  -  -
+//  -  -  -  -  -  - |- |-  -  -  -  -  -  -  -  -  -  -  -  -  ||C-  -  -  |  -  -
 //                   |  |                                       ||T         |
 //   Processing      |  |             ________________   _______||________  |
 //   thread          |  |             |              |   |               |  |
-//                   |  |-----------> |    Buffer    |   |  EvictionMgr  |  | 
+//                   |  |-----------> |    Buffer    |   |  EvictionMgr  |  |
 //                   |                |______________|   |_______________|  |
 //                   |                      ||||                ||          |
 //                   |                      \\//                ||N         |
@@ -50,14 +54,14 @@
 //                   |                |     Zlib     |          ||I         |
 //                   |                |______________|          ||F         |
 //                   |________________________|_________________||Y_________|
-//                                            |                 || 
-//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  |  -  -  -  -  -  ||E-  -  -  -  -  -  -
-//               _____________________________|___________      ||V
-//   Database    |                    ________|_______   |      ||I
-//   thread      |                    |              |   |      ||C
-//               |                    |    SQLite    |---|------||T
-//               |                    |______________|   |
-//               |_______________________________________|
+//                                            |                 ||
+//  -  -  -  -  -  -  -  -  -  -  -  -  -  -  |  -  -  -  -  -  ||E-  -  -  -  -  -
+//                   _________________________|___________      ||V
+//   Database        |                ________|_______   |      ||I
+//   thread          |                |              |   |      ||C
+//                   |                |    SQLite    |---|------||T
+//                   |                |______________|   |
+//                   |___________________________________|
 //
 enum class RegType : uint64_t
 {
@@ -74,6 +78,14 @@ struct RegWrite
     uint64_t reg_num;
     uint64_t prev_val;
     uint64_t curr_val;
+
+    bool operator==(const RegWrite& other) const
+    {
+        return reg_type == other.reg_type &&
+               reg_num == other.reg_num &&
+               prev_val == other.prev_val &&
+               curr_val == other.curr_val;
+    }
 
     template <typename Archive>
     void serialize(Archive& ar, const unsigned int /*version*/)
@@ -101,17 +113,32 @@ using InstructionEventUIDRange = std::pair<uint64_t, uint64_t>;
 class InstEvent
 {
 public:
-    InstEventUID uid;
+    InstEventUID euid;
     uint64_t hart;
     uint64_t opcode;
     uint64_t curr_pc;
     uint64_t next_pc;
     std::vector<RegWrite> reg_writes;
 
+    bool operator==(const InstEvent& other) const
+    {
+        if (this == &other)
+        {
+            return true;
+        }
+
+        return euid == other.euid &&
+               hart == other.hart &&
+               opcode == other.opcode &&
+               curr_pc == other.curr_pc &&
+               next_pc == other.next_pc &&
+               reg_writes == other.reg_writes;
+    }
+
     template <typename Archive>
     void serialize(Archive& ar, const unsigned int /*version*/)
     {
-        ar & uid;
+        ar & euid;
         ar & hart;
         ar & opcode;
         ar & curr_pc;
@@ -130,10 +157,10 @@ public:
         return bytes;
     }
 
-    static InstEvent createRandom(InstEventUID uid)
+    static InstEvent createRandom(InstEventUID euid)
     {
         InstEvent inst_evt;
-        inst_evt.uid = uid;
+        inst_evt.euid = euid;
         inst_evt.hart = rand() % 4;
         inst_evt.opcode = rand();
         inst_evt.curr_pc = rand();
@@ -147,12 +174,18 @@ public:
         return inst_evt;
     }
 
-    // Needed for std::lower_bound to work with uid directly
-    bool operator<(uint64_t other_uid) const
+    // Needed for std::lower_bound to work with euid directly
+    bool operator<(InstEventUID other_euid) const
     {
-        return uid < other_uid;
+        return euid < other_euid;
     }
 };
+
+std::ostream& operator<<(std::ostream& os, const InstEvent& evt)
+{
+    os << "InstEvent(" << evt.euid << ")";
+    return os;
+}
 
 class MultiStageCache : public simdb::App
 {
@@ -170,51 +203,13 @@ public:
         using dt = simdb::SqlDataType;
 
         auto& tbl = schema.addTable("CompressedEvents");
-        tbl.addColumn("StartUID", dt::int64_t);
-        tbl.addColumn("EndUID", dt::int64_t);
+        tbl.addColumn("StartEuid", dt::int64_t);
+        tbl.addColumn("EndEuid", dt::int64_t);
         tbl.addColumn("CompressedEvtBytes", dt::blob_t);
-        tbl.createCompoundIndexOn({"StartUID", "EndUID"});
+        tbl.createCompoundIndexOn({"StartEuid", "EndEuid"});
 
         return true;
     }
-
-    class Cache
-    {
-    public:
-        // This method takes a copy of the event (the original goes down the pipeline).
-        void addToCache(InstEvent evt)
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            cached_evts_.emplace_back(std::move(evt));
-        }
-
-        // This method's data queue is fed by the database pipeline task, and consumed
-        // on the same thread as addToCache() to reduce contention over mutex_.
-        void evictFromCache(const InstructionEventUIDRange& uid_range)
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-
-            const auto start_uid = uid_range.first;
-            const auto end_uid = uid_range.second;
-
-            // Find first event with uid >= start_uid
-            auto first = std::lower_bound(cached_evts_.begin(), cached_evts_.end(), start_uid);
-
-            // Find first event with uid > end_uid (i.e. strictly after range)
-            auto last = std::upper_bound(cached_evts_.begin(), cached_evts_.end(), end_uid,
-                [](uint64_t val, const InstEvent& d)
-                {
-                    return val < d.uid;
-                });
-
-            // Erase range [first, last)
-            cached_evts_.erase(first, last);
-        }
-
-    private:
-        std::mutex mutex_;
-        std::deque<InstEvent> cached_evts_;
-    };
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
     {
@@ -227,11 +222,11 @@ public:
         //   Simulation -----|--|-- copy ---> |     Cache    |<<========||E         |
         //   thread          |  |             |______________|          ||V         |
         //                   |  |                                       ||I         |
-        //  -  -  -  -  -  - |- |-  -  -  -  -  -  -  -  -  -  -  -  -  ||C-  -  -  |  -  -  -
+        //  -  -  -  -  -  - |- |-  -  -  -  -  -  -  -  -  -  -  -  -  ||C-  -  -  |  -  -
         //                   |  |                                       ||T         |
         //   Processing      |  |             ________________   _______||________  |
         //   thread          |  |             |              |   |               |  |
-        //                   |  |-----------> |    Buffer    |   |  EvictionMgr  |  | 
+        //                   |  |-----------> |    Buffer    |   |  EvictionMgr  |  |
         //                   |                |______________|   |_______________|  |
         //                   |                      ||||                ||          |
         //                   |                      \\//                ||N         |
@@ -240,24 +235,26 @@ public:
         //                   |                |     Zlib     |          ||I         |
         //                   |                |______________|          ||F         |
         //                   |________________________|_________________||Y_________|
-        //                                            |                 || 
-        //  -  -  -  -  -  -  -  -  -  -  -  -  -  -  |  -  -  -  -  -  ||E-  -  -  -  -  -  -
-        //               _____________________________|___________      ||V
-        //   Database    |                    ________|_______   |      ||I
-        //   thread      |                    |              |   |      ||C
-        //               |                    |    SQLite    |---|------||T
-        //               |                    |______________|   |
-        //               |_______________________________________|
+        //                                            |                 ||
+        //  -  -  -  -  -  -  -  -  -  -  -  -  -  -  |  -  -  -  -  -  ||E-  -  -  -  -  -
+        //                   _________________________|___________      ||V
+        //   Database        |                ________|_______   |      ||I
+        //   thread          |                |              |   |      ||C
+        //                   |                |    SQLite    |---|------||T
+        //                   |                |______________|   |
+        //                   |___________________________________|
         //
 
-        cache_ = std::make_shared<Cache>();
-
-        // This task gives a copy of an event to the cache and sends the original down the pipeline
-        auto new_evt_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEvent, InstEvent>>(
-            [cache = cache_](InstEvent&& evt, simdb::ConcurrentQueue<InstEvent>& out)
+        // This task reads InstEvents out of the cache and sends them down the pipeline
+        auto source_task = simdb::pipeline::createTask<simdb::pipeline::Function<void, InstEvent>>(
+            [this, send_evt = InstEvent()](simdb::ConcurrentQueue<InstEvent>& out) mutable -> bool
             {
-                cache->addToCache(evt);
-                out.emplace(std::move(evt));
+                if (pipeline_input_queue_.try_pop(send_evt))
+                {
+                    out.emplace(std::move(send_evt));
+                    return true;
+                }
+                return false;
             }
         );
 
@@ -265,96 +262,105 @@ public:
         auto buffer_task = simdb::pipeline::createTask<simdb::pipeline::Buffer<InstEvent>>(100);
 
         // This task takes buffered events and preps them for efficient DB insertion
-        using InstEvents = std::vector<InstEvent>;
-
-        struct InstEventsRange
-        {
-            InstEvents events;
-            InstEventUID start_uid;
-            InstEventUID end_uid;
-        };
-
         auto range_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEvents, InstEventsRange>>(
             [](InstEvents&& evts, simdb::ConcurrentQueue<InstEventsRange>& out)
             {
-                InstEventUID uid = evts.front().uid;
+                InstEventUID euid = evts.front().euid;
                 for (size_t i = 1; i < evts.size(); ++i)
                 {
-                    if (evts[i].uid != uid + 1)
+                    if (evts[i].euid != euid + 1)
                     {
                         throw simdb::DBException("Could not validate event UIDs");
                     }
-                    ++uid;
+                    ++euid;
                 }
 
                 InstEventsRange range;
-                range.start_uid = evts.front().uid;
-                range.end_uid = evts.back().uid;
+                range.euid_range = std::make_pair(evts.front().euid, evts.back().euid);
                 range.events = std::move(evts);
                 out.emplace(std::move(range));
             }
         );
 
-        // This task takes a range of events and performs zlib compression on them
-        struct CompressedInstEventsRange
-        {
-            std::vector<char> all_event_bytes;
-            InstEventUID start_uid;
-            InstEventUID end_uid;
-        };
-
-        auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEventsRange, CompressedInstEventsRange>>(
-            [](InstEventsRange&& evts, simdb::ConcurrentQueue<CompressedInstEventsRange>& out)
+        // This task takes a range of events and serializes them to std::vector<char> buffers (keeping the euid range)
+        auto serialize_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEventsRange, EventsRangeAsBytes>>(
+            [](InstEventsRange&& evts, simdb::ConcurrentQueue<EventsRangeAsBytes>& out)
             {
-                std::vector<char> uncompressed;
-                for (const auto& evt : evts.events)
-                {
-                    const auto bytes = evt.toBytes();
-                    uncompressed.insert(uncompressed.end(), bytes.begin(), bytes.end());
-                }
+                EventsRangeAsBytes range_as_bytes;
+                range_as_bytes.euid_range = evts.euid_range;
+                std::vector<char>& buffer = range_as_bytes.all_event_bytes;
 
-                CompressedInstEventsRange compressed;
-                simdb::compressData(uncompressed, compressed.all_event_bytes);
-                compressed.start_uid = evts.start_uid;
-                compressed.end_uid = evts.end_uid;
+                boost::iostreams::back_insert_device<std::vector<char>> inserter(buffer);
+                boost::iostreams::stream<boost::iostreams::back_insert_device<std::vector<char>>> os(inserter);
+                boost::archive::binary_oarchive oa(os);
+                oa << evts;
+                os.flush();
 
+                out.emplace(std::move(range_as_bytes));
+            }
+        );
+
+        // Perform zlib compression on the event ranges
+        auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<EventsRangeAsBytes, EventsRangeAsBytes>>(
+            [](EventsRangeAsBytes&& uncompressed, simdb::ConcurrentQueue<EventsRangeAsBytes>& out)
+            {
+                EventsRangeAsBytes compressed;
+                compressed.euid_range = uncompressed.euid_range;
+                simdb::compressData(uncompressed.all_event_bytes, compressed.all_event_bytes);
                 out.emplace(std::move(compressed));
             }
         );
 
         // This task writes compressed events to disk and sends out eviction notices
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedInstEventsRange, InstructionEventUIDRange>>(
+        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<EventsRangeAsBytes, InstructionEventUIDRange>>(
             SQL_TABLE("CompressedEvents"),
-            SQL_COLUMNS("StartUID", "EndUID", "CompressedEvtBytes"),
-            [cache = cache_](CompressedInstEventsRange&& evts, simdb::ConcurrentQueue<InstructionEventUIDRange>& out, simdb::PreparedINSERT* inserter)
+            SQL_COLUMNS("StartEuid", "EndEuid", "CompressedEvtBytes"),
+            [](EventsRangeAsBytes&& evts, simdb::ConcurrentQueue<InstructionEventUIDRange>& out, simdb::PreparedINSERT* inserter)
             {
-                inserter->setColumnValue(0, evts.start_uid);
-                inserter->setColumnValue(1, evts.end_uid);
+                inserter->setColumnValue(0, evts.euid_range.first);
+                inserter->setColumnValue(1, evts.euid_range.second);
                 inserter->setColumnValue(2, evts.all_event_bytes);
                 inserter->createRecord();
 
-                InstructionEventUIDRange uid_range = std::make_pair(evts.start_uid, evts.end_uid);
-                out.emplace(std::move(uid_range));
+                // Send this euid range for eviction from the cache
+                out.emplace(std::move(evts.euid_range));
             }
         );
 
         // This task receives eviction notices from the sqlite task and notifies the cache
         auto eviction_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstructionEventUIDRange, void>>(
-            [cache = cache_](InstructionEventUIDRange&& uid_range)
+            [this](InstructionEventUIDRange&& euid_range)
             {
-                cache->evictFromCache(uid_range);
+                std::lock_guard<std::mutex> lock(mutex_);
+
+                const auto start_euid = euid_range.first;
+                const auto end_euid = euid_range.second;
+
+                // Find first event with euid >= start_euid
+                auto first = std::lower_bound(evt_cache_.begin(), evt_cache_.end(), start_euid);
+
+                // Find first event with euid > end_euid (i.e. strictly after range)
+                auto last = std::upper_bound(evt_cache_.begin(), evt_cache_.end(), end_euid,
+                    [](InstEventUID euid, const InstEvent& evt)
+                    {
+                        return euid < evt.euid;
+                    });
+
+                // Erase range [first, last)
+                evt_cache_.erase(first, last);
             }
         );
 
         // Connect tasks ---------------------------------------------------------------------------
-        *new_evt_task >> *buffer_task >> *range_task >> *zlib_task >> *sqlite_task >> *eviction_task;
+        *source_task >> *buffer_task >> *range_task >> *serialize_task >> *zlib_task >> *sqlite_task >> *eviction_task;
 
         // Assign threads (task groups) ------------------------------------------------------------
         // Thread 1:
-        pipeline->createTaskGroup("AllOneThread")
-            ->addTask(std::move(new_evt_task))
+        pipeline->createTaskGroup("PreProcessing")
+            ->addTask(std::move(source_task))
             ->addTask(std::move(buffer_task))
             ->addTask(std::move(range_task))
+            ->addTask(std::move(serialize_task))
             ->addTask(std::move(zlib_task))
             ->addTask(std::move(eviction_task));
 
@@ -365,22 +371,147 @@ public:
         return pipeline;
     }
 
+    void setAsyncDbAccessor(std::shared_ptr<simdb::pipeline::AsyncDatabaseAccessor> accessor) override
+    {
+        async_db_accessor_ = accessor;
+    }
+
     void process(InstEvent&& evt)
     {
-        // Create a copy before the mutex lock
-        InstEvent evt_copy = evt;
-
-        // Now update the cache and send the copy to the next task
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            cache_->addToCache(std::move(evt));
+            evt_cache_.emplace_back(evt);
         }
+
+        pipeline_input_queue_.emplace(std::move(evt));
+    }
+
+    InstEvent getEvent(InstEventUID euid)
+    {
+        auto evt = getCachedEvent_(euid);
+        if (evt.has_value())
+        {
+            ++num_evts_retrieved_from_cache_;
+            return *evt;
+        }
+
+        evt = recreateEvent_(euid);
+        if (evt.has_value())
+        {
+            ++num_evts_retrieved_from_disk_;
+            return *evt;
+        }
+
+        throw simdb::DBException("Could not get event with uid ") << euid;
+    }
+
+    void postSim() override
+    {
+        std::cout << "Event accesses:\n";
+        std::cout << "    From cache: " << num_evts_retrieved_from_cache_ << "\n";
+        std::cout << "    From disk:  " << num_evts_retrieved_from_disk_ << "\n\n";
     }
 
 private:
+    // Get a copy of an InstEvent from the cache
+    std::optional<InstEvent> getCachedEvent_(InstEventUID euid)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (!evt_cache_.empty() && euid >= evt_cache_.front().euid)
+        {
+            auto index = euid - evt_cache_.front().euid;
+            if (index < evt_cache_.size())
+            {
+                return evt_cache_[index];
+            }
+        }
+
+        return std::optional<InstEvent>();
+    }
+
+    // If not in the cache, recreate an InstEvent from disk
+    std::optional<InstEvent> recreateEvent_(InstEventUID euid)
+    {
+        EventsRangeAsBytes compressed_evts_range;
+
+        auto query_func = [&](simdb::DatabaseManager* db_mgr)
+        {
+            auto query = db_mgr->createQuery("CompressedEvents");
+            query->addConstraintForInt("StartEuid", simdb::Constraints::LESS_EQUAL, euid);
+            query->addConstraintForInt("EndEuid", simdb::Constraints::GREATER_EQUAL, euid);
+
+            int64_t start, end;
+            query->select("StartEuid", start);
+            query->select("EndEuid", end);
+            query->select("CompressedEvtBytes", compressed_evts_range.all_event_bytes);
+
+            auto result_set = query->getResultSet();
+            EXPECT_TRUE(result_set.getNextRecord());
+
+            compressed_evts_range.euid_range = std::make_pair(start, end);
+        };
+
+        async_db_accessor_->evalAsync(query_func);
+        EXPECT_TRUE(!compressed_evts_range.all_event_bytes.empty());
+
+        if (compressed_evts_range.all_event_bytes.empty())
+        {
+            return std::optional<InstEvent>();
+        }
+
+        EventsRangeAsBytes evts_range_as_bytes;
+        simdb::decompressData(compressed_evts_range.all_event_bytes, evts_range_as_bytes.all_event_bytes);
+
+        namespace bio = boost::iostreams;
+        auto& bytes = evts_range_as_bytes.all_event_bytes;
+        bio::array_source src(bytes.data(), bytes.size());
+        bio::stream<bio::array_source> is(src);
+
+        boost::archive::binary_iarchive ia(is);
+        InstEventsRange evts_range;
+        ia >> evts_range;
+
+        if (euid >= evts_range.euid_range.first)
+        {
+            auto index = euid - evts_range.euid_range.first;
+            if (index < evts_range.events.size())
+            {
+                return evts_range.events[index];
+            }
+        }
+
+        return std::optional<InstEvent>();
+    }
+
+    using InstEvents = std::vector<InstEvent>;
+
+    struct InstEventsRange
+    {
+        InstEvents events;
+        InstructionEventUIDRange euid_range;
+
+        template <typename Archive>
+        void serialize(Archive& ar, const unsigned int /*version*/)
+        {
+            ar & events;
+            ar & euid_range;
+        }
+    };
+
+    struct EventsRangeAsBytes
+    {
+        std::vector<char> all_event_bytes;
+        InstructionEventUIDRange euid_range;
+    };
+
     simdb::DatabaseManager* db_mgr_ = nullptr;
-    std::shared_ptr<Cache> cache_;
+    std::shared_ptr<simdb::pipeline::AsyncDatabaseAccessor> async_db_accessor_;
+    std::deque<InstEvent> evt_cache_;
+    simdb::ConcurrentQueue<InstEvent> pipeline_input_queue_;
     std::mutex mutex_;
+    size_t num_evts_retrieved_from_cache_ = 0;
+    size_t num_evts_retrieved_from_disk_ = 0;
 };
 
 REGISTER_SIMDB_APPLICATION(MultiStageCache);
@@ -401,10 +532,42 @@ int main(int argc, char** argv)
 
     // Simulate...
     auto app = app_mgr.getApp<MultiStageCache>();
-    InstEventUID next_evt_uid = 1;
-    for (size_t i = 1; i <= 10000; ++i)
+
+    InstEventUID next_evt_euid = 1;
+    std::queue<InstEvent> disk_evt_verif_queue;
+
+    for (size_t i = 1; i <= 1000; ++i)
     {
-        app->process(InstEvent::createRandom(next_evt_uid++));
+        auto evt = InstEvent::createRandom(next_evt_euid++);
+
+        // Verify 100 of these events recreated from disk
+        if (i % 10 == 0)
+        {
+            disk_evt_verif_queue.push(evt);
+        }
+
+        auto evt_copy = evt;
+        auto euid = evt.euid;
+        app->process(std::move(evt));
+
+        // It is much more common to ask for an event
+        // immediately after it occurred. Let's ensure
+        // that repeatedly hitting the cache has no issues.
+        auto cached_evt = app->getEvent(euid);
+        EXPECT_EQUAL(cached_evt, evt_copy);
+    }
+
+    // Increase the chances that the database thread is processing events.
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Now verify that we can get all events back from the database too.
+    while (!disk_evt_verif_queue.empty())
+    {
+        const auto& expected_evt = disk_evt_verif_queue.front();
+        const auto euid = expected_evt.euid;
+        const auto actual_evt = app->getEvent(euid);
+        EXPECT_EQUAL(expected_evt, actual_evt);
+        disk_evt_verif_queue.pop();
     }
 
     // Finish...

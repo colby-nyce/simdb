@@ -285,6 +285,12 @@ public:
         {
             assert(num_db_threads_needed == 1);
             threads_.emplace_back(std::make_unique<pipeline::DatabaseThread>(db_mgr_));
+
+            auto db_thread = dynamic_cast<const pipeline::DatabaseThread*>(threads_.back().get());
+            for (auto app : getApps_())
+            {
+                app->setAsyncDbAccessor(db_thread->getAsyncDatabaseAccessor());
+            }
         }
 
         for (size_t i = 0; i < num_post_db_threads_needed; ++i)
@@ -429,7 +435,10 @@ public:
             {
                 for (const auto task : group->getTasks())
                 {
-                    input_queues.push_back(task->getInputQueue());
+                    if (auto q = task->getInputQueue())
+                    {
+                        input_queues.push_back(q);
+                    }
                 }
             }
         }

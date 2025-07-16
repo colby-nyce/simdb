@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/pipeline/Runnable.hpp"
+#include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <atomic>
@@ -140,11 +141,12 @@ private:
 /// The database thread is used to ensure that Runnable::run()
 /// methods are grouped inside BEGIN/COMMIT TRANSACTION blocks
 /// for much better performance.
-class DatabaseThread : public Thread
+class DatabaseThread : public Thread, private AsyncDatabaseAccessQueue
 {
 public:
     DatabaseThread(DatabaseManager* db_mgr)
         : db_mgr_(db_mgr)
+        , async_db_accessor_(new AsyncDatabaseAccessor(this))
     {}
 
     ~DatabaseThread() noexcept = default;
@@ -154,15 +156,68 @@ public:
         return db_mgr_;
     }
 
+    std::shared_ptr<AsyncDatabaseAccessor> getAsyncDatabaseAccessor() const
+    {
+        return async_db_accessor_;
+    }
+
 private:
-    bool run_() override
+    bool run_() override final
     {
         bool ran = false;
-        db_mgr_->safeTransaction([&]() { ran = Thread::run_(); });
+
+        db_mgr_->safeTransaction(
+            [&]()
+            {
+                ran = Thread::run_();
+
+                // TODO cnyce:
+                // Optimizations here include the following:
+                //
+                //   1. Process at most 1 async task between Tasks. Right now it is
+                //      servicing the requests after all TaskGroups have run.
+                //
+                //   2. Have a dedicated thread that sleeps and is notify_all() when
+                //      a request comes in. Right now the request could be even more
+                //      delayed if the DB thread was asleep when queue() was called.
+
+                AsyncDatabaseTaskPtr async_task;
+                while (pending_async_db_tasks_.try_pop(async_task))
+                {
+                    try
+                    {
+                        async_task->func(db_mgr_);
+                        async_task->exception_reason.set_value("");
+                    }
+                    catch (const std::exception& ex)
+                    {
+                        async_task->exception_reason.set_value(ex.what());
+                    }
+
+                    ran = true;
+                }
+            });
+
         return ran;
     }
 
+    void queue(AsyncDatabaseTaskPtr&& task) override final
+    {
+        std::future<std::string> fut = task->exception_reason.get_future();
+        pending_async_db_tasks_.emplace(std::move(task));
+
+        // Block until DB thread sets result
+        auto exception_reason = fut.get();
+
+        if (!exception_reason.empty())
+        {
+            throw DBException(exception_reason);
+        }
+    }
+
     DatabaseManager* db_mgr_ = nullptr;
+    std::shared_ptr<AsyncDatabaseAccessor> async_db_accessor_;
+    ConcurrentQueue<AsyncDatabaseTaskPtr> pending_async_db_tasks_;
 };
 
 } // namespace simdb::pipeline
