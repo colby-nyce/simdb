@@ -1,1 +1,7 @@
-simdb_test(PipelineCache main.cpp)
+find_package(Boost COMPONENTS serialization)
+if(Boost_FOUND AND Boost_SERIALIZATION_FOUND)
+    simdb_test(PipelineCache main.cpp)
+    target_link_libraries(PipelineCache PRIVATE Boost::serialization)
+else()
+    message(STATUS "Boost serialization library not found - cannot run PipelineCache test.")
+endif()

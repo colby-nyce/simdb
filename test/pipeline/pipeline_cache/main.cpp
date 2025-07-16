@@ -9,6 +9,11 @@
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
 
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/serialization/vector.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/stream.hpp>
+
 // This test shows how to create a pipeline that implements multi-stage data retrieval.
 // Similar to memory hierarchy, each stage of this cache will be slower than the one
 // "upstream" of it when recreating data originally sent down the pipeline.
@@ -70,6 +75,15 @@ struct RegWrite
     uint64_t prev_val;
     uint64_t curr_val;
 
+    template <typename Archive>
+    void serialize(Archive& ar, const unsigned int /*version*/)
+    {
+        ar & reg_type;
+        ar & reg_num;
+        ar & prev_val;
+        ar & curr_val;
+    }
+
     static RegWrite createRandom()
     {
         RegWrite reg_write;
@@ -84,33 +98,6 @@ struct RegWrite
 using InstEventUID = uint64_t;
 using InstructionEventUIDRange = std::pair<uint64_t, uint64_t>;
 
-template <typename T>
-void append(std::vector<char>& bytes, const T val)
-{
-    bytes.resize(bytes.size() + sizeof(T));
-    auto ptr = bytes.data() + bytes.size() - sizeof(T);
-    memcpy(ptr, &val, sizeof(T));
-}
-
-template <>
-void append(std::vector<char>& bytes, RegType reg_type)
-{
-    append(bytes, uint64_t(reg_type));
-}
-
-template <>
-void append(std::vector<char>& bytes, const std::vector<RegWrite>& reg_writes)
-{
-    append(bytes, uint64_t(reg_writes.size()));
-    for (const auto& reg_write : reg_writes)
-    {
-        append(bytes, reg_write.reg_type);
-        append(bytes, reg_write.reg_num);
-        append(bytes, reg_write.prev_val);
-        append(bytes, reg_write.curr_val);
-    }
-}
-
 class InstEvent
 {
 public:
@@ -121,15 +108,25 @@ public:
     uint64_t next_pc;
     std::vector<RegWrite> reg_writes;
 
+    template <typename Archive>
+    void serialize(Archive& ar, const unsigned int /*version*/)
+    {
+        ar & uid;
+        ar & hart;
+        ar & opcode;
+        ar & curr_pc;
+        ar & next_pc;
+        ar & reg_writes;
+    }
+
     std::vector<char> toBytes() const
     {
         std::vector<char> bytes;
-        append(bytes, uid);
-        append(bytes, hart);
-        append(bytes, opcode);
-        append(bytes, curr_pc);
-        append(bytes, next_pc);
-        append(bytes, reg_writes);
+        boost::iostreams::back_insert_device<std::vector<char>> inserter(bytes);
+        boost::iostreams::stream<boost::iostreams::back_insert_device<std::vector<char>>> os(inserter);
+        boost::archive::binary_oarchive oa(os);
+        oa << *this;
+        os.flush();
         return bytes;
     }
 
