@@ -10,10 +10,7 @@
 #include "SimDBTester.hpp"
 
 #include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/serialization/utility.hpp>
-#include <boost/serialization/serialization.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 
