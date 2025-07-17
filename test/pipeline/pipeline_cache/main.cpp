@@ -337,7 +337,7 @@ public:
             }
         );
 
-        // This task receives EventsRangeAsBytes from the zlib task one one thread and writes them to disk on the DB thread
+        // This task receives EventsRangeAsBytes from the zlib task on one thread and writes them to disk on the DB thread
         auto async_writer = db_accessor->createAsyncWriter<EventsRangeAsBytes, InstructionEventUIDRange>(
             SQL_TABLE("CompressedEvents"),
             SQL_COLUMNS("StartEuid", "EndEuid", "CompressedEvtBytes"),
@@ -374,7 +374,6 @@ public:
 
                 // Erase range [first, last)
                 evt_cache_.erase(first, last);
-                last_evicted_euid_ = euid_range.second;
             }
         );
 
@@ -564,7 +563,6 @@ private:
     std::deque<InstEvent> evt_cache_;
     simdb::ConcurrentQueue<InstEvent> pipeline_input_queue_;
     mutable std::mutex mutex_;
-    InstEventUID last_evicted_euid_ = InstEventInvalidUID;
     size_t num_evts_retrieved_from_cache_ = 0;
     size_t num_evts_retrieved_from_disk_ = 0;
     simdb::RunningMean avg_microseconds_recreating_evts_;
