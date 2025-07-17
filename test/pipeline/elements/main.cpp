@@ -4,7 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
-#include "simdb/pipeline/elements/DatabaseQueue.hpp"
+#include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/CircularBuffer.hpp"
 #include "SimDBTester.hpp"
 
@@ -16,7 +16,6 @@
 // The pipeline will use built-in SimDB elements:
 //   - Buffer
 //   - Function
-//   - DatabaseQueue
 //
 // As well as a user-defined element:
 //   - CircularBuffer
@@ -30,8 +29,9 @@
 
 namespace simdb::pipeline {
 
+// TODO cnyce: Make the CircularBuffer task a first-class citizen and do something else here.
 template <typename DataT, size_t BufferLen>
-class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalNonDatabaseTask<DataT, DataT>
+class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, DataT>
 {
 public:
     using InputType = DataT;
@@ -45,6 +45,12 @@ public:
         }
 
         InputType in;
+        if constexpr (std::is_arithmetic_v<InputType> && !std::is_pointer_v<InputType>)
+        {
+            // -Werror=maybe-uninitialized
+            in = 0;
+        }
+
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
@@ -105,7 +111,7 @@ public:
         (void)argv;
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -147,7 +153,7 @@ public:
         // Thread 3 tasks --------------------------------------------------------------------------
 
         // Task 5: take the hashval size_t emitted from the circular buffer and write to the database
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<size_t, void>>(
+        auto sqlite_task = db_accessor->createAsyncWriter<size_t, void>(
             SQL_TABLE("Pipeout"),
             SQL_COLUMNS("HashVal"),
             [](size_t&& in, simdb::PreparedINSERT* inserter)
@@ -173,10 +179,6 @@ public:
         pipeline->createTaskGroup("Hasher")
             ->addTask(std::move(hashval_task))
             ->addTask(std::move(circbuf_task));
-
-        // Thread 3:
-        pipeline->createTaskGroup("Database")
-            ->addTask(std::move(sqlite_task));
 
         return pipeline;
     }

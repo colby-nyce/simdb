@@ -55,8 +55,7 @@ public:
     virtual ~App() = default;
     virtual bool defineSchema(Schema&) { return false; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
-    virtual std::unique_ptr<pipeline::Pipeline> createPipeline() { return nullptr; }
-    virtual void setAsyncDbAccessor(std::shared_ptr<pipeline::AsyncDatabaseAccessor>) {}
+    virtual std::unique_ptr<pipeline::Pipeline> createPipeline(pipeline::AsyncDatabaseAccessor*) { return nullptr; }
     virtual void postSim() {}
     virtual void teardown() {}
 

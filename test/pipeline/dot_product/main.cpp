@@ -4,7 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
-#include "simdb/pipeline/elements/DatabaseQueue.hpp"
+#include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/Random.hpp"
 #include "SimDBTester.hpp"
@@ -115,7 +115,7 @@ public:
         (void)argv;
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -128,7 +128,7 @@ public:
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProductValues, CompressedBytes>>(CompressBytes);
 
         // Thread 3 task
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<CompressedBytes, void>>(
+        auto sqlite_task = db_accessor->createAsyncWriter<CompressedBytes, void>(
             SQL_TABLE("DotProducts"),
             SQL_COLUMNS("Blob"),
             WriteCompressedBytes);
@@ -149,10 +149,6 @@ public:
         // Thread 2:
         pipeline->createTaskGroup("Compression")
             ->addTask(std::move(zlib_task));
-
-        // Thread 3:
-        pipeline->createTaskGroup("Database")
-            ->addTask(std::move(sqlite_task));
 
         return pipeline;
     }

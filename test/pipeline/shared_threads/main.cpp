@@ -4,7 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
-#include "simdb/pipeline/elements/DatabaseQueue.hpp"
+#include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/RunningMean.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/TinyStrings.hpp"
@@ -31,7 +31,7 @@ public:
     App1(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
     ~App1() noexcept = default;
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor*) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -96,7 +96,7 @@ public:
         return true;
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -125,7 +125,7 @@ public:
         );
 
         // Thread 4 task (database thread)
-        auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<uint64_t, int>>(
+        auto db_task = db_accessor->createAsyncWriter<uint64_t, int>(
             SQL_TABLE("App2Data"),
             SQL_COLUMNS("IntVal"),
             [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::PreparedINSERT* inserter)
@@ -164,10 +164,6 @@ public:
             ->addTask(std::move(halver_task));
 
         // Thread 4
-        pipeline->createTaskGroup("Database_Thread")
-            ->addTask(std::move(db_task));
-
-        // Thread 5
         pipeline->createTaskGroup("PostDB_Thread1")
             ->addTask(std::move(stdout_task));
 
@@ -203,7 +199,7 @@ public:
         return true;
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -229,7 +225,7 @@ public:
         using DatabaseIn = ZlibOut;
         using DatabaseOut = std::pair<int, size_t>; // Database record ID, # compressed bytes
 
-        auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<DatabaseIn, DatabaseOut>>(
+        auto db_task = db_accessor->createAsyncWriter<DatabaseIn, DatabaseOut>(
             SQL_TABLE("App3Data"),
             SQL_COLUMNS("DataBlob"),
             [](DatabaseIn&& in, simdb::ConcurrentQueue<DatabaseOut>& out, simdb::PreparedINSERT* inserter)
@@ -279,8 +275,7 @@ public:
         // Thread 1:
         pipeline->createTaskGroup("Database_Thread")
             ->addTask(std::move(buffer_task))
-            ->addTask(std::move(zlib_task))
-            ->addTask(std::move(db_task));
+            ->addTask(std::move(zlib_task));
 
         // Thread 2:
         pipeline->createTaskGroup("PostDB_Thread1")
@@ -317,12 +312,12 @@ public:
     App4(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr), tiny_strings_(db_mgr) {}
     ~App4() noexcept = default;
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
-        // Thread 1 task
-        auto db_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<std::string, void>>(
+        // Thread 1 task (database thread)
+        auto db_task = db_accessor->createAsyncWriter<std::string, void>(
             SQL_TABLE("TinyStringIDs"),
             SQL_COLUMNS("StringValue", "StringID"),
             [this](std::string&& in, simdb::PreparedINSERT* inserter) mutable
@@ -337,11 +332,6 @@ public:
 
         // Get the pipeline input (head) ---------------------------------------------------
         pipeline_head_ = db_task->getTypedInputQueue<std::string>();
-
-        // Assign threads (task groups) ----------------------------------------------------
-        // Thread 1:
-        pipeline->createTaskGroup("Database")
-            ->addTask(std::move(db_task));
 
         return pipeline;
     }
