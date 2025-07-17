@@ -1,7 +1,6 @@
 #pragma once
 
-#include "simdb/utils/Demangle.hpp"
-#include "simdb/pipeline/Queue.hpp"
+#include "simdb/pipeline/Task.hpp"
 #include <functional>
 
 namespace simdb::pipeline {
@@ -12,7 +11,7 @@ class Function {};
 
 /// Specialization for non-terminating functions.
 template <typename FunctionIn, typename FunctionOut>
-class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalNonDatabaseTask<FunctionIn, FunctionOut>
+class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalTask<FunctionIn, FunctionOut>
 {
 public:
     using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
@@ -48,12 +47,12 @@ private:
 
 /// Specialization for terminating functions.
 template <typename FunctionIn>
-class Task<Function<FunctionIn, void>> : public TerminalNonDatabaseTask<FunctionIn>
+class Task<Function<FunctionIn, void>> : public TerminalTask<FunctionIn>
 {
 public:
     using Func = std::function<void(FunctionIn&&)>;
     Task(Func func, InputQueuePtr<FunctionIn> input_queue = nullptr)
-        : TerminalNonDatabaseTask<FunctionIn>(std::move(input_queue))
+        : TerminalTask<FunctionIn>(std::move(input_queue))
         , func_(func)
     {}
 
@@ -111,16 +110,6 @@ private:
         {
             throw DBException("Invalid data type");
         }
-    }
-
-    bool requiresDatabase() const override final
-    {
-        return false;
-    }
-
-    void setDatabaseManager(DatabaseManager*) override final
-    {
-        throw DBException("Cannot give database to a non-database task");
     }
 
     std::string getDescription_() const override

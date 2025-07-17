@@ -46,18 +46,6 @@ public:
         return groups;
     }
 
-    bool requiresDatabase() const
-    {
-        for (const auto& group : task_groups_)
-        {
-            if (group->requiresDatabase())
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;

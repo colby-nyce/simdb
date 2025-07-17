@@ -16,7 +16,7 @@ public:
 };
 
 template <typename Input>
-class Task<Buffer<Input>> : public NonTerminalNonDatabaseTask<Input, typename Buffer<Input>::OutputType>
+class Task<Buffer<Input>> : public NonTerminalTask<Input, typename Buffer<Input>::OutputType>
 {
 public:
     using InputType = Input;
@@ -38,6 +38,12 @@ public:
         }
 
         InputType in;
+        if constexpr (std::is_arithmetic_v<InputType> && !std::is_pointer_v<InputType>)
+        {
+            // -Werror=maybe-uninitialized
+            in = 0;
+        }
+
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {

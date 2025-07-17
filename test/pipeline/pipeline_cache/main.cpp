@@ -4,12 +4,13 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
-#include "simdb/pipeline/elements/DatabaseQueue.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/CircularBuffer.hpp"
 #include "simdb/utils/Compress.hpp"
+#include "simdb/utils/RunningMean.hpp"
 #include "SimDBTester.hpp"
 #include <optional>
+#include <limits>
 
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -110,14 +111,19 @@ struct RegWrite
 using InstEventUID = uint64_t;
 using InstructionEventUIDRange = std::pair<uint64_t, uint64_t>;
 
+constexpr auto InstEventInvalidUID = std::numeric_limits<uint64_t>::max();
+constexpr auto InstEventInvalidHart = std::numeric_limits<uint64_t>::max();
+constexpr auto InstEventInvalidOpcode = uint64_t(0);
+constexpr auto InstEventInvalidPC = uint64_t(0);
+
 class InstEvent
 {
 public:
-    InstEventUID euid;
-    uint64_t hart;
-    uint64_t opcode;
-    uint64_t curr_pc;
-    uint64_t next_pc;
+    InstEventUID euid = InstEventInvalidUID;
+    uint64_t hart = InstEventInvalidHart;
+    uint64_t opcode = InstEventInvalidOpcode;
+    uint64_t curr_pc = InstEventInvalidPC;
+    uint64_t next_pc = InstEventInvalidPC;
     std::vector<RegWrite> reg_writes;
 
     bool operator==(const InstEvent& other) const
@@ -181,6 +187,26 @@ public:
     }
 };
 
+// We are going to send random InstEvents down the pipeline
+// and periodically try to access them, either from the cache
+// or recreated from disk.
+struct TestInstEvent
+{
+    InstEvent orig_evt;
+    uint64_t access_tick;
+    bool check_evicted_first = false;
+};
+
+// Custom comparator for min-heap (based on the tick when we should access the event).
+// Needed for std::priority_queue<TestInstEvent>
+struct CompareTestInstEvent
+{
+    bool operator()(const TestInstEvent& evt1, const TestInstEvent& evt2) const
+    {
+        return evt1.access_tick > evt2.access_tick;
+    }
+};
+
 std::ostream& operator<<(std::ostream& os, const InstEvent& evt)
 {
     os << "InstEvent(" << evt.euid << ")";
@@ -211,7 +237,7 @@ public:
         return true;
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline() override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -311,8 +337,8 @@ public:
             }
         );
 
-        // This task writes compressed events to disk and sends out eviction notices
-        auto sqlite_task = simdb::pipeline::createTask<simdb::pipeline::DatabaseQueue<EventsRangeAsBytes, InstructionEventUIDRange>>(
+        // This task receives EventsRangeAsBytes from the zlib task one one thread and writes them to disk on the DB thread
+        auto async_writer = db_accessor->createAsyncWriter<EventsRangeAsBytes, InstructionEventUIDRange>(
             SQL_TABLE("CompressedEvents"),
             SQL_COLUMNS("StartEuid", "EndEuid", "CompressedEvtBytes"),
             [](EventsRangeAsBytes&& evts, simdb::ConcurrentQueue<InstructionEventUIDRange>& out, simdb::PreparedINSERT* inserter)
@@ -348,14 +374,14 @@ public:
 
                 // Erase range [first, last)
                 evt_cache_.erase(first, last);
+                last_evicted_euid_ = euid_range.second;
             }
         );
 
         // Connect tasks ---------------------------------------------------------------------------
-        *source_task >> *buffer_task >> *range_task >> *serialize_task >> *zlib_task >> *sqlite_task >> *eviction_task;
+        *source_task >> *buffer_task >> *range_task >> *serialize_task >> *zlib_task >> *async_writer >> *eviction_task;
 
         // Assign threads (task groups) ------------------------------------------------------------
-        // Thread 1:
         pipeline->createTaskGroup("PreProcessing")
             ->addTask(std::move(source_task))
             ->addTask(std::move(buffer_task))
@@ -364,16 +390,8 @@ public:
             ->addTask(std::move(zlib_task))
             ->addTask(std::move(eviction_task));
 
-        // Thread 2:
-        pipeline->createTaskGroup("Database")
-            ->addTask(std::move(sqlite_task));
-
+        async_db_accessor_ = db_accessor;
         return pipeline;
-    }
-
-    void setAsyncDbAccessor(std::shared_ptr<simdb::pipeline::AsyncDatabaseAccessor> accessor) override
-    {
-        async_db_accessor_ = accessor;
     }
 
     void process(InstEvent&& evt)
@@ -384,6 +402,12 @@ public:
         }
 
         pipeline_input_queue_.emplace(std::move(evt));
+    }
+
+    bool isInCache(InstEventUID euid)
+    {
+        auto evt = getCachedEvent_(euid);
+        return evt.has_value();
     }
 
     InstEvent getEvent(InstEventUID euid)
@@ -407,9 +431,30 @@ public:
 
     void postSim() override
     {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        while (!evt_cache_.empty())
+        {
+            pipeline_input_queue_.emplace(std::move(evt_cache_.front()));
+            evt_cache_.pop_front();
+        }
+    }
+
+    void teardown() override
+    {
         std::cout << "Event accesses:\n";
         std::cout << "    From cache: " << num_evts_retrieved_from_cache_ << "\n";
-        std::cout << "    From disk:  " << num_evts_retrieved_from_disk_ << "\n\n";
+
+        if (num_evts_retrieved_from_disk_)
+        {
+            auto avg_latency_us = avg_microseconds_recreating_evts_.mean();
+            std::cout << "    From disk:  " << num_evts_retrieved_from_disk_;
+            std::cout << " (avg latency " << std::fixed << std::setprecision(0) << avg_latency_us << " microseconds)\n\n";
+        }
+        else
+        {
+            std::cout << "    From disk:  0\n\n";
+        }
     }
 
 private:
@@ -452,7 +497,10 @@ private:
             compressed_evts_range.euid_range = std::make_pair(start, end);
         };
 
-        async_db_accessor_->evalAsync(query_func);
+        // Keep track of how long we spend waiting for a response
+        auto start = std::chrono::high_resolution_clock::now();
+
+        async_db_accessor_->eval(query_func);
         EXPECT_TRUE(!compressed_evts_range.all_event_bytes.empty());
 
         if (compressed_evts_range.all_event_bytes.empty())
@@ -477,6 +525,12 @@ private:
             auto index = euid - evts_range.euid_range.first;
             if (index < evts_range.events.size())
             {
+                // Keep track of how long we spend waiting for a response
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> dur = end - start;
+                auto us = std::chrono::duration_cast<std::chrono::microseconds>(dur).count();
+                avg_microseconds_recreating_evts_.add(us);
+
                 return evts_range.events[index];
             }
         }
@@ -506,12 +560,14 @@ private:
     };
 
     simdb::DatabaseManager* db_mgr_ = nullptr;
-    std::shared_ptr<simdb::pipeline::AsyncDatabaseAccessor> async_db_accessor_;
+    simdb::pipeline::AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
     std::deque<InstEvent> evt_cache_;
     simdb::ConcurrentQueue<InstEvent> pipeline_input_queue_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
+    InstEventUID last_evicted_euid_ = InstEventInvalidUID;
     size_t num_evts_retrieved_from_cache_ = 0;
     size_t num_evts_retrieved_from_disk_ = 0;
+    simdb::RunningMean avg_microseconds_recreating_evts_;
 };
 
 REGISTER_SIMDB_APPLICATION(MultiStageCache);
@@ -532,42 +588,74 @@ int main(int argc, char** argv)
 
     // Simulate...
     auto app = app_mgr.getApp<MultiStageCache>();
-
     InstEventUID next_evt_euid = 1;
-    std::queue<InstEvent> disk_evt_verif_queue;
 
-    for (size_t i = 1; i <= 1000; ++i)
+    std::priority_queue<TestInstEvent, std::vector<TestInstEvent>, CompareTestInstEvent> evt_verif_queue;
+
+    auto verify_top = [&evt_verif_queue, app]()
+    {
+        const auto& test_evt = evt_verif_queue.top();
+        const auto test_evt_euid = test_evt.orig_evt.euid;
+
+        // Ensure we recreate events from disk despite this "sim loop"
+        // running so fast that events are usually still in the cache.
+        if (test_evt.check_evicted_first)
+        {
+            while (app->isInCache(test_evt_euid))
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        }
+
+        const auto accessed_evt = app->getEvent(test_evt_euid);
+        EXPECT_EQUAL(accessed_evt, test_evt.orig_evt);
+        evt_verif_queue.pop();
+    };
+
+    constexpr uint64_t TICKS = 10000;
+    for (uint64_t tick = 1; tick <= TICKS; ++tick)
     {
         auto evt = InstEvent::createRandom(next_evt_euid++);
 
-        // Verify 100 of these events recreated from disk
-        if (i % 10 == 0)
+        // Let's add an event for future retrieval every 10 sent events
+        if (tick % 10 == 0)
         {
-            disk_evt_verif_queue.push(evt);
+            TestInstEvent test_evt;
+            test_evt.orig_evt = evt;
+
+            // Most of the time we will access an event very soon after sending it.
+            // These will very likely still be in the cache.
+            if (rand() % 10)
+            {
+                test_evt.access_tick = tick + (rand() % 3 + 1);
+                test_evt.access_tick = std::min(test_evt.access_tick, TICKS);
+            }
+
+            // Sometimes we will ask for events that are so old they are no
+            // longer cached.
+            else
+            {
+                test_evt.access_tick = tick + 1000 + rand() % 5;
+                test_evt.access_tick = std::min(test_evt.access_tick, TICKS);
+                test_evt.check_evicted_first = true;
+            }
+
+            evt_verif_queue.emplace(std::move(test_evt));
         }
 
-        auto evt_copy = evt;
-        auto euid = evt.euid;
-        app->process(std::move(evt));
+        // See if we should verify a previous event at this time
+        if (!evt_verif_queue.empty() && evt_verif_queue.top().access_tick == tick)
+        {
+            verify_top();
+        }
 
-        // It is much more common to ask for an event
-        // immediately after it occurred. Let's ensure
-        // that repeatedly hitting the cache has no issues.
-        auto cached_evt = app->getEvent(euid);
-        EXPECT_EQUAL(cached_evt, evt_copy);
+        // Send down the pipeline
+        app->process(std::move(evt));
     }
 
-    // Increase the chances that the database thread is processing events.
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-    // Now verify that we can get all events back from the database too.
-    while (!disk_evt_verif_queue.empty())
+    while (!evt_verif_queue.empty())
     {
-        const auto& expected_evt = disk_evt_verif_queue.front();
-        const auto euid = expected_evt.euid;
-        const auto actual_evt = app->getEvent(euid);
-        EXPECT_EQUAL(expected_evt, actual_evt);
-        disk_evt_verif_queue.pop();
+        verify_top();
     }
 
     // Finish...

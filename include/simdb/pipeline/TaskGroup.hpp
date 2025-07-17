@@ -36,8 +36,6 @@ public:
             task_desc += " (" + description + ")";
         }
         task->setDescription(task_desc);
-
-        requires_db_ |= task->requiresDatabase();
         tasks_.emplace_back(std::move(task));
         return this;
     }
@@ -50,24 +48,6 @@ public:
             tasks.push_back(task.get());
         }
         return tasks;
-    }
-
-    bool requiresDatabase() const
-    {
-        return requires_db_;
-    }
-
-    void setDatabaseManager(DatabaseManager* db_mgr)
-    {
-        assert(requiresDatabase());
-
-        for (auto& task : tasks_)
-        {
-            if (task->requiresDatabase())
-            {
-                task->setDatabaseManager(db_mgr);
-            }
-        }
     }
 
     void print(std::ostream& os, int indent = 0) const override
@@ -111,7 +91,6 @@ private:
     std::string pipeline_name_;
     std::string description_;
     std::vector<std::unique_ptr<TaskBase>> tasks_;
-    bool requires_db_ = false;
 };
 
 } // namespace simdb::pipeline
