@@ -59,6 +59,8 @@ private:
     {
         bool ran = false;
 
+        // Put all runnables (AsyncDbWriters) in a BEGIN/COMMIT block
+        // for fastest insert performance.
         db_mgr_->safeTransaction(
             [&]()
             {
@@ -70,6 +72,7 @@ private:
                     {
                         continue_while |= runnable->run();
 
+                        // Give as high priority as possible for async DB access
                         if (dormant_thread_.hasTasks())
                         {
                             continue_while = false;
@@ -167,6 +170,9 @@ private:
                 std::unique_lock<std::mutex> lock(mutex_);
                 cond_var_.wait(lock, [this] { return !pending_async_db_tasks_.empty() || stop_; });
 
+                // Assume we just woke up due to an async DB access request.
+                // Immediately start a transaction so the DB polling thread
+                // blocks until we are done responding to the requests.
                 db_mgr_->safeTransaction(
                     [&]()
                     {

@@ -106,6 +106,7 @@ private:
         {
             if (!run_())
             {
+                // Sleep for a fixed amount of time before polling all runnables again
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms_));
                 ++num_times_slept_;
             }
