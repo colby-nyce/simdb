@@ -16,7 +16,6 @@
 // The pipeline will use built-in SimDB elements:
 //   - Buffer
 //   - Function
-//   - DatabaseQueue
 //
 // As well as a user-defined element:
 //   - CircularBuffer

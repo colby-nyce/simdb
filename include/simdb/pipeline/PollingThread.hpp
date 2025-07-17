@@ -45,7 +45,7 @@ public:
             return;
         }
 
-        if (!is_running_)
+        if (!thread_)
         {
             is_running_ = true;
             start_ = std::chrono::high_resolution_clock::now();
@@ -55,14 +55,14 @@ public:
 
     virtual void close() noexcept
     {
-        if (is_running_)
+        if (thread_)
         {
             is_running_ = false;
             if (thread_->joinable())
             {
                 thread_->join();
-                thread_.reset();
             }
+            thread_.reset();
         }
     }
 

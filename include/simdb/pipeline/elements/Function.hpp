@@ -51,10 +51,7 @@ class Task<Function<FunctionIn, void>> : public TerminalTask<FunctionIn>
 {
 public:
     using Func = std::function<void(FunctionIn&&)>;
-    Task(Func func, InputQueuePtr<FunctionIn> input_queue = nullptr)
-        : TerminalTask<FunctionIn>(std::move(input_queue))
-        , func_(func)
-    {}
+    Task(Func func) : func_(func) {}
 
     bool run() override
     {

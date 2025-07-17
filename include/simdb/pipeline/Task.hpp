@@ -49,8 +49,8 @@ template <typename InputType>
 class TerminalTask : public TaskBase
 {
 public:
-    TerminalTask(InputQueuePtr<InputType> input_queue = nullptr)//TODO cnyce: are we going to keep accepting input queues?
-        : input_queue_(input_queue ? std::move(input_queue) : makeQueue<InputType>())
+    TerminalTask()
+        : input_queue_(makeQueue<InputType>())
     {}
 
     QueueBase* getInputQueue() override final
@@ -73,8 +73,8 @@ template <typename InputType, typename OutputType>
 class NonTerminalTask : public TaskBase
 {
 public:
-    NonTerminalTask(InputQueuePtr<InputType> input_queue = nullptr)
-        : input_queue_(input_queue ? std::move(input_queue) : makeQueue<InputType>())
+    NonTerminalTask()
+        : input_queue_(makeQueue<InputType>())
     {}
 
     QueueBase* getInputQueue() override final
@@ -102,11 +102,6 @@ protected:
 template <typename Element>
 class Task;
 
-/// Template the concrete tasks on things like Buffer, Function, Hub,
-/// or DatabaseQueue. You can also create your own pipeline element by
-/// specializing the Task class similar to Function.hpp, Buffer.hpp,
-/// or test/pipeline/elements/main.cpp (CircularBuffer).
-///
 template <typename Element, typename... Args>
 inline std::unique_ptr<Task<Element>> createTask(Args&&... args)
 {

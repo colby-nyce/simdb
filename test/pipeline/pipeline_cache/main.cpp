@@ -449,7 +449,7 @@ public:
         {
             auto avg_latency_us = avg_microseconds_recreating_evts_.mean();
             std::cout << "    From disk:  " << num_evts_retrieved_from_disk_;
-            std::cout << " (avg latency " << std::fixed << std::setprecision(0) << avg_latency_us << " microseconds)\n\n";
+            std::cout << " (avg latency " << size_t(avg_latency_us) << " microseconds)\n\n";
         }
         else
         {

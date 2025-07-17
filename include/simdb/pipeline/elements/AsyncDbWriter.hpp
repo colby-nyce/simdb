@@ -23,6 +23,7 @@ private:
         , func_(func)
     {}
 
+    /// Not meant to be publicly constructable.
     friend class AsyncDatabaseAccessor;
 
     /// Processes one item from the queue and returns. Always invoked on
@@ -66,9 +67,10 @@ private:
         , func_(func)
     {}
 
+    /// Not meant to be publicly constructable.
     friend class AsyncDatabaseAccessor;
 
-    /// Process all items from the queue. Always invoked on the database thread. 
+    /// Process one item from the queue. Always invoked on the database thread. 
     bool run() override
     {
         bool ran = false;

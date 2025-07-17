@@ -13,21 +13,13 @@ namespace simdb {
 
 namespace simdb::pipeline {
 
-template <typename InputType>
-class DatabaseQueue
-{
-public:
-
-private:
-};
-
 /// The database thread is used to ensure that Runnable::run()
 /// methods are grouped inside BEGIN/COMMIT TRANSACTION blocks
 /// for much better performance.
 ///
 /// It also provides asynchronous access to the database for
 /// async pipeline queries or serialized data writes.
-class DatabaseThread : private AsyncDatabaseAccessHandler, public PollingThread
+class DatabaseThread : public PollingThread, private AsyncDatabaseAccessHandler
 {
 public:
     DatabaseThread(DatabaseManager* db_mgr)
