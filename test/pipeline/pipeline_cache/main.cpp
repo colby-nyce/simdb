@@ -428,18 +428,7 @@ public:
         throw simdb::DBException("Could not get event with uid ") << euid;
     }
 
-    void postSim() override
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        while (!evt_cache_.empty())
-        {
-            pipeline_input_queue_.emplace(std::move(evt_cache_.front()));
-            evt_cache_.pop_front();
-        }
-    }
-
-    void teardown() override
+    void postTeardown() override
     {
         std::cout << "Event accesses:\n";
         std::cout << "    From cache: " << num_evts_retrieved_from_cache_ << "\n";
@@ -657,9 +646,7 @@ int main(int argc, char** argv)
     }
 
     // Finish...
-    app_mgr.postSim();
-    app_mgr.teardown();
-    app_mgr.destroy();
+    app_mgr.postSimLoopTeardown();
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

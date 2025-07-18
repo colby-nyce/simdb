@@ -56,8 +56,8 @@ public:
     virtual bool defineSchema(Schema&) { return false; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual std::unique_ptr<pipeline::Pipeline> createPipeline(pipeline::AsyncDatabaseAccessor*) { return nullptr; }
-    virtual void postSim() {}
-    virtual void teardown() {}
+    virtual void preTeardown() {}
+    virtual void postTeardown() {}
 
 protected:
     int getAppID_() const { return app_id_; }

@@ -158,14 +158,6 @@ public:
         pipeline_head_->emplace(std::move(input));
     }
 
-    void postSim() override
-    {
-    }
-
-    void teardown() override
-    {
-    }
-
 private:
     simdb::ConcurrentQueue<std::vector<double>>* pipeline_head_ = nullptr;
     simdb::DatabaseManager* db_mgr_ = nullptr;
@@ -200,9 +192,7 @@ int main(int argc, char** argv)
     }
 
     // Finish...
-    app_mgr.postSim();
-    app_mgr.teardown();
-    app_mgr.destroy();
+    app_mgr.postSimLoopTeardown(true);
 
     // Validate...
     std::vector<std::vector<double>> buffered_dot_products;

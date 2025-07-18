@@ -75,6 +75,21 @@ public:
         sqlite3_bind_blob(stmt_, (int32_t)col_idx+1, blobval.data_ptr, (int32_t)blobval.num_bytes, 0);
     }
 
+    void setColumnValue(uint32_t col_idx, const std::string& strval)
+    {
+        setColumnValue(col_idx, strval.c_str());
+    }
+
+    void setColumnValue(uint32_t col_idx, const char* strval)
+    {
+        if (col_dtypes_.at(col_idx) != SqlDataType::string_t)
+        {
+            throw DBException("Column ") << col_idx << " is not a TEXT";
+        }
+
+        sqlite3_bind_text(stmt_, (int32_t)col_idx+1, strval, -1, SQLITE_TRANSIENT);
+    }
+
     int createRecord()
     {
         auto rc = SQLiteReturnCode(sqlite3_step(stmt_));

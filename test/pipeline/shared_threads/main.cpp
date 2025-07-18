@@ -384,9 +384,7 @@ int main(int argc, char** argv)
     }
 
     // Finish...
-    app_mgr.postSim();
-    app_mgr.teardown();
-    app_mgr.destroy();
+    app_mgr.postSimLoopTeardown();
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;
