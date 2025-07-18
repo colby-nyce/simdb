@@ -23,7 +23,7 @@ private:
         , func_(func)
     {}
 
-    /// Not meant to be publicly constructable.
+    /// Not meant to be publicly constructible.
     friend class AsyncDatabaseAccessor;
 
     /// Processes one item from the queue and returns. Always invoked on
@@ -67,7 +67,7 @@ private:
         , func_(func)
     {}
 
-    /// Not meant to be publicly constructable.
+    /// Not meant to be publicly constructible.
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread. 
