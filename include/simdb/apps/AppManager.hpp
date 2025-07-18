@@ -269,10 +269,10 @@ public:
     /// app's pipelines when you call this method. The following will
     /// be performed:
     ///
-    ///   1. Call virtual App::preSimLoopTeardown(). Needed for any apps
-    ///      which use their own data structure to buffer data prior to
-    ///      sending it down the pipeline, as they will have to push the
-    ///      remaining data if they want it processed.
+    ///   1. Call virtual App::preTeardown(). Needed for any apps which
+    ///      use their own data structure to buffer data prior to sending
+    ///      it down the pipeline, as they will have to push the remaining
+    ///      data if they want it processed.
     ///
     ///   2. Stop all pipeline threads. Some data is still in the pipeline.
     ///
@@ -282,6 +282,7 @@ public:
     ///      DB writers.
     ///
     ///   4. Call AsyncDatabaseWriter::flushToPipeline() for all DB writers.
+    ///      This is done inside a BEGIN/COMMIT transaction.
     ///
     ///   5. Repeat steps 2-3 in a round-robin until all tasks say they
     ///      have nothing left to do.
@@ -291,9 +292,9 @@ public:
     ///
     ///   7. Destroy all threads.
     ///
-    ///   8. Call virtual App::postSimLoopTeardown() in a BEGIN/COMMIT
-    ///      transaction. This is the time to write your post-processing
-    ///      data, metadata, etc. if you need to.
+    ///   8. Call virtual App::postTeardown() in a BEGIN/COMMIT transaction.
+    ///      This is the time to write your post-processing data, metadata,
+    ///      and so on if you need to.
     ///
     void postSimLoopTeardown(bool delete_apps = false)
     {
