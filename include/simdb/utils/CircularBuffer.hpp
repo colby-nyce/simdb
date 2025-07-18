@@ -1,3 +1,5 @@
+// <CircularBuffer.hpp> -*- C++ -*-
+
 #pragma once
 
 #include <array>

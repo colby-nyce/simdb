@@ -100,6 +100,20 @@ private:
         dormant_thread_.close();
     }
 
+    /// Overridden from PollingThread
+    bool flushRunnablesToPipelines() override
+    {
+        bool did_work = false;
+
+        db_mgr_->safeTransaction(
+            [&]
+            {
+                did_work = PollingThread::flushRunnablesToPipelines();
+            });
+
+        return did_work;
+    }
+
     /// Unlike the "always-on" PollingThread, the DormantThread
     /// class uses a condition variable to wake up and service
     /// async DB accesses before going back to sleep.

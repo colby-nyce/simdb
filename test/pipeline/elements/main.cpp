@@ -4,8 +4,8 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/CircularBuffer.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
-#include "simdb/utils/CircularBuffer.hpp"
 #include "SimDBTester.hpp"
 
 // This test creates a SimDB app with a pipeline that contains some
@@ -18,67 +18,69 @@
 //   - Function
 //
 // As well as a user-defined element:
-//   - CircularBuffer
+//   - ReorderBuffer (ROB)
 //
 // The pipeline design:
 //
-// int -> itoa() -> buffer(5) -> hashval -> circbuf(10) -> DB
-//        *******************    **********************    *******************
-//        Thread 1               Thread 2                  Thread 3
+// int -> ROB -> itoa() -> buffer(5) -> hashval -> circbuf(10) -> DB
+//        **************************    **********************    *******************
+//        Thread 1                      Thread 2                  Thread 3
 //
+
+class ReorderBuffer {};
 
 namespace simdb::pipeline {
 
-// TODO cnyce: Make the CircularBuffer task a first-class citizen and do something else here.
-template <typename DataT, size_t BufferLen>
-class Task<simdb::CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, DataT>
+/// This user-defined Task element buffers incoming size_t's and only
+/// emits them when it can guarantee they are back in order. A common
+/// use case for this would be something like a thread pool to perform
+/// parallel tasks like compression, but then you need to put them back
+/// in their original order prior to a DB writer task.
+template <>
+class Task<ReorderBuffer> : public NonTerminalTask<size_t, size_t>
 {
 public:
-    using InputType = DataT;
-    using OutputType = DataT;
+    Task(size_t first_emitted_val)
+        : next_expected_val_(first_emitted_val)
+    {}
 
+private:
     bool run() override
     {
-        if (!this->output_queue_)
-        {
-            throw DBException("Output queue not set!");
-        }
-
-        InputType in;
-        if constexpr (std::is_arithmetic_v<InputType> && !std::is_pointer_v<InputType>)
-        {
-            // -Werror=maybe-uninitialized
-            in = 0;
-        }
-
+        size_t val = 0;
         bool ran = false;
-        if (this->input_queue_->get().try_pop(in))
+
+        if (this->input_queue_->get().try_pop(val))
         {
-            if (circ_buf_.full())
-            {
-                this->output_queue_->get().emplace(std::move(circ_buf_.pop()));
-            }
-            circ_buf_.push(std::move(in));
+            ran = true;
+            rob_.push(val);
+        }
+
+        if (!rob_.empty() && rob_.top() == next_expected_val_)
+        {
+            ++next_expected_val_;
+            this->output_queue_->get().push(rob_.top());
+            rob_.pop();
             ran = true;
         }
-
+ 
         return ran;
     }
 
-private:
     std::string getDescription_() const override
     {
-        return "CircularBuffer<" + demangle_type<DataT>() + ", " + std::to_string(BufferLen) + ">";
+        return "ReorderBuffer";
     }
 
-    simdb::CircularBuffer<InputType, BufferLen> circ_buf_;
+    size_t next_expected_val_;
+    std::priority_queue<size_t, std::vector<size_t>, std::greater<size_t>> rob_;
 };
 
 } // namespace simdb::pipeline
 
 void ITOA(size_t&& val, simdb::ConcurrentQueue<std::string>& out)
 {
-    std::string o = (val <= 127) ? std::string(1, static_cast<char>(val)) : "?";
+    std::string o = std::to_string(val);
     out.emplace(std::move(o));
 }
 
@@ -100,7 +102,7 @@ public:
         // We are going to send random ints down the pipeline, do a bunch
         // of transformations on them, and generate a hash value.
         auto& dp_tbl = schema.addTable("Pipeout");
-        dp_tbl.addColumn("HashVal", dt::int32_t);
+        dp_tbl.addColumn("HashVal", dt::string_t);
 
         return true;
     }
@@ -116,30 +118,35 @@ public:
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
         // Create a pipeline which takes random integers and processes them like so:
-        // int -> itoa() -> buffer(5) -> hashval -> circbuf(10) -> DB
-        //        *******************    **********************    *******************
-        //        Thread 1               Thread 2                  Thread 3
+        // int -> ROB -> itoa() -> buffer(5) -> hashval -> circbuf(10) -> DB
+        //        **************************    **********************    *******************
+        //        Thread 1                      Thread 2                  Thread 3
 
         // Thread 1 tasks --------------------------------------------------------------------------
 
+        // Task 1: Reorder buffer
+        auto rob_task = simdb::pipeline::createTask<ReorderBuffer>(1);
+        rob_task_ = rob_task.get();
+
         // *** Note the use of Function below. You can provide the function impl via a free
         // *** function, std::function, or a lambda.
-        // Task 1: take size_t and return std::string (using free function)
+        // Task 2: take size_t and return std::string (using free function)
         auto itoa_task = simdb::pipeline::createTask<simdb::pipeline::Function<size_t, std::string>>(ITOA);
 
-        // Task 2: take std::string from prev task and output std::vector<std::string> when full
+        // Task 3: take std::string from prev task and output std::vector<std::string> when full
         auto buffer_task = simdb::pipeline::createTask<simdb::pipeline::Buffer<std::string>>(5);
 
         // Thread 2 tasks --------------------------------------------------------------------------
 
-        // Task 3: take std::vector<std::string> from prev task and output a hashval size_t (using lambda)
+        // Task 4: take std::vector<std::string> from prev task and output a hashval size_t (using lambda)
         auto hashval_task = simdb::pipeline::createTask<simdb::pipeline::Function<std::vector<std::string>, size_t>>(
             [](std::vector<std::string>&& in, simdb::ConcurrentQueue<size_t>& out)
             {
                 size_t seed = 0;
                 std::hash<std::string> hasher;
 
-                for (const auto& str : in) {
+                for (const auto& str : in)
+                {
                     seed ^= hasher(str) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
                 }
 
@@ -147,31 +154,32 @@ public:
             }
         );
 
-        // Task 4: take hashval size_t and push to a circular buffer (user-defined element)
+        // Task 5: take hashval size_t and push to a circular buffer
         auto circbuf_task = simdb::pipeline::createTask<simdb::CircularBuffer<size_t, 10>>();
 
         // Thread 3 tasks --------------------------------------------------------------------------
 
-        // Task 5: take the hashval size_t emitted from the circular buffer and write to the database
+        // Task 6: take the hashval size_t emitted from the circular buffer and write to the database
         auto sqlite_task = db_accessor->createAsyncWriter<size_t, void>(
             SQL_TABLE("Pipeout"),
             SQL_COLUMNS("HashVal"),
             [](size_t&& in, simdb::PreparedINSERT* inserter)
             {
-                inserter->setColumnValue(0, in);
+                inserter->setColumnValue(0, std::to_string(in));
                 inserter->createRecord();
             }
         );
 
         // Connect tasks ---------------------------------------------------------------------------
-        *itoa_task >> *buffer_task >> *hashval_task >> *circbuf_task >> *sqlite_task;
+        *rob_task >> *itoa_task >> *buffer_task >> *hashval_task >> *circbuf_task >> *sqlite_task;
 
         // Get the pipeline input (head) -----------------------------------------------------------
-        pipeline_head_ = itoa_task->getTypedInputQueue<size_t>();
+        pipeline_head_ = rob_task->getTypedInputQueue<size_t>();
 
         // Assign threads (task groups) ------------------------------------------------------------
         // Thread 1:
         pipeline->createTaskGroup("PreProcess")
+            ->addTask(std::move(rob_task))
             ->addTask(std::move(itoa_task))
             ->addTask(std::move(buffer_task));
 
@@ -188,22 +196,38 @@ public:
         pipeline_head_->push(val);
     }
 
-    void postSim() override
+    void preTeardown() override
     {
     }
 
-    void teardown() override
+    void postTeardown() override
     {
     }
 
 private:
     simdb::ConcurrentQueue<size_t>* pipeline_head_ = nullptr;
     simdb::DatabaseManager* db_mgr_ = nullptr;
+    simdb::pipeline::Task<ReorderBuffer>* rob_task_ = nullptr;
 };
 
 REGISTER_SIMDB_APPLICATION(PipelineElementApp);
 
 TEST_INIT;
+
+std::random_device rd;
+std::mt19937 g(rd());
+
+std::vector<size_t> generateShuffledAutoIncVals(size_t starting_val, size_t num_vals)
+{
+    std::vector<size_t> vals;
+    for (size_t val = starting_val; val < starting_val + num_vals; ++val)
+    {
+        vals.push_back(val);
+    }
+
+    std::shuffle(vals.begin(), vals.end(), g);
+    return vals;
+}
 
 int main(int argc, char** argv)
 {
@@ -219,15 +243,63 @@ int main(int argc, char** argv)
 
     // Simulate...
     auto app = app_mgr.getApp<PipelineElementApp>();
-    for (size_t i = 1; i <= 10000; ++i)
+
+    size_t starting_val = 1;
+    for (size_t i = 0; i < 100; ++i)
     {
-        app->process(rand() % 256);
+        auto shuffled_vals = generateShuffledAutoIncVals(starting_val, 100);
+        for (auto val : shuffled_vals)
+        {
+            app->process(val);
+        }
+        starting_val += 100;
     }
 
     // Finish...
-    app_mgr.postSim();
-    app_mgr.teardown();
-    app_mgr.destroy();
+    app_mgr.postSimLoopTeardown(true);
+
+    // Validate...
+    auto get_hash_val = [](size_t starting_val, size_t num_vals)
+    {
+        std::vector<std::string> itoas;
+        for (size_t val = starting_val; val < starting_val + num_vals; ++val)
+        {
+            itoas.push_back(std::to_string(val));
+        }
+
+        size_t seed = 0;
+        std::hash<std::string> hasher;
+        for (const auto& str : itoas)
+        {
+            seed ^= hasher(str) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+
+        return std::to_string(seed);
+    };
+
+    std::vector<std::string> expected_hash_vals;
+    for (size_t i = 0; i < 1990; ++i)
+    {
+        starting_val = 5*i + 1;
+        size_t num_vals = 5;
+
+        auto hash_val = get_hash_val(starting_val, num_vals);
+        expected_hash_vals.push_back(hash_val);
+    }
+
+    auto query = db_mgr.createQuery("Pipeout");
+    EXPECT_EQUAL(query->count(), expected_hash_vals.size());
+
+    std::string actual_hash_val;
+    query->select("HashVal", actual_hash_val);
+
+    auto result_set = query->getResultSet();
+    for (auto expected_hash_val : expected_hash_vals)
+    {
+        EXPECT_TRUE(result_set.getNextRecord());
+        EXPECT_EQUAL(actual_hash_val, expected_hash_val);
+    }
+    EXPECT_FALSE(result_set.getNextRecord());
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

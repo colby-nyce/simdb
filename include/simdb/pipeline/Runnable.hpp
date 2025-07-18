@@ -29,6 +29,19 @@ public:
     /// actually did anything, false if there was no input data.
     virtual bool run() = 0;
 
+    /// Perform end-of-simulation flush to pipeline. The pipeline
+    /// threads have been stopped, so you don't have to worry about
+    /// thread safety of your subclass objects.
+    virtual bool flushToPipeline()
+    {
+        bool did_work = false;
+        while (run())
+        {
+            did_work = true;
+        }
+        return did_work;
+    }
+
     /// Print info about this runnable for reporting purposes.
     virtual void print(std::ostream& os, int indent) const
     {

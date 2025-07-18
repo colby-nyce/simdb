@@ -12,6 +12,8 @@
 #include <set>
 #include <iostream>
 
+#define PROFILE_APP_PHASE ScopedTimer timer(__FUNCTION__, msg_log_); (void)timer;
+
 namespace simdb
 {
 
@@ -135,7 +137,7 @@ public:
     /// Create app-specific schemas for the instantiated apps.
     void createSchemas()
     {
-        ScopedTimer timer("createSchemas()", msg_log_); (void)timer;
+        PROFILE_APP_PHASE
 
         db_mgr_->safeTransaction(
             [&]()
@@ -176,7 +178,7 @@ public:
     /// Call this after command line args and config files are parsed.
     void postInit(int argc, char** argv)
     {
-        ScopedTimer timer("postInit()", msg_log_); (void)timer;
+        PROFILE_APP_PHASE
 
         db_mgr_->safeTransaction(
             [&]()
@@ -198,7 +200,7 @@ public:
             throw DBException("Pipelines already open");
         }
 
-        ScopedTimer timer("openPipelines()", msg_log_); (void)timer;
+        PROFILE_APP_PHASE
 
         polling_threads_.emplace_back(std::make_unique<pipeline::DatabaseThread>(db_mgr_));
         auto db_thread = dynamic_cast<pipeline::DatabaseThread*>(polling_threads_.back().get());
@@ -262,85 +264,88 @@ public:
         msg_log_ << "\n";
     }
 
-    /// Call this after the simulation loop ends for post-processing tasks.
-    void postSim()
+    /// This method is to be called after the main simulation loop ends.
+    /// It is assumed that there is no more data to be sent into your
+    /// app's pipelines when you call this method. The following will
+    /// be performed:
+    ///
+    ///   1. Call virtual App::preSimLoopTeardown(). Needed for any apps
+    ///      which use their own data structure to buffer data prior to
+    ///      sending it down the pipeline, as they will have to push the
+    ///      remaining data if they want it processed.
+    ///
+    ///   2. Stop all pipeline threads. Some data is still in the pipeline.
+    ///
+    ///   3. Call virtual TaskBase::flushToPipeline() for every task.
+    ///      They will be called in the same order as they are organized
+    ///      in their respective TaskGroup. Do this for all except the
+    ///      DB writers.
+    ///
+    ///   4. Call AsyncDatabaseWriter::flushToPipeline() for all DB writers.
+    ///
+    ///   5. Repeat steps 2-3 in a round-robin until all tasks say they
+    ///      have nothing left to do.
+    ///
+    ///   6. Destroy all pipelines (and therefore task groups, tasks, and
+    ///      their respective ConcurrentQueues).
+    ///
+    ///   7. Destroy all threads.
+    ///
+    ///   8. Call virtual App::postSimLoopTeardown() in a BEGIN/COMMIT
+    ///      transaction. This is the time to write your post-processing
+    ///      data, metadata, etc. if you need to.
+    ///
+    void postSimLoopTeardown(bool delete_apps = false)
     {
-        ScopedTimer timer("postSim()", msg_log_); (void)timer;
+        PROFILE_APP_PHASE
+
+        for (auto app : getApps_())
+        {
+            app->preTeardown();
+        }
+
+        for (auto& thread : polling_threads_)
+        {
+            thread->close();
+
+            std::ostringstream oss;
+            thread->printPerfReport(oss);
+            msg_log_ << oss.str() << "\n\n";
+        }
+
+        bool continue_while;
+        do
+        {
+            continue_while = false;
+            for (auto& thread : polling_threads_)
+            {
+                continue_while |= thread->flushRunnablesToPipelines();
+            }
+        } while (continue_while);
+
+        pipelines_.clear();
+        polling_threads_.clear();
 
         db_mgr_->safeTransaction(
             [&]()
             {
                 for (auto app : getApps_())
                 {
-                    app->postSim();
+                    app->postTeardown();
                 }
             });
-    }
 
-    /// Call this after the simulation ends for resource cleanup tasks
-    /// such as closing files, releasing memory, etc.
-    void teardown()
-    {
-        ScopedTimer timer("teardown()", msg_log_); (void)timer;
-
-        // Wait until the pipeline is finished
-        std::vector<const simdb::pipeline::QueueBase*> input_queues;
-        for (const auto& pipeline : pipelines_)
+        if (delete_apps)
         {
-            for (const auto group : pipeline->getTaskGroups())
-            {
-                for (const auto task : group->getTasks())
-                {
-                    if (auto q = task->getInputQueue())
-                    {
-                        input_queues.push_back(q);
-                    }
-                }
-            }
+            destroyAllApps();
         }
-
-        while (true)
-        {
-            bool all_empty = true;
-            for (const auto q : input_queues)
-            {
-                if (q->size() > 0)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    all_empty = false;
-                    break;
-                }
-            }
-
-            if (all_empty)
-            {
-                break;
-            }
-        }
-
-        for (auto& thread : polling_threads_)
-        {
-            thread->close();
-            std::ostringstream oss;
-            thread->printPerfReport(oss);
-            msg_log_ << oss.str() << "\n\n";
-        }
-        polling_threads_.clear();
-
-        for (auto app : getApps_())
-        {
-            app->teardown();
-        }
-        pipelines_.clear();
     }
 
     /// Delete all instantiated apps. This may be needed since AppManager
     /// is a singleton and your simulator might want to call app destructors
     /// before the AppManager itself is destroyed on program exit.
-    void destroy()
+    void destroyAllApps()
     {
-        ScopedTimer timer("destroy()", msg_log_); (void)timer;
-
         assert(polling_threads_.empty());
         assert(pipelines_.empty());
         apps_.clear();

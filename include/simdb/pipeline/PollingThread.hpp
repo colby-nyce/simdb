@@ -38,6 +38,16 @@ public:
         runnables_.emplace_back(runnable);
     }
 
+    virtual bool flushRunnablesToPipelines()
+    {
+        bool did_work = false;
+        for (auto runnable : runnables_)
+        {
+            did_work |= runnable->flushToPipeline();
+        }
+        return did_work;
+    }
+
     virtual void open()
     {
         if (runnables_.empty())
