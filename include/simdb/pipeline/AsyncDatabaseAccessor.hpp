@@ -43,16 +43,37 @@ class AsyncDatabaseAccessor
 {
 public:
     /// Create an entry point for asynchronous database writes
-    template <typename Input, typename Output, typename... Args>
-    Task<AsyncDatabaseWriter<Input, Output>>* createAsyncWriter(
-        SqlTable&& table, SqlColumns&& cols, Args&&... args)
+    template <typename App, typename Input, typename Output, typename... Args>
+    Task<AsyncDatabaseWriter<App, Input, Output>>* createAsyncWriter(Args&&... args)
     {
         auto db_mgr = db_access_handler_->getDatabaseManager();
-        auto inserter = db_mgr->prepareINSERT(std::move(table), std::move(cols));
 
-        std::unique_ptr<Task<AsyncDatabaseWriter<Input, Output>>> writer(
-            new Task<AsyncDatabaseWriter<Input, Output>>(
-                std::move(inserter), std::forward<Args>(args)...));
+        App app(db_mgr);
+        Schema schema;
+        if (!app.defineSchema(schema))
+        {
+            throw DBException("App '") << App::NAME << "' should have defined its schema";
+        }
+
+        // Create all PreparedINSERT objects for this App's schema.
+        typename AppPreparedINSERTs::TableInserters inserters;
+        for (const auto& tbl : schema.getTables())
+        {
+            std::vector<std::string> col_names;
+            for (const auto& col : tbl.getColumns())
+            {
+                col_names.emplace_back(col->getName());
+            }
+
+            SqlTable table(tbl.getName());
+            SqlColumns columns(col_names);
+            auto inserter = db_mgr->prepareINSERT(std::move(table), std::move(columns));
+            inserters[tbl.getName()] = std::move(inserter);
+        }
+
+        std::unique_ptr<Task<AsyncDatabaseWriter<App, Input, Output>>> writer(
+            new Task<AsyncDatabaseWriter<App, Input, Output>>(
+                db_mgr, std::move(inserters), std::forward<Args>(args)...));
 
         auto ret = writer.get();
         db_access_handler_->addRunnable(std::move(writer));

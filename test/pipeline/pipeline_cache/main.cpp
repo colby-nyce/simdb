@@ -338,11 +338,13 @@ public:
         );
 
         // This task receives EventsRangeAsBytes from the zlib task on one thread and writes them to disk on the DB thread
-        auto async_writer = db_accessor->createAsyncWriter<EventsRangeAsBytes, InstructionEventUIDRange>(
-            SQL_TABLE("CompressedEvents"),
-            SQL_COLUMNS("StartEuid", "EndEuid", "CompressedEvtBytes"),
-            [](EventsRangeAsBytes&& evts, simdb::ConcurrentQueue<InstructionEventUIDRange>& out, simdb::PreparedINSERT* inserter)
+        auto async_writer = db_accessor->createAsyncWriter<MultiStageCache, EventsRangeAsBytes, InstructionEventUIDRange>(
+            [](EventsRangeAsBytes&& evts,
+               simdb::ConcurrentQueue<InstructionEventUIDRange>& out,
+               simdb::pipeline::AppPreparedINSERTs* tables)
             {
+                auto inserter = tables->getPreparedINSERT("CompressedEvents");
+
                 inserter->setColumnValue(0, evts.euid_range.first);
                 inserter->setColumnValue(1, evts.euid_range.second);
                 inserter->setColumnValue(2, evts.all_event_bytes);

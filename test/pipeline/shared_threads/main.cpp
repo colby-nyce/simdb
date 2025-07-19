@@ -7,7 +7,6 @@
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/RunningMean.hpp"
 #include "simdb/utils/Compress.hpp"
-#include "simdb/utils/TinyStrings.hpp"
 #include "SimDBTester.hpp"
 
 // This test creates 4 separate SimDB apps with competing requirements:
@@ -125,11 +124,10 @@ public:
         );
 
         // Thread 4 task (database thread)
-        auto db_task = db_accessor->createAsyncWriter<uint64_t, int>(
-            SQL_TABLE("App2Data"),
-            SQL_COLUMNS("IntVal"),
-            [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::PreparedINSERT* inserter)
+        auto db_task = db_accessor->createAsyncWriter<App2, uint64_t, int>(
+            [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::pipeline::AppPreparedINSERTs* tables)
             {
+                auto inserter = tables->getPreparedINSERT("App2Data");
                 inserter->setColumnValue(0, in);
                 auto record_id = inserter->createRecord();
                 out.push(record_id);
@@ -225,11 +223,10 @@ public:
         using DatabaseIn = ZlibOut;
         using DatabaseOut = std::pair<int, size_t>; // Database record ID, # compressed bytes
 
-        auto db_task = db_accessor->createAsyncWriter<DatabaseIn, DatabaseOut>(
-            SQL_TABLE("App3Data"),
-            SQL_COLUMNS("DataBlob"),
-            [](DatabaseIn&& in, simdb::ConcurrentQueue<DatabaseOut>& out, simdb::PreparedINSERT* inserter)
+        auto db_task = db_accessor->createAsyncWriter<App3, DatabaseIn, DatabaseOut>(
+            [](DatabaseIn&& in, simdb::ConcurrentQueue<DatabaseOut>& out, simdb::pipeline::AppPreparedINSERTs* tables)
             {
+                auto inserter = tables->getPreparedINSERT("App3Data");
                 inserter->setColumnValue(0, in);
                 auto record_id = inserter->createRecord();
                 DatabaseOut o = std::make_pair(record_id, in.size());
@@ -309,42 +306,59 @@ class App4 : public simdb::App
 {
 public:
     static constexpr auto NAME = "app-4";
-    App4(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr), tiny_strings_(db_mgr) {}
+    App4(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
     ~App4() noexcept = default;
+
+    bool defineSchema(simdb::Schema& schema) override
+    {
+        using dt = simdb::SqlDataType;
+
+        auto& tbl = schema.addTable("TinyStringIDs");
+        tbl.addColumn("StringValue", dt::string_t);
+        tbl.addColumn("StringID", dt::int32_t);
+
+        return true;
+    }
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
         // Thread 1 task (database thread)
-        auto db_task = db_accessor->createAsyncWriter<std::string, void>(
-            SQL_TABLE("TinyStringIDs"),
-            SQL_COLUMNS("StringValue", "StringID"),
-            [this](std::string&& in, simdb::PreparedINSERT* inserter) mutable
+        auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
+            [this](NewStringEntry&& new_entry, simdb::pipeline::AppPreparedINSERTs* tables) mutable
             {
-                // TODO cnyce: use prepared inserter for TinyStrings
-                (void)inserter;
-
-                tiny_strings_.insert(in);
-                tiny_strings_.serialize();
+                auto inserter = tables->getPreparedINSERT("TinyStringIDs");
+                inserter->setColumnValue(0, new_entry.first);
+                inserter->setColumnValue(1, new_entry.second);
+                inserter->createRecord();
             }
         );
 
         // Get the pipeline input (head) ---------------------------------------------------
-        pipeline_head_ = db_task->getTypedInputQueue<std::string>();
+        pipeline_head_ = db_task->getTypedInputQueue<NewStringEntry>();
 
         return pipeline;
     }
 
     void process(uint64_t val)
     {
-        pipeline_head_->push(std::to_string(val));
+        auto s = std::to_string(val);
+        if (string_ids_.find(s) == string_ids_.end())
+        {
+            auto string_id = string_ids_.size() + 1;
+            string_ids_[s] = string_id;
+
+            NewStringEntry new_entry = std::make_pair(s, string_id);
+            pipeline_head_->emplace(std::move(new_entry));
+        }
     }
 
 private:
-    simdb::ConcurrentQueue<std::string>* pipeline_head_ = nullptr;
+    using NewStringEntry = std::pair<std::string, int>; // String plus its ID
+    simdb::ConcurrentQueue<NewStringEntry>* pipeline_head_ = nullptr;
     simdb::DatabaseManager* db_mgr_ = nullptr;
-    simdb::TinyStrings<true> tiny_strings_;
+    std::unordered_map<std::string, int> string_ids_;
 };
 
 REGISTER_SIMDB_APPLICATION(App1);
