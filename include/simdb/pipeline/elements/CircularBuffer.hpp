@@ -10,6 +10,9 @@ namespace simdb::pipeline {
 template <typename DataT, size_t BufferLen>
 class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, DataT>
 {
+private:
+    /// \brief Process one item from the queue.
+    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         if (!this->output_queue_)
@@ -51,7 +54,6 @@ class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, Dat
         return did_work;
     }
 
-private:
     std::string getDescription_() const override
     {
         return "CircularBuffer<" + demangle_type<DataT>() + ", " + std::to_string(BufferLen) + ">";

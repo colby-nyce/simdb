@@ -19,6 +19,9 @@ public:
 
     using TaskBase::getTypedInputQueue;
 
+private:
+    /// \brief Process one item from the queue.
+    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         if (!this->output_queue_)
@@ -36,7 +39,6 @@ public:
         return ran;
     }
 
-private:
     std::string getDescription_() const override
     {
         return "Function<" + demangle_type<FunctionIn>() + ", " + demangle_type<FunctionOut>() + ">";
@@ -53,6 +55,9 @@ public:
     using Func = std::function<void(FunctionIn&&)>;
     Task(Func func) : func_(func) {}
 
+private:
+    /// \brief Process one item from the queue.
+    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         FunctionIn in;
@@ -65,7 +70,6 @@ public:
         return ran;
     }
 
-private:
     std::string getDescription_() const override
     {
         return "Function<" + demangle_type<FunctionIn>() + ", void>";
