@@ -52,7 +52,19 @@ public:
 
     SqlColumns(const char* col_name)
     {
+        // It is important that this is emplace_front()
+        // since this constructor might be called last
+        // in a chain of constructors (parameter pack
+        // unrolling).
         col_names_.emplace_front(col_name);
+    }
+
+    SqlColumns(const std::vector<std::string>& col_names)
+    {
+        for (const auto& col_name : col_names)
+        {
+            col_names_.emplace_back(col_name);
+        }
     }
 
     void writeColsForINSERT(std::ostringstream& oss) const

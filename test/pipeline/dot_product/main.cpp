@@ -79,11 +79,12 @@ void CompressBytes(BufferedDotProductValues&& in, simdb::ConcurrentQueue<Compres
     out.emplace(std::move(compressed));
 }
 
-void WriteCompressedBytes(CompressedBytes&& in, simdb::PreparedINSERT* inserter)
+void WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSERTs* tables)
 {
     // This is on the dedicated DB thread. Note that we are inside a
     // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
     // going on.
+    auto inserter = tables->getPreparedINSERT("DotProducts");
     inserter->setColumnValue(0, in);
     inserter->createRecord();
 }
@@ -128,10 +129,7 @@ public:
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProductValues, CompressedBytes>>(CompressBytes);
 
         // Thread 3 task
-        auto sqlite_task = db_accessor->createAsyncWriter<CompressedBytes, void>(
-            SQL_TABLE("DotProducts"),
-            SQL_COLUMNS("Blob"),
-            WriteCompressedBytes);
+        auto sqlite_task = db_accessor->createAsyncWriter<DotProductApp, CompressedBytes, void>(WriteCompressedBytes);
 
         // Connect tasks -------------------------------------------------------------------
         *dot_prod_task1 >> *dot_prod_task2 >> *dot_prod_task3 >> *zlib_task >> *sqlite_task;

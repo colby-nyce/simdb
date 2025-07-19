@@ -160,11 +160,10 @@ public:
         // Thread 3 tasks --------------------------------------------------------------------------
 
         // Task 6: take the hashval size_t emitted from the circular buffer and write to the database
-        auto sqlite_task = db_accessor->createAsyncWriter<size_t, void>(
-            SQL_TABLE("Pipeout"),
-            SQL_COLUMNS("HashVal"),
-            [](size_t&& in, simdb::PreparedINSERT* inserter)
+        auto sqlite_task = db_accessor->createAsyncWriter<PipelineElementApp, size_t, void>(
+            [](size_t&& in, simdb::pipeline::AppPreparedINSERTs* tables)
             {
+                auto inserter = tables->getPreparedINSERT("Pipeout");
                 inserter->setColumnValue(0, std::to_string(in));
                 inserter->createRecord();
             }
