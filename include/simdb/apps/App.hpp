@@ -53,7 +53,6 @@ class App
 {
 public:
     virtual ~App() = default;
-    virtual bool defineSchema(Schema&) { return false; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual std::unique_ptr<pipeline::Pipeline> createPipeline(pipeline::AsyncDatabaseAccessor*) { return nullptr; }
     virtual void preTeardown() {}
@@ -74,6 +73,7 @@ class AppFactoryBase
 public:
     virtual ~AppFactoryBase() = default;
     virtual App* createApp(DatabaseManager*) = 0;
+    virtual void defineSchema(Schema& schema) const = 0;
 };
 
 template <typename AppT>
@@ -83,6 +83,11 @@ public:
     App* createApp(DatabaseManager* db_mgr) override
     {
         return new AppT(db_mgr);
+    }
+
+    void defineSchema(Schema& schema) const override
+    {
+        AppT::defineSchema(schema);
     }
 };
 

@@ -30,6 +30,10 @@ public:
     App1(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
     ~App1() noexcept = default;
 
+    static void defineSchema(simdb::Schema&)
+    {
+    }
+
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor*) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
@@ -87,12 +91,11 @@ public:
     App2(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
     ~App2() noexcept = default;
 
-    bool defineSchema(simdb::Schema& schema) override
+    static void defineSchema(simdb::Schema& schema)
     {
         using dt = simdb::SqlDataType;
         auto& dp_tbl = schema.addTable("App2Data");
         dp_tbl.addColumn("IntVal", dt::int64_t);
-        return true;
     }
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
@@ -189,12 +192,11 @@ public:
     App3(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
     ~App3() noexcept = default;
 
-    bool defineSchema(simdb::Schema& schema) override
+    static void defineSchema(simdb::Schema& schema)
     {
         using dt = simdb::SqlDataType;
         auto& dp_tbl = schema.addTable("App3Data");
         dp_tbl.addColumn("DataBlob", dt::blob_t);
-        return true;
     }
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
@@ -309,15 +311,13 @@ public:
     App4(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
     ~App4() noexcept = default;
 
-    bool defineSchema(simdb::Schema& schema) override
+    static void defineSchema(simdb::Schema& schema)
     {
         using dt = simdb::SqlDataType;
 
         auto& tbl = schema.addTable("TinyStringIDs");
         tbl.addColumn("StringValue", dt::string_t);
         tbl.addColumn("StringID", dt::int32_t);
-
-        return true;
     }
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override

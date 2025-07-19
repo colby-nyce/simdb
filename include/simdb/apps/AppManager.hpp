@@ -167,10 +167,9 @@ public:
                     app->app_id_ = record->getId();
 
                     Schema app_schema;
-                    if (app->defineSchema(app_schema))
-                    {
-                        db_mgr_->appendSchema(app_schema);
-                    }
+                    auto& factory = app_factories_[app_name];
+                    factory->defineSchema(app_schema);
+                    db_mgr_->appendSchema(app_schema);
                 }
             });
     }

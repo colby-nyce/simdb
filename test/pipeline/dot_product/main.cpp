@@ -100,14 +100,12 @@ public:
 
     ~DotProductApp() noexcept = default;
 
-    bool defineSchema(simdb::Schema& schema) override
+    static void defineSchema(simdb::Schema& schema)
     {
         using dt = simdb::SqlDataType;
 
         auto& dp_tbl = schema.addTable("DotProducts");
         dp_tbl.addColumn("Blob", dt::blob_t);
-
-        return true;
     }
 
     void postInit(int argc, char** argv) override
