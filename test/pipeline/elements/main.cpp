@@ -95,7 +95,7 @@ public:
 
     ~PipelineElementApp() noexcept = default;
 
-    bool defineSchema(simdb::Schema& schema) override
+    static void defineSchema(simdb::Schema& schema)
     {
         using dt = simdb::SqlDataType;
 
@@ -103,8 +103,6 @@ public:
         // of transformations on them, and generate a hash value.
         auto& dp_tbl = schema.addTable("Pipeout");
         dp_tbl.addColumn("HashVal", dt::string_t);
-
-        return true;
     }
 
     void postInit(int argc, char** argv) override

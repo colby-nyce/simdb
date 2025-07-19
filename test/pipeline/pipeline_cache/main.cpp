@@ -224,7 +224,7 @@ public:
 
     ~MultiStageCache() noexcept = default;
 
-    bool defineSchema(simdb::Schema& schema) override
+    static void defineSchema(simdb::Schema& schema)
     {
         using dt = simdb::SqlDataType;
 
@@ -233,8 +233,6 @@ public:
         tbl.addColumn("EndEuid", dt::int64_t);
         tbl.addColumn("CompressedEvtBytes", dt::blob_t);
         tbl.createCompoundIndexOn({"StartEuid", "EndEuid"});
-
-        return true;
     }
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override

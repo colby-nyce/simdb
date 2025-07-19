@@ -48,12 +48,8 @@ public:
     {
         auto db_mgr = db_access_handler_->getDatabaseManager();
 
-        App app(db_mgr);
         Schema schema;
-        if (!app.defineSchema(schema))
-        {
-            throw DBException("App '") << App::NAME << "' should have defined its schema";
-        }
+        App::defineSchema(schema);
 
         // Create all PreparedINSERT objects for this App's schema.
         typename AppPreparedINSERTs::TableInserters inserters;
