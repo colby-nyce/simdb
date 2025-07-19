@@ -45,6 +45,8 @@ public:
     {}
 
 private:
+    /// \brief Process one item from the queue.
+    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         size_t val = 0;

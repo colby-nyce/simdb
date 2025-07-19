@@ -49,8 +49,8 @@ private:
 
     friend class AsyncDatabaseAccessor;
 
-    /// Processes one item from the queue and returns. Always invoked on
-    /// the database thread. 
+    /// Process one item from the queue. Always invoked on the database thread.
+    /// Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         if (!this->output_queue_)
@@ -82,10 +82,9 @@ private:
 template <typename App, typename Input>
 class Task<AsyncDatabaseWriter<App, Input, void>> : public TerminalTask<Input>
 {
-public:
+private:
     using Func = std::function<void(Input&&, AppPreparedINSERTs*)>;
 
-private:
     /// Not meant to be publicly constructible.
     Task(DatabaseManager* db_mgr, AppPreparedINSERTs&& app_tables, Func func)
         : func_(func)
@@ -95,7 +94,8 @@ private:
 
     friend class AsyncDatabaseAccessor;
 
-    /// Process one item from the queue. Always invoked on the database thread. 
+    /// Process one item from the queue. Always invoked on the database thread.
+    /// Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         bool ran = false;
