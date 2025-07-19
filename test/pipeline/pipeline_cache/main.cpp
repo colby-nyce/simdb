@@ -237,12 +237,6 @@ public:
         return true;
     }
 
-    enum class SchemaTables
-    {
-        CompressedEvents,
-        __COUNT__
-    };
-
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
