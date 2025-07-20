@@ -12,11 +12,6 @@ message(STATUS "Using SQLite3 ${SQLite3_VERSION}")
 find_package(ZLIB REQUIRED)
 message(STATUS "Using zlib ${ZLIB_VERSION_STRING}")
 
-find_package(TBB)
-if(TBB_VERSION)
-    message(STATUS "Using TBB ${TBB_VERSION}")
-endif()
-
 set(SIMDB_BASE ${CMAKE_CURRENT_SOURCE_DIR})
 option(SIMDB_PEDANTIC "Enable build with -Wall -Wextra -Werror" ON)
 
@@ -40,10 +35,6 @@ target_include_directories(simdb SYSTEM INTERFACE
 target_link_libraries(simdb INTERFACE
     sqlite3 ZLIB::ZLIB pthread
 )
-
-if(TBB_VERSION)
-    target_link_libraries(simdb INTERFACE TBB::tbb)
-endif()
 
 add_subdirectory(test EXCLUDE_FROM_ALL)
 
