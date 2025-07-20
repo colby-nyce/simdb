@@ -1,4 +1,4 @@
-// <MetaStructs.hpp> -*- C++ -*-
+// <TypeTraits.hpp> -*- C++ -*-
 
 #pragma once
 

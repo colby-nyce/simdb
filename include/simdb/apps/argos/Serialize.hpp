@@ -4,7 +4,7 @@
 
 #include "simdb/Exceptions.hpp"
 #include "simdb/pipeline/CollectionBuffer.hpp"
-#include "simdb/utils/MetaStructs.hpp"
+#include "simdb/utils/TypeTraits.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 #include "simdb/utils/Demangle.hpp"
 
