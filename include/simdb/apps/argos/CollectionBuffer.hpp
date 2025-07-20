@@ -53,7 +53,7 @@ private:
 };
 
 template <typename T>
-inline typename std::enable_if<std::is_arithmetic<T>::value && std::is_scalar<T>::value && !meta_utils::is_any_pointer<T>::value,
+inline typename std::enable_if<std::is_arithmetic<T>::value && std::is_scalar<T>::value && !type_traits::is_any_pointer<T>::value,
                                CollectionBuffer&>::type
 operator<<(CollectionBuffer& buffer, const T& val)
 {

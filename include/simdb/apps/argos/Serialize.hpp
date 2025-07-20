@@ -643,7 +643,7 @@ template <typename StructT> class StructSerializer
 public:
     static StructSerializer* getInstance()
     {
-        static_assert(!meta_utils::is_any_pointer<StructT>::value, "StructSerializer does not support pointer types");
+        static_assert(!type_traits::is_any_pointer<StructT>::value, "StructSerializer does not support pointer types");
 
         static StructSerializer serializer;
         return &serializer;
