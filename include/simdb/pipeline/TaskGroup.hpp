@@ -50,6 +50,16 @@ public:
         return tasks;
     }
 
+    std::vector<const TaskBase*> getTasks() const
+    {
+        std::vector<const TaskBase*> tasks;
+        for (auto& task : tasks_)
+        {
+            tasks.push_back(task.get());
+        }
+        return tasks;
+    }
+
     void print(std::ostream& os, int indent = 0) const override
     {
         Runnable::print(os, indent);
