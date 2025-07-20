@@ -37,6 +37,7 @@ target_link_libraries(simdb INTERFACE
 )
 
 add_subdirectory(test EXCLUDE_FROM_ALL)
+add_subdirectory(examples EXCLUDE_FROM_ALL)
 
 install(DIRECTORY include/simdb/ DESTINATION include/simdb)
 install(DIRECTORY cmake/ DESTINATION lib/cmake/simdb)
