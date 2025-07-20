@@ -218,9 +218,7 @@ void TestPipelineCircularBuffer(simdb::DatabaseManager* db_mgr)
         circbuf_in.push(val);
     }
 
-    static constexpr size_t INFINITE = std::numeric_limits<size_t>::max();
-
-    auto wait_avail = [&](size_t min_avail = 1, size_t num_tries = 5)
+    auto wait_avail = [&](size_t min_avail = 1, size_t num_tries = 10)
     {
         auto num_avail = circbuf_out.size();
         while (num_avail < min_avail && num_tries-- > 0)
@@ -232,7 +230,7 @@ void TestPipelineCircularBuffer(simdb::DatabaseManager* db_mgr)
     };
 
     // Wait for the oldest (0-4) to arrive
-    wait_avail(5, INFINITE);
+    wait_avail(5);
 
     auto validate = [&](int expected_val)
     {
