@@ -11,8 +11,7 @@
 #include <memory>
 #include <string>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Callback which gets invoked during SELECT queries that involve
 /// floating point comparisons with a supplied tolerance.

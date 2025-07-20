@@ -8,8 +8,7 @@
 #include "simdb/sqlite/Constraints.hpp"
 #include "simdb/sqlite/Iterator.hpp"
 
-namespace simdb
-{
+namespace simdb {
 
 /// Used in query->orderBy("ColA", ASC|DESC)
 enum class QueryOrder

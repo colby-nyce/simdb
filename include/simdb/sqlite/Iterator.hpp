@@ -10,8 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /*!
  * \class ResultWriterBase

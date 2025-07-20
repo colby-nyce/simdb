@@ -6,8 +6,7 @@
 #include "simdb/utils/DeferredLock.hpp"
 #include <mutex>
 
-namespace simdb
-{
+namespace simdb {
 
 /// To keep SimDB collection as fast and small as possible, we serialize strings
 /// not as actual strings, but as ints. This class is used to map strings to ints,

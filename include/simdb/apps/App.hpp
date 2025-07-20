@@ -34,8 +34,7 @@
 /// with 1-to-many apps that are all writing to it with their own custom schemas
 /// and logic.
 
-namespace simdb
-{
+namespace simdb {
 
 class DatabaseManager;
 class Schema;

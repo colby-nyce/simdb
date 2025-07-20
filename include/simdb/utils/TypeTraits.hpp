@@ -1,4 +1,4 @@
-// <MetaStructs.hpp> -*- C++ -*-
+// <TypeTraits.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -17,7 +17,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace simdb::meta_utils {
+namespace simdb::type_traits {
 
 template <typename> struct is_any_pointer : public std::false_type
 {
@@ -203,4 +203,4 @@ struct TypeAt<N, T, Ts...>
     using type = typename TypeAt<N - 1, Ts...>::type;
 };
 
-} // namespace simdb::meta_utils
+} // namespace simdb::type_traits

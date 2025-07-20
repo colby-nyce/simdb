@@ -14,8 +14,7 @@
 
 #define PROFILE_APP_PHASE ScopedTimer timer(__FUNCTION__, msg_log_); (void)timer;
 
-namespace simdb
-{
+namespace simdb {
 
 /// This class is responsible for registering, enabling, instantiating,
 /// and managing the lifecycle of all SimDB applications running in a

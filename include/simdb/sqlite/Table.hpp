@@ -10,8 +10,7 @@
 #include <algorithm>
 #include <list>
 
-namespace simdb
-{
+namespace simdb {
 
 /*!
  * \class SqlTable

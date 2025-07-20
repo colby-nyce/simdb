@@ -7,8 +7,7 @@
 #include <cstring>
 #include "simdb/Exceptions.hpp"
 
-namespace simdb
-{
+namespace simdb {
 
 /// Compression modes of operation.
 enum class CompressionModes

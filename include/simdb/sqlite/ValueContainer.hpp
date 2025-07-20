@@ -9,8 +9,7 @@
 #include <memory>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /*!
  * \class ValueContainerBase

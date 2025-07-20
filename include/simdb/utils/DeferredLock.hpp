@@ -1,7 +1,6 @@
 // <DeferredLock.hpp> -*- C++ -*-
 
-namespace simdb
-{
+namespace simdb {
 
 template <typename Mutex>
 class DeferredLock

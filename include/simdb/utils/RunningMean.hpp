@@ -4,8 +4,7 @@
 
 #include <stdint.h>
 
-namespace simdb
-{
+namespace simdb {
 
 /// This classes uses Welford's method to compute a running
 /// mean of a series of values given one at a time (without

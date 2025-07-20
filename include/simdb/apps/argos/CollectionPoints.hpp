@@ -10,8 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Raw data held in the SimDB collection "black box". Sent to the database
 /// for as long as the Status isn't set to DONT_READ.
@@ -209,7 +208,7 @@ public:
     /// Put this collectable in the black box for consumption until deactivate() is called.
     /// NOTE: There is no reason to call deactivate() on your own if "bool once = true".
     template <typename T>
-    typename std::enable_if<meta_utils::is_any_pointer<T>::value, void>::type activate(const T& val, bool once = false)
+    typename std::enable_if<type_traits::is_any_pointer<T>::value, void>::type activate(const T& val, bool once = false)
     {
         if (val)
         {
@@ -224,7 +223,7 @@ public:
     /// Put this collectable in the black box for consumption until deactivate() is called.
     /// NOTE: There is no reason to call deactivate() on your own if "bool once = true".
     template <typename T>
-    typename std::enable_if<!meta_utils::is_any_pointer<T>::value, void>::type activate(const T& val, bool once = false)
+    typename std::enable_if<!type_traits::is_any_pointer<T>::value, void>::type activate(const T& val, bool once = false)
     {
         minify_(val);
         argos_record_.status = once ? ArgosRecord::Status::READ_ONCE : ArgosRecord::Status::READ;
@@ -392,7 +391,7 @@ public:
     /// Put this collectable in the black box for consumption until deactivate() is called.
     /// NOTE: There is no reason to call deactivate() on your own if "bool once = true".
     template <typename T>
-    typename std::enable_if<meta_utils::is_any_pointer<T>::value, void>::type activate(const T container, bool once = false)
+    typename std::enable_if<type_traits::is_any_pointer<T>::value, void>::type activate(const T container, bool once = false)
     {
         activate(*container, once);
     }
@@ -400,7 +399,7 @@ public:
     /// Put this collectable in the black box for consumption until deactivate() is called.
     /// NOTE: There is no reason to call deactivate() on your own if "bool once = true".
     template <typename T>
-    typename std::enable_if<!meta_utils::is_any_pointer<T>::value, void>::type activate(const T& container, bool once = false)
+    typename std::enable_if<!type_traits::is_any_pointer<T>::value, void>::type activate(const T& container, bool once = false)
     {
         minify_(container);
         argos_record_.status = once ? ArgosRecord::Status::READ_ONCE : ArgosRecord::Status::READ;
@@ -689,7 +688,7 @@ private:
     }
 
     template <typename T>
-    typename std::enable_if<meta_utils::is_any_pointer<T>::value, bool>::type
+    typename std::enable_if<type_traits::is_any_pointer<T>::value, bool>::type
     writeStruct_(const T& el, IterableSnapshot& snapshot, uint16_t bin_idx)
     {
         if (el)
@@ -700,7 +699,7 @@ private:
     }
 
     template <typename T>
-    typename std::enable_if<!meta_utils::is_any_pointer<T>::value, bool>::type
+    typename std::enable_if<!type_traits::is_any_pointer<T>::value, bool>::type
     writeStruct_(const T& el, IterableSnapshot& snapshot, uint16_t bin_idx)
     {
         StructSerializer<T>::getInstance()->extract(&el, snapshot[bin_idx]);
@@ -733,7 +732,7 @@ public:
     /// Put this collectable in the black box for consumption until deactivate() is called.
     /// NOTE: There is no reason to call deactivate() on your own if "bool once = true".
     template <typename T>
-    typename std::enable_if<meta_utils::is_any_pointer<T>::value, void>::type activate(const T container, bool once = false)
+    typename std::enable_if<type_traits::is_any_pointer<T>::value, void>::type activate(const T container, bool once = false)
     {
         activate(*container, once);
     }
@@ -741,7 +740,7 @@ public:
     /// Put this collectable in the black box for consumption until deactivate() is called.
     /// NOTE: There is no reason to call deactivate() on your own if "bool once = true".
     template <typename T>
-    typename std::enable_if<!meta_utils::is_any_pointer<T>::value, void>::type activate(const T& container, bool once = false)
+    typename std::enable_if<!type_traits::is_any_pointer<T>::value, void>::type activate(const T& container, bool once = false)
     {
         minify_(container);
         argos_record_.status = once ? ArgosRecord::Status::READ_ONCE : ArgosRecord::Status::READ;
@@ -818,7 +817,7 @@ private:
     }
 
     template <typename T>
-    typename std::enable_if<meta_utils::is_any_pointer<T>::value, bool>::type
+    typename std::enable_if<type_traits::is_any_pointer<T>::value, bool>::type
     writeStruct_(const T& el, CollectionBuffer& buffer, uint16_t bin_idx)
     {
         if (el)
@@ -829,7 +828,7 @@ private:
     }
 
     template <typename T>
-    typename std::enable_if<!meta_utils::is_any_pointer<T>::value, bool>::type
+    typename std::enable_if<!type_traits::is_any_pointer<T>::value, bool>::type
     writeStruct_(const T& el, CollectionBuffer& buffer, uint16_t bin_idx)
     {
         buffer << bin_idx;

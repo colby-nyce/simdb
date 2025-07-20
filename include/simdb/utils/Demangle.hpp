@@ -3,8 +3,7 @@
 #include <string>
 #include <cxxabi.h>
 
-namespace simdb
-{
+namespace simdb {
 
 /*!
  * \brief Represents the internal buffer size for demangling C++ symbols via

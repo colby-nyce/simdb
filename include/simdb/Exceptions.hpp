@@ -7,8 +7,7 @@
 #include <sstream>
 #include <string>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Used to construct and throw a standard C++ exception
 class DBException : public std::exception
