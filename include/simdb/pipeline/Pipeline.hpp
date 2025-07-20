@@ -4,6 +4,10 @@
 
 #include "simdb/pipeline/TaskGroup.hpp"
 
+namespace simdb {
+    class DatabaseManager;
+}
+
 namespace simdb::pipeline {
 
 /// SimDB pipelines are used to create high-performance multi-stage

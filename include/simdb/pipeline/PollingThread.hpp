@@ -126,7 +126,8 @@ private:
             }
         }
 
-        run_();
+        // Flush
+        while (run_()) {}
     }
 
     virtual bool run_()

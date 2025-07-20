@@ -1,3 +1,3 @@
-add_subdirectory(dot_product)
-add_subdirectory(elements)
-add_subdirectory(shared_threads)
+add_subdirectory(DotProduct)
+add_subdirectory(PipelineElements)
+add_subdirectory(SharedThreads)

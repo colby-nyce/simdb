@@ -69,6 +69,7 @@ public:
         }
     }
 
+private:
     bool run() override
     {
         bool ran = false;
@@ -87,7 +88,16 @@ public:
         return ran;
     }
 
-private:
+    bool flushToPipeline() override
+    {
+        bool did_work = Runnable::flushToPipeline();
+        for (auto& task : tasks_)
+        {
+            did_work |= task->flushToPipeline();
+        }
+        return did_work;
+    }
+
     std::string getDescription_() const override
     {
         std::string name = "TaskGroup for pipeline '" + pipeline_name_ + "'";
