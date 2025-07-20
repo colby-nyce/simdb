@@ -46,6 +46,16 @@ public:
         return groups;
     }
 
+    std::vector<const TaskGroup*> getTaskGroups() const
+    {
+        std::vector<const TaskGroup*> groups;
+        for (auto& group : task_groups_)
+        {
+            groups.push_back(group.get());
+        }
+        return groups;
+    }
+
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;

@@ -4,9 +4,7 @@
 
 #include "simdb/apps/App.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/pipeline/Pipeline.hpp"
-#include "simdb/pipeline/PollingThread.hpp"
-#include "simdb/pipeline/DatabaseThread.hpp"
+#include "simdb/pipeline/PipelineManager.hpp"
 
 #include <map>
 #include <set>
@@ -194,60 +192,28 @@ public:
     /// too many threads in total.
     void openPipelines()
     {
-        if (!pipelines_.empty())
+        PROFILE_APP_PHASE
+
+        if (pipeline_mgr_)
         {
             throw DBException("Pipelines already open");
         }
 
-        PROFILE_APP_PHASE
-
-        polling_threads_.emplace_back(std::make_unique<pipeline::DatabaseThread>(db_mgr_));
-        auto db_thread = dynamic_cast<pipeline::DatabaseThread*>(polling_threads_.back().get());
-        auto db_accessor = db_thread->getAsyncDatabaseAccessor();
+        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
+        auto db_accessor = pipeline_mgr_->getAsyncDatabaseAccessor();
         for (const auto& [app_name, app] : apps_)
         {
             if (auto pipeline = app->createPipeline(db_accessor))
             {
-                pipelines_.emplace_back(std::move(pipeline));
+                pipeline_mgr_->addPipeline(std::move(pipeline));
             }
         }
 
-        // The number of non-database processing threads we need is equal to
-        // the max number of TaskGroups across all our pipelines.
-        size_t num_proc_threads = 0;
-        for (auto& pipeline : pipelines_)
-        {
-            num_proc_threads = std::max(num_proc_threads, pipeline->getTaskGroups().size());
-        }
-
-        for (size_t i = 0; i < num_proc_threads; ++i)
-        {
-            polling_threads_.emplace_back(std::make_unique<pipeline::PollingThread>());
-        }
-
-        for (auto& pipeline : pipelines_)
-        {
-            auto thread_it = polling_threads_.begin() + 1; // Advance over database thread
-            for (auto group : pipeline->getTaskGroups())
-            {
-                if (thread_it == polling_threads_.end())
-                {
-                    throw DBException("Internal logic error while connecting threads and runnables");
-                }
-
-                (*thread_it)->addRunnable(group);
-                ++thread_it;
-            }
-        }
-
-        for (auto& thread : polling_threads_)
-        {
-            thread->open();
-        }
+        pipeline_mgr_->openPipelines();
 
         // Print final thread/task configuration.
         msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
-        for (auto& pipeline : pipelines_)
+        for (const auto pipeline : pipeline_mgr_->getPipelines())
         {
             msg_log_ << "---- Pipeline (app): " << pipeline->getName() << "\n";
             for (auto group : pipeline->getTaskGroups())
@@ -304,27 +270,11 @@ public:
             app->preTeardown();
         }
 
-        for (auto& thread : polling_threads_)
+        if (pipeline_mgr_)
         {
-            thread->close();
-
-            std::ostringstream oss;
-            thread->printPerfReport(oss);
-            msg_log_ << oss.str() << "\n\n";
+            pipeline_mgr_->postSimLoopTeardown(msg_log_);
+            pipeline_mgr_.reset();
         }
-
-        bool continue_while;
-        do
-        {
-            continue_while = false;
-            for (auto& thread : polling_threads_)
-            {
-                continue_while |= thread->flushRunnablesToPipelines();
-            }
-        } while (continue_while);
-
-        pipelines_.clear();
-        polling_threads_.clear();
 
         db_mgr_->safeTransaction(
             [&]()
@@ -346,8 +296,7 @@ public:
     /// before the AppManager itself is destroyed on program exit.
     void destroyAllApps()
     {
-        assert(polling_threads_.empty());
-        assert(pipelines_.empty());
+        assert(pipeline_mgr_ == nullptr);
         apps_.clear();
     }
 
@@ -372,14 +321,11 @@ private:
     /// Enabled apps (may or may not be instantiated).
     std::set<std::string> enabled_apps_;
 
-    /// Instantiated pipelines.
-    std::vector<std::unique_ptr<pipeline::Pipeline>> pipelines_;
-
-    /// Instantiated threads.
-    std::vector<std::unique_ptr<pipeline::PollingThread>> polling_threads_;
-
     /// Associated database.
     DatabaseManager* db_mgr_ = nullptr;
+
+    /// All pipelines and threads are managed by PipelineManager.
+    std::unique_ptr<pipeline::PipelineManager> pipeline_mgr_;
 
     /// RAII timer to measure the performance of teardown()
     class ScopedTimer
