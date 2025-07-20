@@ -10,8 +10,7 @@
 #include <filesystem>
 #include <set>
 
-namespace simdb
-{
+namespace simdb {
 
 enum class JournalMode
 {

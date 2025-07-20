@@ -15,8 +15,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 class DatabaseManager;
 

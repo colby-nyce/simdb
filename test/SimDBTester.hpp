@@ -22,8 +22,8 @@
 #include <string>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
+
 /// ostream operator so we can do EXPECT_EQUAL(vec1, vec2)
 template <typename T> inline std::ostream& operator<<(std::ostream& os, const std::vector<T>& data)
 {

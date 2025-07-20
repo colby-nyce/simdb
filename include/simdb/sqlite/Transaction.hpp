@@ -11,8 +11,7 @@
 #include <mutex>
 #include <thread>
 
-namespace simdb
-{
+namespace simdb {
 
 /// To support SimDB self-profiling, return TRUE only if the transaction
 /// involved touching the database (setProperty*(), INSERT, SELECT, etc.)

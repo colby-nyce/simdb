@@ -8,8 +8,7 @@
 #include <limits>
 #include <random>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Comparison of two floating-point values with
 /// a supplied tolerance. The tolerance value defaults

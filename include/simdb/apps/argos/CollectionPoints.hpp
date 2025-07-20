@@ -10,8 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Raw data held in the SimDB collection "black box". Sent to the database
 /// for as long as the Status isn't set to DONT_READ.

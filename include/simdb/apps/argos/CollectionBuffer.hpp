@@ -9,8 +9,7 @@
 #include <iostream>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /*!
  * \class CollectionBuffer

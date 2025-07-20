@@ -6,8 +6,7 @@
 #include <iostream>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Blob descriptor used for writing and reading raw bytes
 /// to/from the database.

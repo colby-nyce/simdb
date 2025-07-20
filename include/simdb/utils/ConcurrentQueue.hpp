@@ -5,8 +5,7 @@
 #include <mutex>
 #include <queue>
 
-namespace simdb
-{
+namespace simdb {
 
 /*! 
  * \class ConcurrentQueue<T>

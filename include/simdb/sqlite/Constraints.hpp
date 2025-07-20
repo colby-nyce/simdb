@@ -4,8 +4,7 @@
 
 #include <iostream>
 
-namespace simdb
-{
+namespace simdb {
 
 /// This enum holds all the comparators for WHERE clauses in queries (scalar target values).
 enum class Constraints

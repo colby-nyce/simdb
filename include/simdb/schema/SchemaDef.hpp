@@ -12,8 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /// Data types supported by SimDB schemas
 enum class SqlDataType

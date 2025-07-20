@@ -102,10 +102,7 @@ enum class Color
 #define SIMDB_CMDLINE_COLOR_WARNING "" // SIMDB_UNMANAGED_COLOR_YELLOW
 #define SIMDB_CMDLINE_COLOR_GOOD "" // SIMDB_UNMANAGED_COLOR_GOOD
 
-namespace simdb
-{
-namespace color
-{
+namespace simdb::color {
 
 /**
      * \class ColorScheme
@@ -164,5 +161,4 @@ private:
     std::vector<std::string> all_colors_;
 };
 
-} // namespace color
-} // namespace simdb
+} // namespace simdb::color
