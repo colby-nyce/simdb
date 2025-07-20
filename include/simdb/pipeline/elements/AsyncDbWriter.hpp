@@ -1,6 +1,12 @@
 #pragma once
 
 #include "simdb/pipeline/Task.hpp"
+#include <functional>
+
+namespace simdb {
+    class DatabaseManager;
+    class PreparedINSERT;
+}
 
 namespace simdb::pipeline {
 
@@ -11,6 +17,7 @@ namespace simdb::pipeline {
 class AppPreparedINSERTs
 {
 public:
+    /// \note PreparedINSERT is defined in DatabaseManager.hpp
     using TableInserters = std::unordered_map<std::string, std::unique_ptr<PreparedINSERT>>;
 
     AppPreparedINSERTs(TableInserters&& tbl_inserters)
@@ -50,7 +57,6 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread.
-    /// Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         if (!this->output_queue_)
@@ -95,7 +101,6 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread.
-    /// Method cannot be public or SimDB can't guarantee thread safety.
     bool run() override
     {
         bool ran = false;

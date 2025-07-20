@@ -20,8 +20,7 @@ public:
     using TaskBase::getTypedInputQueue;
 
 private:
-    /// \brief Process one item from the queue.
-    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
+    /// Process one item from the queue.
     bool run() override
     {
         if (!this->output_queue_)
@@ -56,8 +55,7 @@ public:
     Task(Func func) : func_(func) {}
 
 private:
-    /// \brief Process one item from the queue.
-    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
+    /// Process one item from the queue.
     bool run() override
     {
         FunctionIn in;

@@ -11,8 +11,7 @@ template <typename DataT, size_t BufferLen>
 class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, DataT>
 {
 private:
-    /// \brief Process one item from the queue.
-    /// \note  Method cannot be public or SimDB can't guarantee thread safety.
+    /// Process one item from the queue.
     bool run() override
     {
         if (!this->output_queue_)
@@ -30,10 +29,16 @@ private:
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
+            std::cout << "CircularBuffer::run()\n";
+            std::cout << "  - New value came in: " << in << "\n";
+            std::lock_guard<std::mutex> lock(mutex_);
             if (circ_buf_.full())
             {
-                this->output_queue_->get().emplace(std::move(circ_buf_.pop()));
+                auto oldest = std::move(circ_buf_.pop());
+                std::cout << "  - We're full. Popping and sending oldest: " << oldest;
+                this->output_queue_->get().emplace(oldest);
             }
+            std::cout << "  - Pushing new value into circular buffer: " << in << "\n";
             circ_buf_.push(std::move(in));
             ran = true;
         }
@@ -43,11 +48,26 @@ private:
 
     bool flushToPipeline() override
     {
+        std::cout << "CircularBuffer::flushToPipeline()\n";
         bool did_work = Runnable::flushToPipeline();
+        std::cout << "  - Runnable did work: " << std::boolalpha << did_work << "\n";
+        std::cout << "  - Now circ_buf_.size() = " << circ_buf_.size() << "\n";
 
-        while (!circ_buf_.empty())
+        auto send_oldest = [&]() -> bool
         {
-            this->output_queue_->get().emplace(std::move(circ_buf_.pop()));
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!circ_buf_.empty())
+            {
+                auto oldest = std::move(circ_buf_.pop());
+                std::cout << "  - Popping and sending oldest: " << oldest << "\n";
+                this->output_queue_->get().emplace(oldest);
+                return true;
+            }
+            return false;
+        };
+
+        while (send_oldest())
+        {
             did_work = true;
         }
 
@@ -60,6 +80,7 @@ private:
     }
 
     CircularBuffer<DataT, BufferLen> circ_buf_;
+    std::mutex mutex_;
 };
 
 } // namespace simdb::pipeline
