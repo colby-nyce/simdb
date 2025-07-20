@@ -10,7 +10,6 @@
 #include "SimDBTester.hpp"
 
 static constexpr auto INVALID_TICK = std::numeric_limits<int64_t>::max();
-static constexpr auto BLOB_LEN = size_t(4096);
 
 struct TestData
 {
@@ -34,6 +33,7 @@ struct CompressedTestData
     std::vector<char> compressed_bytes;
     int64_t tick = INVALID_TICK;
 
+    /// Provided for std::priority_queue (ReorderBuffer)
     bool operator>(const CompressedTestData& other) const
     {
         return tick > other.tick;
@@ -47,11 +47,9 @@ class ReorderBuffer {};
 
 namespace simdb::pipeline {
 
-/// This user-defined Task element buffers incoming size_t's and only
-/// emits them when it can guarantee they are back in order. A common
-/// use case for this would be something like a thread pool to perform
-/// parallel tasks like compression, but then you need to put them back
-/// in their original order prior to a DB writer task.
+/// This user-defined Task element buffers incoming data and only
+/// emits them when it can guarantee they are back in order. We
+/// order them by tick starting at 1.
 template <>
 class Task<ReorderBuffer> : public NonTerminalTask<CompressedTestData, CompressedTestData>
 {
@@ -85,7 +83,10 @@ private:
     }
 
     int64_t next_expected_tick_ = 1;
-    std::priority_queue<CompressedTestData, std::vector<CompressedTestData>, std::greater<CompressedTestData>> rob_;
+
+    std::priority_queue<CompressedTestData,
+                        std::vector<CompressedTestData>,
+                        std::greater<CompressedTestData>> rob_;
 };
 
 } // namespace simdb::pipeline
@@ -111,7 +112,8 @@ public:
         tbl.createIndexOn("Tick");
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
+        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
     {
         auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
 
@@ -231,13 +233,6 @@ int main(int argc, char** argv)
 
     // Finish...
     app_mgr.postSimLoopTeardown();
-
-    /*
-        auto& tbl = schema.addTable("CompressedData");
-        tbl.addColumn("Tick", dt::int64_t);
-        tbl.addColumn("CompressedBytes", dt::blob_t);
-        tbl.createIndexOn("Tick");
-    */
 
     // Validate...
     auto query = db_mgr.createQuery("CompressedData");
