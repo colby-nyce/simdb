@@ -718,6 +718,40 @@ int main()
         EXPECT_FALSE(result_set.getNextRecord());
     }
 
+    // Verify we can run a query without constraints on a table
+    // that does not use auto-incrementing primary keys. This
+    // verifies that a query "ORDER BY Id" bug is fixed (cannot
+    // just assume that the Id column is there).
+    simdb::Schema schema5;
+    auto& customers_tbl = schema5.addTable("Customers");
+    customers_tbl.addColumn("FirstName", dt::string_t);
+    customers_tbl.addColumn("LastName", dt::string_t);
+    customers_tbl.disableAutoIncPrimaryKey();
+
+    db_mgr.appendSchema(schema5);
+
+    db_mgr.INSERT(
+        SQL_TABLE("Customers"),
+        SQL_COLUMNS("FirstName", "LastName"),
+        SQL_VALUES("Bob", "Smith"));
+
+    db_mgr.INSERT(
+        SQL_TABLE("Customers"),
+        SQL_COLUMNS("FirstName", "LastName"),
+        SQL_VALUES("Jane", "Smith"));
+
+    auto query11 = db_mgr.createQuery("Customers");
+
+    std::string customer_first_name;
+    query11->select("FirstName", customer_first_name);
+
+    auto result_set = query11->getResultSet();
+    EXPECT_TRUE(result_set.getNextRecord());
+    EXPECT_EQUAL(customer_first_name, "Bob");
+    EXPECT_TRUE(result_set.getNextRecord());
+    EXPECT_EQUAL(customer_first_name, "Jane");
+    EXPECT_FALSE(result_set.getNextRecord());
+
     REPORT_ERROR;
     return ERROR_CODE;
 }
