@@ -494,11 +494,6 @@ private:
             }
             oss << " ";
         }
-        else
-        {
-            // Default order by Id if no other order clauses are specified
-            oss << " ORDER BY Id ";
-        }
     }
 
     /// Append LIMIT clause.
