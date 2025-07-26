@@ -12,6 +12,8 @@ message(STATUS "Using SQLite3 ${SQLite3_VERSION}")
 find_package(ZLIB REQUIRED)
 message(STATUS "Using zlib ${ZLIB_VERSION_STRING}")
 
+find_package(Threads REQUIRED)
+
 set(SIMDB_BASE ${CMAKE_CURRENT_SOURCE_DIR})
 option(SIMDB_PEDANTIC "Enable build with -Wall -Wextra -Werror" ON)
 
@@ -23,21 +25,20 @@ if(SIMDB_PEDANTIC)
 endif()
 
 target_include_directories(simdb INTERFACE
-    $<BUILD_INTERFACE:${SIMDB_BASE}/include>
     $<INSTALL_INTERFACE:include>
 )
 
 target_include_directories(simdb SYSTEM INTERFACE
+    $<BUILD_INTERFACE:${SIMDB_BASE}/include>
     ${SQLite3_INCLUDE_DIRS}
     ${ZLIB_INCLUDE_DIRS}
 )
 
 target_link_libraries(simdb INTERFACE
-    sqlite3 ZLIB::ZLIB pthread
+    sqlite3 ZLIB::ZLIB Threads::Threads
 )
 
 add_subdirectory(test EXCLUDE_FROM_ALL)
 add_subdirectory(examples EXCLUDE_FROM_ALL)
 
 install(DIRECTORY include/simdb/ DESTINATION include/simdb)
-install(DIRECTORY cmake/ DESTINATION lib/cmake/simdb)
