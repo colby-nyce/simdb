@@ -326,7 +326,7 @@ public:
 
         // Thread 1 task (database thread)
         auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
-            [this](NewStringEntry&& new_entry, simdb::pipeline::AppPreparedINSERTs* tables) mutable
+            [](NewStringEntry&& new_entry, simdb::pipeline::AppPreparedINSERTs* tables) mutable
             {
                 auto inserter = tables->getPreparedINSERT("TinyStringIDs");
                 inserter->setColumnValue(0, new_entry.first);
