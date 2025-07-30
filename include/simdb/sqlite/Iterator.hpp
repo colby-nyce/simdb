@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/sqlite/Transaction.hpp"
+#include "simdb/utils/utf16.hpp"
 
 #include <sqlite3.h>
 #include <string.h>
@@ -119,6 +120,47 @@ public:
 
 private:
     int64_t* user_var_;
+};
+
+/*!
+ * \class ResultWriterUInt64
+ *
+ * \brief Responsible for writing uint64 record values to the user's local
+ *        variables whenever a query's result set iterator is advanced.
+ */
+class ResultWriterUInt64 : public ResultWriterBase
+{
+public:
+    /// \brief Construction
+    /// \param col_name Name of the selected column
+    /// \param user_var Pointer to the local variable where result values are written to
+    ResultWriterUInt64(const char* col_name, uint64_t* user_var)
+        : ResultWriterBase(col_name)
+        , user_var_(user_var)
+    {
+    }
+
+    /// Read the value for the prepared statement at the given column index
+    /// and copy it to the user's local variable.
+    void writeToUserVar(sqlite3_stmt* stmt, const int idx) const override
+    {
+        const void* blob = sqlite3_column_text16(stmt, idx);
+        if (sqlite3_column_type(stmt, idx) == SQLITE_TEXT && blob != nullptr) {
+            const char16_t* utf16str = static_cast<const char16_t*>(blob);
+            *user_var_ = utils::utf16_to_uint64(utf16str, 20);
+        } else {
+            throw DBException("Invalid data / data type");
+        }
+    }
+
+    /// Return a new copy of this writer.
+    ResultWriterBase* clone() const override
+    {
+        return new ResultWriterUInt64(getColName().c_str(), user_var_);
+    }
+
+private:
+    uint64_t* user_var_;
 };
 
 /*!

@@ -19,6 +19,7 @@ enum class SqlDataType
 {
     int32_t,
     int64_t,
+    uint64_t,
     double_t,
     string_t,
     blob_t
@@ -39,6 +40,7 @@ inline std::ostream& operator<<(std::ostream& os, const SqlDataType dtype)
         }
 
         case dt::string_t:
+        case dt::uint64_t:
         {
             os << "TEXT";
             break;

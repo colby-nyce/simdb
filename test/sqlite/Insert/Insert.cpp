@@ -110,8 +110,8 @@ int main()
     using dt = simdb::SqlDataType;
 
     auto& high_volume_data_tbl = schema2.addTable("HighVolumeBlobs");
-    high_volume_data_tbl.addColumn("StartTick", dt::int64_t);
-    high_volume_data_tbl.addColumn("EndTick", dt::int64_t);
+    high_volume_data_tbl.addColumn("StartTick", dt::uint64_t);
+    high_volume_data_tbl.addColumn("EndTick", dt::uint64_t);
     high_volume_data_tbl.addColumn("DataBlob", dt::blob_t);
     db_mgr.appendSchema(schema2);
 

@@ -3,6 +3,7 @@
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/sqlite/Connection.hpp"
 #include "simdb/schema/SchemaDef.hpp"
+#include "simdb/utils/utf16.hpp"
 
 namespace simdb {
 
@@ -17,9 +18,7 @@ public:
         , db_conn_(db_conn)
     {}
 
-    template <typename ColumnT>
-    typename std::enable_if<std::is_integral_v<ColumnT> && sizeof(ColumnT) == 64, void>::type
-    setColumnValue(uint32_t col_idx, const ColumnT ival)
+    void setColumnValue(uint32_t col_idx, const int64_t ival)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::int64_t)
         {
@@ -29,17 +28,34 @@ public:
         sqlite3_bind_int64(stmt_, (int32_t)col_idx+1, ival);
     }
 
+    void setColumnValue(uint32_t col_idx, const uint64_t ival)
+    {
+        if (col_dtypes_.at(col_idx) != SqlDataType::uint64_t)
+        {
+            throw DBException("Column ") << col_idx+1 << " is not an INT64";
+        }
+
+        auto u16 = utils::uint64_to_utf16(ival);
+        sqlite3_bind_text16(stmt_, (int32_t)col_idx+1, u16.data(), 40, SQLITE_TRANSIENT);
+    }
+
     template <typename ColumnT>
     typename std::enable_if<std::is_integral_v<ColumnT> && sizeof(ColumnT) < 64, void>::type
     setColumnValue(uint32_t col_idx, const ColumnT ival)
     {
         const auto dtype = col_dtypes_.at(col_idx);
-        if (dtype != SqlDataType::int64_t && dtype != SqlDataType::int32_t)
+        if (dtype != SqlDataType::int64_t && dtype != SqlDataType::int32_t && dtype != SqlDataType::uint64_t)
         {
             throw DBException("Column ") << col_idx+1 << " is not an INT";
         }
-
-        sqlite3_bind_int(stmt_, (int32_t)col_idx+1, (int32_t)ival);
+        else if (dtype == SqlDataType::uint64_t)
+        {
+            setColumnValue(col_idx, (uint64_t)ival);
+        }
+        else
+        {
+            sqlite3_bind_int(stmt_, (int32_t)col_idx+1, (int32_t)ival);
+        }
     }
 
     template <typename ColumnT>

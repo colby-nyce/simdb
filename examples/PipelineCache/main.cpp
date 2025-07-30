@@ -229,8 +229,8 @@ public:
         using dt = simdb::SqlDataType;
 
         auto& tbl = schema.addTable("CompressedEvents");
-        tbl.addColumn("StartEuid", dt::int64_t);
-        tbl.addColumn("EndEuid", dt::int64_t);
+        tbl.addColumn("StartEuid", dt::uint64_t);
+        tbl.addColumn("EndEuid", dt::uint64_t);
         tbl.addColumn("CompressedEvtBytes", dt::blob_t);
         tbl.createCompoundIndexOn({"StartEuid", "EndEuid"});
     }
@@ -471,10 +471,10 @@ private:
         auto query_func = [&](simdb::DatabaseManager* db_mgr)
         {
             auto query = db_mgr->createQuery("CompressedEvents");
-            query->addConstraintForInt("StartEuid", simdb::Constraints::LESS_EQUAL, euid);
-            query->addConstraintForInt("EndEuid", simdb::Constraints::GREATER_EQUAL, euid);
+            query->addConstraintForUInt64("StartEuid", simdb::Constraints::LESS_EQUAL, euid);
+            query->addConstraintForUInt64("EndEuid", simdb::Constraints::GREATER_EQUAL, euid);
 
-            int64_t start, end;
+            uint64_t start, end;
             query->select("StartEuid", start);
             query->select("EndEuid", end);
             query->select("CompressedEvtBytes", compressed_evts_range.all_event_bytes);
