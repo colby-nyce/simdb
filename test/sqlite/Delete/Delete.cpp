@@ -15,8 +15,8 @@ int main()
     using dt = simdb::SqlDataType;
 
     auto& tbl = schema.addTable("TickRanges");
-    tbl.addColumn("StartTick", dt::int64_t);
-    tbl.addColumn("EndTick", dt::int64_t);
+    tbl.addColumn("StartTick", dt::uint64_t);
+    tbl.addColumn("EndTick", dt::uint64_t);
 
     simdb::DatabaseManager db_mgr("test.db", true);
     EXPECT_TRUE(db_mgr.appendSchema(schema));

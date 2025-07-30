@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/schema/Blob.hpp"
+#include "simdb/utils/utf16.hpp"
 
 #include <sqlite3.h>
 #include <functional>
@@ -58,6 +59,24 @@ public:
 
 private:
     int64_t val_;
+};
+
+/// Bind a uint64_t to an INSERT prepared statement.
+class IntegralU64ValueContainer : public ValueContainerBase
+{
+public:
+    IntegralU64ValueContainer(uint64_t val)
+        : u16_(utils::uint64_to_utf16(val))
+    {
+    }
+
+    int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
+    {
+        return sqlite3_bind_text16(stmt, col_idx, u16_.data(), 40, 0);
+    }
+
+private:
+    std::u16string u16_;
 };
 
 /// Bind a double to an INSERT prepared statement.
@@ -142,10 +161,17 @@ createValueContainer(T val)
 }
 
 template <typename T> inline
-typename std::enable_if<std::is_integral<T>::value && sizeof(T) == sizeof(int64_t), ValueContainerBasePtr>::type
+typename std::enable_if<std::is_same_v<T, int64_t>, ValueContainerBasePtr>::type
 createValueContainer(T val)
 {
     return ValueContainerBasePtr(new Integral64ValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_same_v<T, uint64_t>, ValueContainerBasePtr>::type
+createValueContainer(T val)
+{
+    return ValueContainerBasePtr(new IntegralU64ValueContainer(val));
 }
 
 template <typename T> inline

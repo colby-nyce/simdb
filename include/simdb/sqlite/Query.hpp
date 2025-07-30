@@ -85,11 +85,37 @@ public:
     /// scalar target values.
     template <typename T> void addConstraintForInt(const char* col_name, const Constraints constraint, const T target)
     {
-        static_assert(std::is_integral<T>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
+        static_assert(!std::is_same<T, uint64_t>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
 
         std::ostringstream oss;
         oss << col_name << stringify(constraint) << target;
         constraint_clauses_.emplace_back(oss.str());
+    }
+
+    /// Add a uint64_t constraint to this query for scalar target values.
+    void addConstraintForUInt64(const char* col_name, const Constraints constraint, uint64_t target)
+    {
+        char digits[21];
+        for (int i = 19; i >= 0; --i)
+        {
+            digits[i] = '0' + (target % 10);
+            target /= 10;
+        }
+        digits[20] = '\0';
+
+        std::string clause;
+        auto constraint_str = stringify(constraint);
+
+        // column + op + digits + quotes
+        clause.reserve(strlen(col_name) + constraint_str.size() + 20 + 2);
+
+        clause += col_name;
+        clause += constraint_str;
+        clause += '"';
+        clause += digits;
+        clause += '"';
+
+        constraint_clauses_.emplace_back(std::move(clause));
     }
 
     /// Add a constraint to this query specific to floating-point types
@@ -148,7 +174,7 @@ public:
     /// multiple target values.
     template <typename T> void addConstraintForInt(const char* col_name, const SetConstraints constraint, const std::vector<T>& targets)
     {
-        static_assert(std::is_integral<T>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
+        static_assert(!std::is_same<T, uint64_t>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
 
         std::ostringstream oss;
         oss << col_name << stringify(constraint) << "(";
@@ -164,6 +190,48 @@ public:
 
         oss << ")";
         constraint_clauses_.emplace_back(oss.str());
+    }
+
+    /// Add a constraint to this query for uint64_t types and multiple target values.
+    void addConstraintForUInt64(const char* col_name, const SetConstraints constraint, const std::initializer_list<uint64_t>& targets)
+    {
+        addConstraintForUInt64(col_name, constraint, std::vector<uint64_t>{targets.begin(), targets.end()});
+    }
+
+    /// Add a constraint to this query for uint64_t types and multiple target values.
+    void addConstraintForUInt64(const char* col_name, const SetConstraints constraint, const std::vector<uint64_t>& targets)
+    {
+        std::string clause;
+        auto constraint_str = stringify(constraint);
+
+        // column + op + digits + quotes + commas + parens
+        clause.reserve(strlen(col_name) + constraint_str.size() + 20 + 2 + (targets.size()-1) + 2);
+        clause += col_name;
+        clause += constraint_str;
+        clause += "(";
+
+        for (size_t i = 0; i < targets.size(); ++i)
+        {
+            auto target = targets[i];
+            char digits[21];
+            for (int i = 19; i >= 0; --i)
+            {
+                digits[i] = '0' + (target % 10);
+                target /= 10;
+            }
+            digits[20] = '\0';
+            clause += '"';
+            clause += digits;
+            clause += '"';
+
+            if (i != targets.size() - 1)
+            {
+                clause += ",";
+            }
+        }
+        clause += ")";
+
+        constraint_clauses_.emplace_back(std::move(clause));
     }
 
     /// Add a constraint to this query specific to floating-point types
@@ -338,7 +406,7 @@ public:
     /// SELECT column values and write to the local variable on each iteration (int32).
     ///
     ///     int32_t val;
-    ///     query->select("ColA", val);
+    ///     query->select("Col", val);
     void select(const char* col_name, int32_t& user_var)
     {
         result_writers_.emplace_back(new ResultWriterInt32(col_name, &user_var));
@@ -347,16 +415,25 @@ public:
     /// SELECT column values and write to the local variable on each iteration (int64).
     ///
     ///     int64_t val;
-    ///     query->select("ColB", val);
+    ///     query->select("Col", val);
     void select(const char* col_name, int64_t& user_var)
     {
         result_writers_.emplace_back(new ResultWriterInt64(col_name, &user_var));
     }
 
+    /// SELECT column values and write to the local variable on each iteration (uint64).
+    ///
+    ///     uint64_t val;
+    ///     query->select("Col", val);
+    void select(const char* col_name, uint64_t& user_var)
+    {
+        result_writers_.emplace_back(new ResultWriterUInt64(col_name, &user_var));
+    }
+
     /// SELECT column values and write to the local variable on each iteration (double).
     ///
     ///     double val;
-    ///     query->select("ColE", val);
+    ///     query->select("Col", val);
     void select(const char* col_name, double& user_var)
     {
         result_writers_.emplace_back(new ResultWriterDouble(col_name, &user_var));
@@ -365,7 +442,7 @@ public:
     /// SELECT column values and write to the local variable on each iteration (string).
     ///
     ///     std::string val;
-    ///     query->select("ColF", val);
+    ///     query->select("Col", val);
     void select(const char* col_name, std::string& user_var)
     {
         result_writers_.emplace_back(new ResultWriterString(col_name, &user_var));
@@ -374,7 +451,7 @@ public:
     /// SELECT column values and write to the local variable on each iteration (blob).
     ///
     ///     std::vector<int> val;
-    ///     query->select("ColG", val);
+    ///     query->select("Col", val);
     template <typename T> void select(const char* col_name, std::vector<T>& user_var)
     {
         result_writers_.emplace_back(new ResultWriterBlob<T>(col_name, &user_var));

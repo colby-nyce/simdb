@@ -30,4 +30,4 @@ inline std::vector<T> generateRandomData(size_t size, T min = T(0), T max = T(10
     return data;
 }
 
-} // namespace simdb
+} // namespace simdb::utils

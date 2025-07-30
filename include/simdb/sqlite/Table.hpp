@@ -5,6 +5,7 @@
 #include "simdb/sqlite/Query.hpp"
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/sqlite/ValueContainer.hpp"
+#include "simdb/utils/utf16.hpp"
 
 #include <sqlite3.h>
 #include <algorithm>
@@ -186,6 +187,9 @@ public:
     /// SELECT the given column value (int64)
     int64_t getPropertyInt64(const char* col_name) const;
 
+    /// SELECT the given column value (uint64)
+    uint64_t getPropertyUInt64(const char* col_name) const;
+
     /// SELECT the given column value (double)
     double getPropertyDouble(const char* col_name) const;
 
@@ -198,13 +202,10 @@ public:
     /// UPDATE the given column value (int32)
     void setPropertyInt32(const char* col_name, const int32_t val) const;
 
-    /// UPDATE the given column value (int32)
+    /// UPDATE the given column value (int64)
     void setPropertyInt64(const char* col_name, const int64_t val) const;
 
-    /// UPDATE the given column value (int32)
-    void setPropertyUInt32(const char* col_name, const uint32_t val) const;
-
-    /// UPDATE the given column value (int32)
+    /// UPDATE the given column value (uint64)
     void setPropertyUInt64(const char* col_name, const uint64_t val) const;
 
     /// UPDATE the given column value (double)
@@ -307,6 +308,11 @@ inline int64_t SqlRecord::getPropertyInt64(const char* col_name) const
     return queryPropertyValue<int64_t>(table_name_.c_str(), col_name, db_id_, db_conn_);
 }
 
+inline uint64_t SqlRecord::getPropertyUInt64(const char* col_name) const
+{
+    return queryPropertyValue<uint64_t>(table_name_.c_str(), col_name, db_id_, db_conn_);
+}
+
 inline double SqlRecord::getPropertyDouble(const char* col_name) const
 {
     return queryPropertyValue<double>(table_name_.c_str(), col_name, db_id_, db_conn_);
@@ -350,27 +356,14 @@ inline void SqlRecord::setPropertyInt64(const char* col_name, const int64_t val)
         });
 }
 
-inline void SqlRecord::setPropertyUInt32(const char* col_name, const uint32_t val) const
-{
-    transaction_->safeTransaction(
-        [&]()
-        {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_int(stmt, 1, val)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
-}
-
 inline void SqlRecord::setPropertyUInt64(const char* col_name, const uint64_t val) const
 {
     transaction_->safeTransaction(
         [&]()
         {
+            auto utf16 = utils::uint64_to_utf16(val);
             auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_int64(stmt, 1, val)))
+            if (SQLiteReturnCode(sqlite3_bind_text16(stmt, 1, utf16.data(), 40, 0)))
             {
                 throw DBException(sqlite3_errmsg(db_conn_));
             }

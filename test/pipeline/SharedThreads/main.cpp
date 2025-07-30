@@ -95,7 +95,7 @@ public:
     {
         using dt = simdb::SqlDataType;
         auto& dp_tbl = schema.addTable("App2Data");
-        dp_tbl.addColumn("IntVal", dt::int64_t);
+        dp_tbl.addColumn("IntVal", dt::uint64_t);
     }
 
     std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
