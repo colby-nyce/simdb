@@ -23,7 +23,7 @@ inline std::u16string uint64_to_utf16(uint64_t value)
     return result;
 }
 
-uint64_t utf16_to_uint64(const char16_t* str, int length)
+inline uint64_t utf16_to_uint64(const char16_t* str, int length)
 {
     if (length != 20)
     {
