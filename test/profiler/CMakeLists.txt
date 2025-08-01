@@ -1,0 +1,7 @@
+find_package(Boost COMPONENTS serialization)
+if(Boost_FOUND AND Boost_SERIALIZATION_FOUND)
+    simdb_test(ProfilerWriter main.cpp)
+    target_link_libraries(ProfilerWriter PRIVATE Boost::serialization)
+else()
+    message(STATUS "Boost serialization library not found - cannot run ProfilerWriter test.")
+endif()

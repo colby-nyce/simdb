@@ -16,3 +16,4 @@ endmacro()
 
 add_subdirectory(sqlite)
 add_subdirectory(pipeline)
+add_subdirectory(profiler)
