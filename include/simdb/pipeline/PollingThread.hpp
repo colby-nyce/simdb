@@ -114,7 +114,7 @@ private:
     {
         while (is_running_)
         {
-            if (!run_())
+            if (!run_(false))
             {
                 // Sleep for a fixed amount of time before polling all runnables again
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms_));
@@ -127,15 +127,15 @@ private:
         }
 
         // Flush
-        while (run_()) {}
+        while (run_(true)) {}
     }
 
-    virtual bool run_()
+    virtual bool run_(bool simulation_terminating)
     {
         bool ran = false;
         for (auto runner : runnables_)
         {
-            ran |= runner->run();
+            ran |= runner->run(simulation_terminating);
         }
         return ran;
     }

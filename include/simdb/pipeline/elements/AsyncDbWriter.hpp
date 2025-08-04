@@ -45,7 +45,7 @@ template <typename App, typename Input, typename Output>
 class Task<AsyncDatabaseWriter<App, Input, Output>> : public NonTerminalTask<Input, Output>
 {
 private:
-    using Func = std::function<void(Input&&, ConcurrentQueue<Output>&, AppPreparedINSERTs*)>;
+    using Func = std::function<void(Input&&, ConcurrentQueue<Output>&, AppPreparedINSERTs*, bool)>;
 
     /// Not meant to be publicly constructible.
     Task(DatabaseManager* db_mgr, AppPreparedINSERTs&& app_tables, Func func)
@@ -57,7 +57,7 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         if (!this->output_queue_)
         {
@@ -68,7 +68,7 @@ private:
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), &app_tables_);
+            func_(std::move(in), this->output_queue_->get(), &app_tables_, simulation_terminating);
             ran = true;
         }
         return ran;
@@ -89,7 +89,7 @@ template <typename App, typename Input>
 class Task<AsyncDatabaseWriter<App, Input, void>> : public TerminalTask<Input>
 {
 private:
-    using Func = std::function<void(Input&&, AppPreparedINSERTs*)>;
+    using Func = std::function<void(Input&&, AppPreparedINSERTs*, bool)>;
 
     /// Not meant to be publicly constructible.
     Task(DatabaseManager* db_mgr, AppPreparedINSERTs&& app_tables, Func func)
@@ -101,13 +101,13 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         bool ran = false;
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), &app_tables_);
+            func_(std::move(in), &app_tables_, simulation_terminating);
             ran = true;
         }
         return ran;

@@ -55,7 +55,7 @@ private:
     }
 
     /// Overridden from PollingThread
-    bool run_() override final
+    bool run_(bool simulation_terminating) override final
     {
         bool ran = false;
 
@@ -70,7 +70,7 @@ private:
                     continue_while = false;
                     for (auto& runnable : polling_runnables_)
                     {
-                        continue_while |= runnable->run();
+                        continue_while |= runnable->run(simulation_terminating);
 
                         // Give as high priority as possible for async DB access
                         if (dormant_thread_.hasTasks())

@@ -14,14 +14,14 @@ template <typename FunctionIn, typename FunctionOut>
 class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalTask<FunctionIn, FunctionOut>
 {
 public:
-    using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&)>;
+    using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&, bool)>;
     Task(Func func) : func_(func) {}
 
     using TaskBase::getTypedInputQueue;
 
 private:
     /// Process one item from the queue.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         if (!this->output_queue_)
         {
@@ -32,7 +32,7 @@ private:
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get());
+            func_(std::move(in), this->output_queue_->get(), simulation_terminating);
             ran = true;
         }
         return ran;
@@ -51,18 +51,18 @@ template <typename FunctionIn>
 class Task<Function<FunctionIn, void>> : public TerminalTask<FunctionIn>
 {
 public:
-    using Func = std::function<void(FunctionIn&&)>;
+    using Func = std::function<void(FunctionIn&&, bool)>;
     Task(Func func) : func_(func) {}
 
 private:
     /// Process one item from the queue.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         FunctionIn in;
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in));
+            func_(std::move(in), simulation_terminating);
             ran = true;
         }
         return ran;
@@ -82,12 +82,12 @@ class Task<Function<void, FunctionOut>> : public TaskBase
 {
 public:
     /// Return true if your function pushed at least one item to the queue
-    using Func = std::function<bool(ConcurrentQueue<FunctionOut>&)>;
+    using Func = std::function<bool(ConcurrentQueue<FunctionOut>&, bool)>;
     Task(Func func) : func_(func) {}
 
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
-        return func_(this->output_queue_->get());
+        return func_(this->output_queue_->get(), simulation_terminating);
     }
 
 protected:

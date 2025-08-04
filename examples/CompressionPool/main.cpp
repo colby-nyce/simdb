@@ -55,23 +55,31 @@ class Task<ReorderBuffer> : public NonTerminalTask<CompressedTestData, Compresse
 {
 private:
     /// Process one item from the queue.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         bool ran = false;
         CompressedTestData data;
 
-        if (this->input_queue_->get().try_pop(data))
+        while (this->input_queue_->get().try_pop(data))
         {
             rob_.push(data);
             ran = true;
+            if (!simulation_terminating)
+            {
+                break;
+            }
         }
 
-        if (!rob_.empty() && rob_.top().tick == next_expected_tick_)
+        while (!rob_.empty() && rob_.top().tick == next_expected_tick_)
         {
             ++next_expected_tick_;
             this->output_queue_->get().emplace(std::move(rob_.top()));
             rob_.pop();
             ran = true;
+            if (!simulation_terminating)
+            {
+                break;
+            }
         }
  
         return ran;
@@ -121,7 +129,9 @@ public:
         auto create_compressor = [&]()
         {
             return simdb::pipeline::createTask<simdb::pipeline::Function<TestData, CompressedTestData>>(
-                [this](TestData&& in, simdb::ConcurrentQueue<CompressedTestData>& out)
+                [this](TestData&& in,
+                       simdb::ConcurrentQueue<CompressedTestData>& out,
+                       bool /*simulation_terminating*/)
                 {
                     CompressedTestData compressed;
                     compressed.tick = in.tick;
@@ -145,7 +155,8 @@ public:
         // executed on the shared database thread.
         auto sqlite = db_accessor->createAsyncWriter<CompressionPool, CompressedTestData, void>(
             [](CompressedTestData&& in,
-               simdb::pipeline::AppPreparedINSERTs* tables)
+               simdb::pipeline::AppPreparedINSERTs* tables,
+               bool /*simulation_terminating*/)
             {
                 auto inserter = tables->getPreparedINSERT("CompressedData");
                 inserter->setColumnValue(0, in.tick);

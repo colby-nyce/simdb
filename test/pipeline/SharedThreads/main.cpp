@@ -40,7 +40,7 @@ public:
 
         // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*simulation_terminating*/)
             {
                 out.push(in * 2);
             }
@@ -48,7 +48,7 @@ public:
 
         // Thread 2 task
         auto tripler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, void>>(
-            [this](uint64_t&& in) { final_pipeline_values_.push_back(in); }
+            [this](uint64_t&& in, bool /*simulation_terminating*/) { final_pipeline_values_.push_back(in); }
         );
 
         // Connect tasks -------------------------------------------------------------------
@@ -104,7 +104,7 @@ public:
 
         // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*simulation_terminating*/)
             {
                 out.push(in * 2);
             }
@@ -112,7 +112,7 @@ public:
 
         // Thread 2 task
         auto tripler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*simulation_terminating*/)
             {
                 out.push(in * 3);
             }
@@ -120,7 +120,7 @@ public:
 
         // Thread 3 task
         auto halver_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*simulation_terminating*/)
             {
                 out.push(in >> 1);
             }
@@ -128,7 +128,10 @@ public:
 
         // Thread 4 task (database thread)
         auto db_task = db_accessor->createAsyncWriter<App2, uint64_t, int>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<int>& out, simdb::pipeline::AppPreparedINSERTs* tables)
+            [](uint64_t&& in,
+               simdb::ConcurrentQueue<int>& out,
+               simdb::pipeline::AppPreparedINSERTs* tables,
+               bool /*simulation_terminating*/)
             {
                 auto inserter = tables->getPreparedINSERT("App2Data");
                 inserter->setColumnValue(0, in);
@@ -139,7 +142,7 @@ public:
 
         // Thread 5 task
         auto stdout_task = simdb::pipeline::createTask<simdb::pipeline::Function<int, void>>(
-            [](int&& id)
+            [](int&& id, bool /*simulation_terminating*/)
             {
                 std::cout << "Committed record with ID " << id << "\n";
             }
@@ -214,7 +217,7 @@ public:
         using ZlibOut = std::vector<char>;
 
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<ZlibIn, ZlibOut>>(
-            [](ZlibIn&& in, simdb::ConcurrentQueue<ZlibOut>& out)
+            [](ZlibIn&& in, simdb::ConcurrentQueue<ZlibOut>& out, bool /*simulation_terminating*/)
             {
                 ZlibOut compressed;
                 simdb::compressData(in, compressed);
@@ -226,7 +229,10 @@ public:
         using DatabaseOut = std::pair<int, size_t>; // Database record ID, # compressed bytes
 
         auto db_task = db_accessor->createAsyncWriter<App3, DatabaseIn, DatabaseOut>(
-            [](DatabaseIn&& in, simdb::ConcurrentQueue<DatabaseOut>& out, simdb::pipeline::AppPreparedINSERTs* tables)
+            [](DatabaseIn&& in,
+               simdb::ConcurrentQueue<DatabaseOut>& out,
+               simdb::pipeline::AppPreparedINSERTs* tables,
+               bool /*simulation_terminating*/)
             {
                 auto inserter = tables->getPreparedINSERT("App3Data");
                 inserter->setColumnValue(0, in);
@@ -242,7 +248,7 @@ public:
         using TallyOut = std::pair<size_t, size_t>; // Total records created, avg # bytes
 
         auto running_tally_task = simdb::pipeline::createTask<simdb::pipeline::Function<TallyIn, TallyOut>>(
-            [this](TallyIn&& in, simdb::ConcurrentQueue<TallyOut>& out) mutable
+            [this](TallyIn&& in, simdb::ConcurrentQueue<TallyOut>& out, bool /*simulation_terminating*/) mutable
             {
                 ++num_db_records_;
                 running_mean_.add(in.second);
@@ -258,7 +264,7 @@ public:
         using ReportOut = void;
 
         auto report_task = simdb::pipeline::createTask<simdb::pipeline::Function<ReportIn, ReportOut>>(
-            [this](ReportIn&& in)
+            [this](ReportIn&& in, bool /*simulation_terminating*/)
             {
                 final_report_ = in;
             }
@@ -326,7 +332,9 @@ public:
 
         // Thread 1 task (database thread)
         auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
-            [](NewStringEntry&& new_entry, simdb::pipeline::AppPreparedINSERTs* tables) mutable
+            [](NewStringEntry&& new_entry,
+               simdb::pipeline::AppPreparedINSERTs* tables,
+               bool /*simulation_terminating*/) mutable
             {
                 auto inserter = tables->getPreparedINSERT("TinyStringIDs");
                 inserter->setColumnValue(0, new_entry.first);
