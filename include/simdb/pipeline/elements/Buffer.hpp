@@ -22,8 +22,9 @@ public:
     using InputType = Input;
     using OutputType = std::vector<Input>;
 
-    Task(size_t buffer_len)
+    Task(size_t buffer_len, bool flush_partial=false)
         : buffer_len_(buffer_len)
+        , flush_partial_(flush_partial)
     {
         buffer_.reserve(buffer_len);
     }
@@ -32,7 +33,7 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         if (!this->output_queue_)
         {
@@ -57,7 +58,23 @@ private:
             }
         }
 
+        if (simulation_terminating && (full_() || (!empty_() && flush_partial_)))
+        {
+            this->output_queue_->get().emplace(std::move(buffer_));
+            ran = true;
+        }
+
         return ran;
+    }
+
+    bool full_() const
+    {
+        return buffer_.size() == buffer_len_;
+    }
+
+    bool empty_() const
+    {
+        return buffer_.empty();
     }
 
     std::string getDescription_() const override
@@ -67,6 +84,7 @@ private:
 
     size_t buffer_len_;
     OutputType buffer_;
+    bool flush_partial_;
 };
 
 } // namespace simdb::pipeline

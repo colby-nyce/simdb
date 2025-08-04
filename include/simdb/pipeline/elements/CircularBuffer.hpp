@@ -12,7 +12,7 @@ class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, Dat
 {
 private:
     /// Process one item from the queue.
-    bool run() override
+    bool run(bool simulation_terminating) override
     {
         if (!this->output_queue_)
         {
@@ -37,6 +37,17 @@ private:
             }
             circ_buf_.push(std::move(in));
             ran = true;
+        }
+
+        if (simulation_terminating)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            while (!circ_buf_.empty())
+            {
+                auto oldest = std::move(circ_buf_.pop());
+                this->output_queue_->get().emplace(std::move(oldest));
+                ran = true;
+            }
         }
 
         return ran;

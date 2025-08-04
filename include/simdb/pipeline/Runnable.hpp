@@ -27,7 +27,7 @@ public:
 
     /// Flush and process everything. Return true if the runnable
     /// actually did anything, false if there was no input data.
-    virtual bool run() = 0;
+    virtual bool run(bool simulation_terminating) = 0;
 
     /// Perform end-of-simulation flush to pipeline. The pipeline
     /// threads have been stopped, so you don't have to worry about
@@ -35,7 +35,7 @@ public:
     virtual bool flushToPipeline()
     {
         bool did_work = false;
-        while (run())
+        while (run(true))
         {
             did_work = true;
         }

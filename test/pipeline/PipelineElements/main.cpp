@@ -15,7 +15,7 @@
 /// larger pipelines and SimDB apps.
 
 /// ------ simdb::pipeline::Function --------------------------------------------
-void DoublerFunctionTask(int&& val, simdb::ConcurrentQueue<int>& out)
+void DoublerFunctionTask(int&& val, simdb::ConcurrentQueue<int>& out, bool /*simulation_terminating*/)
 {
     out.push(val * 2);
 }
@@ -29,7 +29,7 @@ void TestPipelineFunction(simdb::DatabaseManager* db_mgr)
 
     // Create a function task using a lambda.
     auto func2 = simdb::pipeline::createTask<simdb::pipeline::Function<int, int>>(
-        [](int&& val, simdb::ConcurrentQueue<int>& out)
+        [](int&& val, simdb::ConcurrentQueue<int>& out, bool /*simulation_terminating*/)
         {
             out.push(val * 2);
         }
@@ -91,12 +91,12 @@ void TestPipelineFunction(simdb::DatabaseManager* db_mgr)
 }
 
 /// ------ simdb::pipeline::Buffer ----------------------------------------------
-void TestPipelineBuffer(simdb::DatabaseManager* db_mgr)
+void TestPipelineBuffer(simdb::DatabaseManager* db_mgr, bool flush_partial)
 {
     auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr, "Buffers");
 
     // Create a buffer task to hold 100 ints before releasing all of them.
-    auto buffer = simdb::pipeline::createTask<simdb::pipeline::Buffer<int>>(100);
+    auto buffer = simdb::pipeline::createTask<simdb::pipeline::Buffer<int>>(100, flush_partial);
 
     // Connect the buffer output.
     simdb::pipeline::Queue<std::vector<int>> buffer_outq;
@@ -115,8 +115,8 @@ void TestPipelineBuffer(simdb::DatabaseManager* db_mgr)
     pipeline_mgr.addPipeline(std::move(pipeline));
     pipeline_mgr.openPipelines();
 
-    // Note that we go over a "clean" boundary (mod 100) to verify the
-    // buffer didn't release a partially filled vector.
+    // Go over a "clean" boundary (mod 100) to verify the behavior of
+    // buffers directed to flush partial buffers on simulation teardown.
     for (int val = 0; val < 1007; ++val)
     {
         buffer_in.push(val);
@@ -135,14 +135,14 @@ void TestPipelineBuffer(simdb::DatabaseManager* db_mgr)
     };
 
     // Validate.
-    auto validate = [&](simdb::ConcurrentQueue<std::vector<int>>& queue, int expected_first_val)
+    auto validate = [&](simdb::ConcurrentQueue<std::vector<int>>& queue, int expected_first_val, int expected_num_vals)
     {
         wait_avail();
 
         std::vector<int> actual_buffer;
         if (queue.try_pop(actual_buffer))
         {
-            EXPECT_EQUAL(actual_buffer.size(), 100);
+            EXPECT_EQUAL(actual_buffer.size(), expected_num_vals);
             for (size_t i = 0; i < actual_buffer.size(); ++i)
             {
                 EXPECT_EQUAL(actual_buffer[i], expected_first_val + i);
@@ -156,7 +156,7 @@ void TestPipelineBuffer(simdb::DatabaseManager* db_mgr)
 
     for (int start = 0; start < 1000; start += 100)
     {
-        validate(buffer_out, start);
+        validate(buffer_out, start, 100);
     }
 
     // Verify the extra data (partially filled vectors) were not released
@@ -165,6 +165,11 @@ void TestPipelineBuffer(simdb::DatabaseManager* db_mgr)
     EXPECT_FALSE(buffer_out.try_pop(remaining));
 
     pipeline_mgr.postSimLoopTeardown();
+
+    if (flush_partial)
+    {
+        validate(buffer_out, 1000, 7);
+    }
 }
 
 /// ------ simdb::CircularBuffer ------------------------------------------------
@@ -223,14 +228,14 @@ void TestPipelineCircularBuffer(simdb::DatabaseManager* db_mgr)
         auto num_avail = circbuf_out.size();
         while (num_avail < min_avail && num_tries-- > 0)
         {
-            std::cout << "  - Waiting on " << min_avail << " values, have " << num_avail << "so far\n";
+            std::cout << "  - Waiting on " << min_avail << " values, have " << num_avail << " so far\n";
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             num_avail = circbuf_out.size();
         }
     };
 
     // Wait for the oldest (0-4) to arrive
-    wait_avail(5);
+    wait_avail();
 
     auto validate = [&](int expected_val)
     {
@@ -328,7 +333,8 @@ void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
     // on the dedicated database thread.
     auto writer = pipeline_mgr.getAsyncDatabaseAccessor()->createAsyncWriter<TestDataApp, TestData, void>(
         [](TestData&& test_data,
-           simdb::pipeline::AppPreparedINSERTs* tables)
+           simdb::pipeline::AppPreparedINSERTs* tables,
+           bool /*simulation_terminating*/)
         {
             auto inserter = tables->getPreparedINSERT("TestData");
             inserter->setColumnValue(0, test_data.intval);
@@ -385,7 +391,8 @@ int main()
     simdb::DatabaseManager db_mgr("test.db", true);
 
     TestPipelineFunction(&db_mgr);
-    TestPipelineBuffer(&db_mgr);
+    TestPipelineBuffer(&db_mgr, true);
+    //TestPipelineBuffer(&db_mgr, false);
     TestCircularBuffer();
     TestPipelineCircularBuffer(&db_mgr);
     TestAsyncDatabaseWriter(&db_mgr);

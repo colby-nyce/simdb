@@ -67,19 +67,19 @@ double GetDotProduct(const BufferedDotProdInputs& in)
     return sum;
 }
 
-void SendDotProduct(BufferedDotProdInputs&& in, simdb::ConcurrentQueue<double>& out)
+void SendDotProduct(BufferedDotProdInputs&& in, simdb::ConcurrentQueue<double>& out, bool /*simulation_terminating*/)
 {
     out.push(GetDotProduct(in));
 }
 
-void CompressBytes(BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out)
+void CompressBytes(BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out, bool /*simulation_terminating*/)
 {
     CompressedBytes compressed;
     simdb::compressData(in, compressed);
     out.emplace(std::move(compressed));
 }
 
-void WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSERTs* tables)
+void WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSERTs* tables, bool /*simulation_terminating*/)
 {
     // This is on the dedicated DB thread. Note that we are inside a
     // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
