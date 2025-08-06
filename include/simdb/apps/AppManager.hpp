@@ -36,6 +36,29 @@ public:
         app_factories_[AppT::NAME] = std::make_unique<AppFactory<AppT>>();
     }
 
+    /// Access an app factory.
+    template <typename AppT>
+    AppFactory<AppT>* getAppFactory(bool must_exist = true)
+    {
+        auto it = app_factories_.find(AppT::NAME);
+        if (it == app_factories_.end())
+        {
+            if (must_exist)
+            {
+                throw DBException("No factory named ") << AppT::NAME << " exists.";
+            }
+            return nullptr;
+        }
+
+        auto factory = dynamic_cast<AppFactory<AppT>*>(it->second.get());
+        if (!factory && must_exist)
+        {
+            throw DBException("Factory is not the expected subclass type");
+        }
+
+        return factory;
+    }
+
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
     AppManager(DatabaseManager* db_mgr, std::ostream* msg_log = &std::cout, std::ostream* err_log = &std::cerr)
         : db_mgr_(db_mgr)
