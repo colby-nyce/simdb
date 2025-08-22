@@ -60,6 +60,8 @@ private:
         bool ran = false;
         CompressedTestData data;
 
+        std::lock_guard<std::mutex> lock(mutex_);
+
         while (this->input_queue_->get().try_pop(data))
         {
             rob_.push(data);
@@ -95,6 +97,9 @@ private:
     std::priority_queue<CompressedTestData,
                         std::vector<CompressedTestData>,
                         std::greater<CompressedTestData>> rob_;
+
+    /// Mutex to protect the ROB
+    std::mutex mutex_;
 };
 
 } // namespace simdb::pipeline

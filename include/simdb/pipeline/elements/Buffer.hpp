@@ -47,6 +47,8 @@ private:
             in = 0;
         }
 
+        std::lock_guard<std::mutex> lock(mutex_);
+
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
@@ -85,6 +87,9 @@ private:
     size_t buffer_len_;
     OutputType buffer_;
     bool flush_partial_;
+
+    /// Mutex to protect the buffer
+    std::mutex mutex_;
 };
 
 } // namespace simdb::pipeline
