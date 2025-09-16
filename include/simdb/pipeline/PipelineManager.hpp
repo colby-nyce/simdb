@@ -22,8 +22,14 @@ public:
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor()
     {
         checkOpen_();
-        auto db_thread = dynamic_cast<pipeline::DatabaseThread*>(polling_threads_.front().get());
-        return db_thread->getAsyncDatabaseAccessor();
+        for (auto& thread : polling_threads_)
+        {
+            if (auto db_thread = dynamic_cast<pipeline::DatabaseThread*>(thread.get()))
+            {
+                return db_thread->getAsyncDatabaseAccessor();
+            }
+        }
+        return nullptr;
     }
 
     void addPipeline(std::unique_ptr<Pipeline> pipeline)
@@ -61,18 +67,21 @@ public:
             polling_threads_.emplace_back(std::make_unique<pipeline::PollingThread>());
         }
 
+        // Move the DB thread from the front to the back
+        std::rotate(polling_threads_.begin(), polling_threads_.begin() + 1, polling_threads_.end());
+
         for (auto& pipeline : pipelines_)
         {
-            auto thread_it = polling_threads_.begin() + 1; // Advance over database thread
+            auto it = polling_threads_.begin();
             for (auto group : pipeline->getTaskGroups())
             {
-                if (thread_it == polling_threads_.end())
+                if (it == polling_threads_.end() - 1)
                 {
                     throw DBException("Internal logic error while connecting threads and runnables");
                 }
 
-                (*thread_it)->addRunnable(group);
-                ++thread_it;
+                (*it)->addRunnable(group);
+                ++it;
             }
         }
 
@@ -86,7 +95,7 @@ public:
     {
         checkOpen_();
 
-        for (auto& thread : polling_threads_)
+        auto close_thread = [&](PollingThread* thread)
         {
             thread->close();
 
@@ -96,15 +105,25 @@ public:
                 thread->printPerfReport(oss);
                 *perf_report << oss.str() << "\n\n";
             }
+        };
+
+        auto it = polling_threads_.begin();
+        while (it != polling_threads_.end())
+        {
+            close_thread(it->get());
+            ++it;
         }
 
         bool continue_while;
         do
         {
             continue_while = false;
-            for (auto& thread : polling_threads_)
+
+            it = polling_threads_.begin();
+            while (it != polling_threads_.end())
             {
-                continue_while |= thread->flushRunnablesToPipelines();
+                continue_while |= (*it)->flushRunnablesToPipelines();
+                ++it;
             }
         } while (continue_while);
 
