@@ -111,7 +111,12 @@ public:
     {
         if (db_conn_)
         {
-            sqlite3_close(db_conn_);
+            if (sqlite3_close(db_conn_) != SQLITE_OK)
+            {
+                // Failed to close the database connection. Not much we can do here.
+                std::cerr << "Warning: Failed to close database connection: "
+                          << sqlite3_errmsg(db_conn_) << std::endl;
+            }
         }
     }
 
