@@ -146,6 +146,7 @@ public:
         pipeline->createTaskGroup("Compression")
             ->addTask(std::move(zlib_task));
 
+        pipeline_ = pipeline.get();
         return pipeline;
     }
 
@@ -154,9 +155,18 @@ public:
         pipeline_head_->emplace(std::move(input));
     }
 
+    void preTeardown() override
+    {
+        if (pipeline_)
+        {
+            pipeline_->waitUntilFlushed(3);
+        }
+    }
+
 private:
     simdb::ConcurrentQueue<std::vector<double>>* pipeline_head_ = nullptr;
     simdb::DatabaseManager* db_mgr_ = nullptr;
+    simdb::pipeline::Pipeline* pipeline_ = nullptr;
 };
 
 REGISTER_SIMDB_APPLICATION(DotProductApp);
