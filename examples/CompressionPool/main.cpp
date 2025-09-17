@@ -206,6 +206,7 @@ public:
         // thread (TaskGroup) of your choice since they all have to run
         // on the shared database thread (SimDB rule for performance).
 
+        pipeline_ = pipeline.get();
         return pipeline;
     }
 
@@ -216,8 +217,17 @@ public:
         q->emplace(std::move(data));
     }
 
+    void preTeardown() override
+    {
+        if (pipeline_)
+        {
+            pipeline_->waitUntilFlushed(3);
+        }
+    }
+
 private:
     simdb::DatabaseManager* db_mgr_ = nullptr;
+    simdb::pipeline::Pipeline* pipeline_ = nullptr;
     std::vector<simdb::ConcurrentQueue<TestData>*> pool_input_queues_;
 };
 
