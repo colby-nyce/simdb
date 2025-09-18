@@ -1,4 +1,4 @@
-find_package(Boost REQUIRED COMPONENTS serialization CONFIG)
+find_package(Boost COMPONENTS serialization CONFIG)
 if(Boost_FOUND AND Boost_SERIALIZATION_FOUND)
     simdb_test(PipelineCache main.cpp)
     target_link_libraries(PipelineCache PRIVATE Boost::serialization)
