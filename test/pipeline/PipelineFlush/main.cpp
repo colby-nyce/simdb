@@ -108,7 +108,7 @@ public:
         pipeline_head_ = circbuf->getTypedInputQueue<int>();
 
         // Assign thread tasks.
-        pipeline->createTaskGroup("PreDB_Thread1")
+        pipeline->createTaskGroup("ProcessingThread")
             ->addTask(std::move(circbuf))
             ->addTask(std::move(zero7))
             ->addTask(std::move(buffer))
