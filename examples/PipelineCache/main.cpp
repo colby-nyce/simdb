@@ -399,7 +399,6 @@ public:
             ->addTask(std::move(eviction_task));
 
         async_db_accessor_ = db_accessor;
-        pipeline_ = pipeline.get();
         return pipeline;
     }
 
@@ -436,14 +435,6 @@ public:
         }
 
         throw simdb::DBException("Could not get event with uid ") << euid;
-    }
-
-    void preTeardown() override
-    {
-        if (pipeline_)
-        {
-            pipeline_->waitUntilFlushed(3);
-        }
     }
 
     void postTeardown() override
@@ -566,7 +557,6 @@ private:
     };
 
     simdb::DatabaseManager* db_mgr_ = nullptr;
-    simdb::pipeline::Pipeline* pipeline_ = nullptr;
     simdb::pipeline::AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
     std::deque<InstEvent> evt_cache_;
     simdb::ConcurrentQueue<InstEvent> pipeline_input_queue_;
