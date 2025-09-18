@@ -1,3 +1,4 @@
 add_subdirectory(DotProduct)
 add_subdirectory(PipelineElements)
+add_subdirectory(PipelineFlush)
 add_subdirectory(SharedThreads)
