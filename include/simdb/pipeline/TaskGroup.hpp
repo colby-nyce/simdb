@@ -70,7 +70,7 @@ public:
     }
 
 private:
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         bool ran = false;
         bool task_ran = false;
@@ -79,7 +79,7 @@ private:
             task_ran = false;
             for (auto& task : tasks_)
             {
-                task_ran |= task->run(simulation_terminating);
+                task_ran |= task->run(force_flush);
             }
 
             ran |= task_ran;

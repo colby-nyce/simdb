@@ -130,12 +130,12 @@ private:
         while (run_(true)) {}
     }
 
-    virtual bool run_(bool simulation_terminating)
+    virtual bool run_(bool force_flush)
     {
         bool ran = false;
         for (auto runner : runnables_)
         {
-            ran |= runner->run(simulation_terminating);
+            ran |= runner->run(force_flush);
         }
         return ran;
     }

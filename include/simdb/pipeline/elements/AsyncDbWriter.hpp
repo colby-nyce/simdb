@@ -57,7 +57,7 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         if (!this->output_queue_)
         {
@@ -68,7 +68,7 @@ private:
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), &app_tables_, simulation_terminating);
+            func_(std::move(in), this->output_queue_->get(), &app_tables_, force_flush);
             ran = true;
         }
         return ran;
@@ -101,13 +101,13 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue. Always invoked on the database thread.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         bool ran = false;
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), &app_tables_, simulation_terminating);
+            func_(std::move(in), &app_tables_, force_flush);
             ran = true;
         }
         return ran;

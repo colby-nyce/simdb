@@ -21,7 +21,7 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         if (!this->output_queue_)
         {
@@ -32,7 +32,7 @@ private:
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), simulation_terminating);
+            func_(std::move(in), this->output_queue_->get(), force_flush);
             ran = true;
         }
         return ran;
@@ -56,13 +56,13 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         FunctionIn in;
         bool ran = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), simulation_terminating);
+            func_(std::move(in), force_flush);
             ran = true;
         }
         return ran;
@@ -85,9 +85,9 @@ public:
     using Func = std::function<bool(ConcurrentQueue<FunctionOut>&, bool)>;
     Task(Func func) : func_(func) {}
 
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
-        return func_(this->output_queue_->get(), simulation_terminating);
+        return func_(this->output_queue_->get(), force_flush);
     }
 
 protected:

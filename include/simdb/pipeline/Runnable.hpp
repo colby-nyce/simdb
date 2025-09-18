@@ -2,8 +2,13 @@
 
 #pragma once
 
+#include "simdb/sqlite/DatabaseManager.hpp"
+
 #include <iostream>
+#include <memory>
 #include <string>
+#include <type_traits>
+#include <vector>
 
 namespace simdb::pipeline {
 
@@ -27,7 +32,7 @@ public:
 
     /// Flush and process everything. Return true if the runnable
     /// actually did anything, false if there was no input data.
-    virtual bool run(bool simulation_terminating) = 0;
+    virtual bool run(bool force_flush) = 0;
 
     /// Perform end-of-simulation flush to pipeline. The pipeline
     /// threads have been stopped, so you don't have to worry about
@@ -51,6 +56,85 @@ public:
 private:
     virtual std::string getDescription_() const = 0;
     std::string description_;
+};
+
+/// This class takes a variable number of Runnable pointers (raw or smart)
+/// and calls flushToPipeline() on each of them when flush() is called.
+class RunnableFlusher
+{
+public:
+    /// Constructor taking any number of Runnable pointers (raw or smart).
+    /// Pass in runnables in the order you want them flushed. Must pass in
+    /// the app's DatabaseManager so all work can be done in a transaction.
+    template <typename... Args>
+    RunnableFlusher(DatabaseManager& db_mgr, Args&&... args)
+        : db_mgr_(db_mgr)
+    {
+        addRunnables_(std::forward<Args>(args)...);
+    }
+
+    /// Call flushToPipeline() on all runnables in a single transaction.
+    void flush()
+    {
+        db_mgr_.safeTransaction(
+            [&]()
+            {
+                bool continue_while;
+                do
+                {
+                    continue_while = false;
+                    for (Runnable* r : runnables_)
+                    {
+                        continue_while |= r->flushToPipeline();
+                    }
+                } while (continue_while);
+            });
+    }
+
+private:
+    template <typename T>
+    Runnable* unwrap_(T* ptr) const
+    {
+        static_assert(std::is_base_of<Runnable, T>::value,
+                      "All arguments must be or point to Runnable");
+        return ptr;
+    }
+
+    template <typename T>
+    Runnable* unwrap_(const std::shared_ptr<T>& ptr) const
+    {
+        static_assert(std::is_base_of<Runnable, T>::value,
+                      "All arguments must be or point to Runnable");
+        return ptr.get();
+    }
+
+    template <typename T>
+    Runnable* unwrap_(const std::unique_ptr<T>& ptr) const
+    {
+        static_assert(std::is_base_of<Runnable, T>::value,
+                      "All arguments must be or point to Runnable");
+        return ptr.get();
+    }
+
+    // Recursive variadic unpacking
+    template <typename First, typename... Rest>
+    void addRunnables_(First&& first, Rest&&... rest)
+    {
+        Runnable* r = unwrap_(std::forward<First>(first));
+        if (!r) {
+            throw std::invalid_argument("Null Runnable pointer passed to RunnableFlusher");
+        }
+        runnables_.push_back(r);
+        addRunnables_(std::forward<Rest>(rest)...);
+    }
+
+    // Base case
+    void addRunnables_()
+    {
+    }
+
+    DatabaseManager& db_mgr_;
+    std::vector<Runnable*> runnables_;
 };
 
 } // namespace simdb::pipeline
