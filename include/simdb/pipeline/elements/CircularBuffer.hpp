@@ -12,7 +12,7 @@ class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, Dat
 {
 private:
     /// Process one item from the queue.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         if (!this->output_queue_)
         {
@@ -39,7 +39,7 @@ private:
             ran = true;
         }
 
-        if (simulation_terminating)
+        if (force_flush)
         {
             std::lock_guard<std::mutex> lock(mutex_);
             while (!circ_buf_.empty())

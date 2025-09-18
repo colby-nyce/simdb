@@ -33,7 +33,7 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         if (!this->output_queue_)
         {
@@ -60,7 +60,7 @@ private:
             }
         }
 
-        if (simulation_terminating && (full_() || (!empty_() && flush_partial_)))
+        if (force_flush && (full_() || (!empty_() && flush_partial_)))
         {
             this->output_queue_->get().emplace(std::move(buffer_));
             ran = true;

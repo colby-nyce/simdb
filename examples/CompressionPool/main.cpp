@@ -55,7 +55,7 @@ class Task<ReorderBuffer> : public NonTerminalTask<CompressedTestData, Compresse
 {
 private:
     /// Process one item from the queue.
-    bool run(bool simulation_terminating) override
+    bool run(bool force_flush) override
     {
         bool ran = false;
         CompressedTestData data;
@@ -66,7 +66,7 @@ private:
         {
             rob_.push(data);
             ran = true;
-            if (!simulation_terminating)
+            if (!force_flush)
             {
                 break;
             }
@@ -78,7 +78,7 @@ private:
             this->output_queue_->get().emplace(std::move(rob_.top()));
             rob_.pop();
             ran = true;
-            if (!simulation_terminating)
+            if (!force_flush)
             {
                 break;
             }
@@ -134,9 +134,9 @@ public:
         auto create_compressor = [&]()
         {
             return simdb::pipeline::createTask<simdb::pipeline::Function<TestData, CompressedTestData>>(
-                [this](TestData&& in,
-                       simdb::ConcurrentQueue<CompressedTestData>& out,
-                       bool /*simulation_terminating*/)
+                [](TestData&& in,
+                   simdb::ConcurrentQueue<CompressedTestData>& out,
+                   bool /*force_flush*/)
                 {
                     CompressedTestData compressed;
                     compressed.tick = in.tick;
@@ -161,7 +161,7 @@ public:
         auto sqlite = db_accessor->createAsyncWriter<CompressionPool, CompressedTestData, void>(
             [](CompressedTestData&& in,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*simulation_terminating*/)
+               bool /*force_flush*/)
             {
                 auto inserter = tables->getPreparedINSERT("CompressedData");
                 inserter->setColumnValue(0, in.tick);
