@@ -60,48 +60,6 @@ public:
         return groups;
     }
 
-    void waitUntilFlushed(double timeout_sec = 30, uint32_t poll_milli = 10)
-    {
-        if (poll_milli == 0)
-        {
-            throw DBException("Pipeline waitUntilFlushed() poll interval must be > 0");
-        }
-
-        if (timeout_sec <= 0.0)
-        {
-            throw DBException("Pipeline waitUntilFlushed() timeout must be > 0");
-        }
-
-        while (true)
-        {
-            bool continue_while = false;
-            for (auto& group : task_groups_)
-            {
-                for (auto& task : group->getTasks())
-                {
-                    if (auto q = task->getInputQueue())
-                    {
-                        continue_while |= q->size() > 0;
-                    }
-                }
-            }
-
-            if (continue_while)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(poll_milli));
-                timeout_sec -= poll_milli / 1000.0;
-                if (timeout_sec <= 0.0)
-                {
-                    throw DBException("Pipeline waitUntilFlushed() timeout");
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
