@@ -127,8 +127,6 @@ public:
             }
         } while (continue_while);
 
-        pipelines_.clear();
-        polling_threads_.clear();
         closed_ = true;
     }
 

@@ -423,7 +423,7 @@ public:
         return evt.has_value();
     }
 
-    InstEvent getEvent(InstEventUID euid)
+    InstEvent getEvent(InstEventUID euid, double timeout_seconds = 10)
     {
         auto evt = getCachedEvent_(euid);
         if (evt.has_value())
@@ -432,7 +432,7 @@ public:
             return *evt;
         }
 
-        evt = recreateEvent_(euid);
+        evt = recreateEvent_(euid, timeout_seconds);
         if (evt.has_value())
         {
             ++num_evts_retrieved_from_disk_;
@@ -457,6 +457,9 @@ public:
         {
             std::cout << "    From disk:  0\n\n";
         }
+
+        // Force events to be recreated from disk for verification after thread shutdown.
+        evt_cache_.clear();
     }
 
 private:
@@ -478,7 +481,7 @@ private:
     }
 
     // If not in the cache, recreate an InstEvent from disk
-    std::optional<InstEvent> recreateEvent_(InstEventUID euid)
+    std::optional<InstEvent> recreateEvent_(InstEventUID euid, double timeout_seconds)
     {
         EventsRangeAsBytes compressed_evts_range;
 
@@ -502,7 +505,7 @@ private:
         // Keep track of how long we spend waiting for a response
         auto start = std::chrono::high_resolution_clock::now();
 
-        async_db_accessor_->eval(query_func);
+        async_db_accessor_->eval(query_func, timeout_seconds);
         EXPECT_TRUE(!compressed_evts_range.all_event_bytes.empty());
 
         if (compressed_evts_range.all_event_bytes.empty())
@@ -654,13 +657,20 @@ int main(int argc, char** argv)
         app->process(std::move(evt));
     }
 
-    while (!evt_verif_queue.empty())
+    // Leave a few events to be verified after threads have been torn down.
+    while (evt_verif_queue.size() > 5)
     {
         verify_top();
     }
 
     // Finish...
     app_mgr.postSimLoopTeardown();
+
+    // Verify any remaining events. These will likely be retrieved from disk.
+    while (!evt_verif_queue.empty())
+    {
+        verify_top();
+    }
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

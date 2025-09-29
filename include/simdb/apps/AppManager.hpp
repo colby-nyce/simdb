@@ -295,7 +295,6 @@ public:
         if (pipeline_mgr_)
         {
             pipeline_mgr_->postSimLoopTeardown(msg_log_);
-            pipeline_mgr_.reset();
         }
 
         db_mgr_->safeTransaction(

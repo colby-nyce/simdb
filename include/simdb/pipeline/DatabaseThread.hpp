@@ -49,9 +49,9 @@ private:
     }
 
     /// Overridden from AsyncDatabaseAccessHandler
-    void eval(AsyncDatabaseTaskPtr&& task) override final
+    void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0) override final
     {
-        dormant_thread_.eval(std::move(task));
+        dormant_thread_.eval(std::move(task), timeout_seconds);
     }
 
     /// Overridden from PollingThread
@@ -156,15 +156,22 @@ private:
             }
         }
 
-        void eval(AsyncDatabaseTaskPtr&& task)
+        void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0)
         {
             std::future<std::string> fut = task->exception_reason.get_future();
             pending_async_db_tasks_.emplace(std::move(task));
             cond_var_.notify_one();
 
-            // Block until DB thread sets result
-            auto exception_reason = fut.get();
+            if (timeout_seconds > 0)
+            {
+                auto status = fut.wait_for(std::chrono::duration<double>(timeout_seconds));
+                if (status == std::future_status::timeout)
+                {
+                    throw DBException("Timed out waiting for async DB task to complete");
+                }
+            }
 
+            auto exception_reason = fut.get();
             if (!exception_reason.empty())
             {
                 throw DBException(exception_reason);
