@@ -317,7 +317,7 @@ public:
     /// before the AppManager itself is destroyed on program exit.
     void destroyAllApps()
     {
-        assert(pipeline_mgr_ == nullptr);
+        pipeline_mgr_.reset();
         apps_.clear();
     }
 
