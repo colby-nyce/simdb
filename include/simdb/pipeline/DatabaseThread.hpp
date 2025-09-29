@@ -162,7 +162,7 @@ private:
             {
                 // If we are already stopped, we cannot use std::future. We have to
                 // evaluate the task right here.
-                task->func(db_mgr_);
+                db_mgr_->safeTransaction([&]() { task->func(db_mgr_); });
                 return;
             }
 
