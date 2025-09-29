@@ -666,12 +666,11 @@ int main(int argc, char** argv)
     // Finish...
     app_mgr.postSimLoopTeardown();
 
-    // TODO cnyce: put this back
     // Verify any remaining events. These will likely be retrieved from disk.
-    // while (!evt_verif_queue.empty())
-    // {
-    //     verify_top();
-    // }
+    while (!evt_verif_queue.empty())
+    {
+        verify_top();
+    }
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

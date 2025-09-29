@@ -158,6 +158,14 @@ private:
 
         void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0)
         {
+            if (stop_)
+            {
+                // If we are already stopped, we cannot use std::future. We have to
+                // evaluate the task right here.
+                task->func(db_mgr_);
+                return;
+            }
+
             std::future<std::string> fut = task->exception_reason.get_future();
             pending_async_db_tasks_.emplace(std::move(task));
             cond_var_.notify_one();
