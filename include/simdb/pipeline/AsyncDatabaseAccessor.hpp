@@ -33,7 +33,10 @@ public:
     /// until it is called. The DB thread will complete its
     /// current transaction (INSERTs) immediately and evaluate
     /// this task inside a separate safeTransaction().
-    virtual void eval(AsyncDatabaseTaskPtr&& task) = 0;
+    ///
+    /// If a nonzero timeout is given, throws a DBException
+    /// if the task is not completed within the timeout.
+    virtual void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0) = 0;
 };
 
 /// This class is used by SimDB apps and pipeline elements to
@@ -79,10 +82,13 @@ public:
     /// Invoke a std::function on the DB thread. This BLOCKS the
     /// calling thread until the function is processed.
     /// (Uses std::future/promise).
-    void eval(const AsyncDbAccessFunc& func)
+    ///
+    /// If a nonzero timeout is given, throws a DBException
+    /// if the task is not completed within the timeout.
+    void eval(const AsyncDbAccessFunc& func, double timeout_seconds = 0)
     {
         auto task = std::make_shared<AsyncDatabaseTask>(func);
-        db_access_handler_->eval(std::move(task));
+        db_access_handler_->eval(std::move(task), timeout_seconds);
     }
 
 private:

@@ -295,7 +295,6 @@ public:
         if (pipeline_mgr_)
         {
             pipeline_mgr_->postSimLoopTeardown(msg_log_);
-            pipeline_mgr_.reset();
         }
 
         db_mgr_->safeTransaction(
@@ -318,7 +317,7 @@ public:
     /// before the AppManager itself is destroyed on program exit.
     void destroyAllApps()
     {
-        assert(pipeline_mgr_ == nullptr);
+        pipeline_mgr_.reset();
         apps_.clear();
     }
 
