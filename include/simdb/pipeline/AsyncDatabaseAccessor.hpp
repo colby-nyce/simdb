@@ -4,6 +4,7 @@
 
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/pipeline/elements/AsyncDbWriter.hpp"
+#include "simdb/pipeline/elements/AsyncDbReader.hpp"
 #include "simdb/pipeline/AsyncDatabaseTask.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 
@@ -76,6 +77,21 @@ public:
 
         auto ret = writer.get();
         db_access_handler_->addRunnable(std::move(writer));
+        return ret;
+    }
+
+    /// Create an entry point for asynchronous database reads/updates
+    template <typename Input, typename Output, typename... Args>
+    Task<AsyncDatabaseReader<Input, Output>>* createAsyncReader(Args&&... args)
+    {
+        auto db_mgr = db_access_handler_->getDatabaseManager();
+
+        std::unique_ptr<Task<AsyncDatabaseReader<Input, Output>>> reader(
+            new Task<AsyncDatabaseReader<Input, Output>>(
+                db_mgr, std::forward<Args>(args)...));
+
+        auto ret = reader.get();
+        db_access_handler_->addRunnable(std::move(reader));
         return ret;
     }
 
