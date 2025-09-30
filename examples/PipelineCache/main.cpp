@@ -8,6 +8,7 @@
 #include "simdb/utils/CircularBuffer.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/RunningMean.hpp"
+#include "simdb/utils/TickTock.hpp"
 #include "SimDBTester.hpp"
 #include <optional>
 #include <limits>
@@ -483,6 +484,7 @@ private:
     // If not in the cache, recreate an InstEvent from disk
     std::optional<InstEvent> recreateEvent_(InstEventUID euid, double timeout_seconds)
     {
+        PROFILE_METHOD
         EventsRangeAsBytes compressed_evts_range;
 
         auto query_func = [&](simdb::DatabaseManager* db_mgr)
