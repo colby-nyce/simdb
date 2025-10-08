@@ -234,8 +234,6 @@ void RunTest(bool cancellable)
 
 int main()
 {
-    EXPECT_TRUE(false);
-
     RunTest(false);
     RunTest(true);
 
