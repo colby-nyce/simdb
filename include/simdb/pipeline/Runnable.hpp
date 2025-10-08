@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/Exceptions.hpp"
 
 #include <iostream>
 #include <memory>
@@ -30,22 +31,13 @@ public:
         description_ = desc;
     }
 
-    /// Flush and process everything. Return true if the runnable
-    /// actually did anything, false if there was no input data.
-    virtual bool run(bool force_flush) = 0;
+    /// Process one item from the input queue, returning true
+    /// if this runnable did anything.
+    virtual bool processOne(bool force) = 0;
 
-    /// Perform end-of-simulation flush to pipeline. The pipeline
-    /// threads have been stopped, so you don't have to worry about
-    /// thread safety of your subclass objects.
-    virtual bool flushToPipeline()
-    {
-        bool did_work = false;
-        while (run(true))
-        {
-            did_work = true;
-        }
-        return did_work;
-    }
+    /// Flush and process everything from the input queue,
+    /// returning true if this runnable did anything.
+    virtual bool processAll(bool force) = 0;
 
     /// Print info about this runnable for reporting purposes.
     virtual void print(std::ostream& os, int indent) const
@@ -59,7 +51,7 @@ private:
 };
 
 /// This class takes a variable number of Runnable pointers (raw or smart)
-/// and calls flushToPipeline() on each of them when flush() is called.
+/// and flushes them on demand using a "waterfall" or "round robin" algo.
 class RunnableFlusher
 {
 public:
@@ -73,8 +65,14 @@ public:
         addRunnables_(std::forward<Args>(args)...);
     }
 
-    /// Call flushToPipeline() on all runnables in a single transaction.
-    void flush()
+    /// Call processAll() on all runnables in a single transaction.
+    /// This will flush the leftmost runnable first, then the next, etc.
+    ///
+    ///    Task1    Task2    Task3
+    ///    a-b-c-d--e-f-g-h--i-j-k-l
+    ///
+    /// Flush: a, b, c, d, e, f, g, h, i, j, k, l
+    void waterfallFlush()
     {
         db_mgr_.safeTransaction(
             [&]()
@@ -85,7 +83,50 @@ public:
                     continue_while = false;
                     for (Runnable* r : runnables_)
                     {
-                        continue_while |= r->flushToPipeline();
+                        try
+                        {
+                            continue_while |= r->processAll(true);
+                        }
+                        catch(const FlushCancelledException&)
+                        {
+                            continue_while = false;
+                            break;
+                        }
+                    }
+                } while (continue_while);
+            });
+    }
+
+    /// Call processOne() on all runnables in a single transaction.
+    //
+    /// This will process one item from the leftmost runnable first, then
+    /// one from the next, and so on in a round robin fashion until all
+    /// runnables are empty.
+    ///
+    ///    Task1    Task2    Task3
+    ///    a-b-c-d--e-f-g-h--i-j-k-l
+    ///
+    /// Flush: a, e, i, b, f, j, c, g, k, d, h, l
+    void roundRobinFlush()
+    {
+        db_mgr_.safeTransaction(
+            [&]()
+            {
+                bool continue_while;
+                do
+                {
+                    continue_while = false;
+                    for (Runnable* r : runnables_)
+                    {
+                        try
+                        {
+                            continue_while |= r->processOne(true);
+                        }
+                        catch(const FlushCancelledException&)
+                        {
+                            continue_while = false;
+                            break;
+                        }
                     }
                 } while (continue_while);
             });

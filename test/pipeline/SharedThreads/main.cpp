@@ -41,7 +41,7 @@ public:
 
         // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force_flush*/)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in * 2);
             }
@@ -49,9 +49,9 @@ public:
 
         // Thread 2 task
         auto tripler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, void>>(
-            [this](uint64_t&& in, bool force_flush)
+            [this](uint64_t&& in, bool force)
             {
-                simdb::ConditionalLock<std::mutex> lock(mutex_, force_flush);
+                simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 final_pipeline_values_.push_back(in);
             }
         );
@@ -110,7 +110,7 @@ public:
 
         // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force_flush*/)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in * 2);
             }
@@ -118,7 +118,7 @@ public:
 
         // Thread 2 task
         auto tripler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force_flush*/)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in * 3);
             }
@@ -126,7 +126,7 @@ public:
 
         // Thread 3 task
         auto halver_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
-            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force_flush*/)
+            [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in >> 1);
             }
@@ -137,7 +137,7 @@ public:
             [](uint64_t&& in,
                simdb::ConcurrentQueue<int>& out,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 auto inserter = tables->getPreparedINSERT("App2Data");
                 inserter->setColumnValue(0, in);
@@ -148,7 +148,7 @@ public:
 
         // Thread 5 task
         auto stdout_task = simdb::pipeline::createTask<simdb::pipeline::Function<int, void>>(
-            [](int&& id, bool /*force_flush*/)
+            [](int&& id, bool /*force*/)
             {
                 std::cout << "Committed record with ID " << id << "\n";
             }
@@ -223,7 +223,7 @@ public:
         using ZlibOut = std::vector<char>;
 
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<ZlibIn, ZlibOut>>(
-            [](ZlibIn&& in, simdb::ConcurrentQueue<ZlibOut>& out, bool /*force_flush*/)
+            [](ZlibIn&& in, simdb::ConcurrentQueue<ZlibOut>& out, bool /*force*/)
             {
                 ZlibOut compressed;
                 simdb::compressData(in, compressed);
@@ -238,7 +238,7 @@ public:
             [](DatabaseIn&& in,
                simdb::ConcurrentQueue<DatabaseOut>& out,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 auto inserter = tables->getPreparedINSERT("App3Data");
                 inserter->setColumnValue(0, in);
@@ -254,9 +254,9 @@ public:
         using TallyOut = std::pair<size_t, size_t>; // Total records created, avg # bytes
 
         auto running_tally_task = simdb::pipeline::createTask<simdb::pipeline::Function<TallyIn, TallyOut>>(
-            [this](TallyIn&& in, simdb::ConcurrentQueue<TallyOut>& out, bool force_flush) mutable
+            [this](TallyIn&& in, simdb::ConcurrentQueue<TallyOut>& out, bool force) mutable
             {
-                simdb::ConditionalLock<std::mutex> lock(mutex_, force_flush);
+                simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 ++num_db_records_;
                 running_mean_.add(in.second);
 
@@ -271,9 +271,9 @@ public:
         using ReportOut = void;
 
         auto report_task = simdb::pipeline::createTask<simdb::pipeline::Function<ReportIn, ReportOut>>(
-            [this](ReportIn&& in, bool force_flush)
+            [this](ReportIn&& in, bool force)
             {
-                simdb::ConditionalLock<std::mutex> lock(mutex_, force_flush);
+                simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 final_report_ = in;
             }
         );
@@ -343,7 +343,7 @@ public:
         auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
             [](NewStringEntry&& new_entry,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force_flush*/) mutable
+               bool /*force*/) mutable
             {
                 auto inserter = tables->getPreparedINSERT("TinyStringIDs");
                 inserter->setColumnValue(0, new_entry.first);

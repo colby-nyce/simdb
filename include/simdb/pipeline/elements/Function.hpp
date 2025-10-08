@@ -21,7 +21,7 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run(bool force_flush) override
+    bool processOne(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -29,13 +29,31 @@ private:
         }
 
         FunctionIn in;
-        bool ran = false;
+        bool did_work = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), force_flush);
-            ran = true;
+            func_(std::move(in), this->output_queue_->get(), force);
+            did_work = true;
         }
-        return ran;
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool force) override
+    {
+        if (!this->output_queue_)
+        {
+            throw DBException("Output queue not set!");
+        }
+
+        FunctionIn in;
+        bool did_work = false;
+        while (this->input_queue_->get().try_pop(in))
+        {
+            func_(std::move(in), this->output_queue_->get(), force);
+            did_work = true;
+        }
+        return did_work;
     }
 
     std::string getDescription_() const override
@@ -56,16 +74,29 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run(bool force_flush) override
+    bool processOne(bool force) override
     {
         FunctionIn in;
-        bool ran = false;
+        bool did_work = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), force_flush);
-            ran = true;
+            func_(std::move(in), force);
+            did_work = true;
         }
-        return ran;
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool force) override
+    {
+        FunctionIn in;
+        bool did_work = false;
+        while (this->input_queue_->get().try_pop(in))
+        {
+            func_(std::move(in), force);
+            did_work = true;
+        }
+        return did_work;
     }
 
     std::string getDescription_() const override
@@ -85,9 +116,19 @@ public:
     using Func = std::function<bool(ConcurrentQueue<FunctionOut>&, bool)>;
     Task(Func func) : func_(func) {}
 
-    bool run(bool force_flush) override
+    bool processOne(bool force) override
     {
-        return func_(this->output_queue_->get(), force_flush);
+        return func_(this->output_queue_->get(), force);
+    }
+
+    bool processAll(bool force) override
+    {
+        bool did_work = false;
+        while (processOne(force))
+        {
+            did_work = true;
+        }
+        return did_work;
     }
 
 protected:

@@ -45,7 +45,7 @@ public:
 
         // 2. Function that zeros out all integer values divisible by 7
         auto zero7 = simdb::pipeline::createTask<simdb::pipeline::Function<int, int>>(
-            [](int&& val, simdb::ConcurrentQueue<int>& out, bool /*force_flush*/)
+            [](int&& val, simdb::ConcurrentQueue<int>& out, bool /*force*/)
             {
                 if (val % 7 == 0)
                 {
@@ -61,7 +61,7 @@ public:
         // 4. Function that doubles all integer values that pass through
         using BufferedInts = std::vector<int>;
         auto doubler = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedInts, BufferedInts>>(
-            [](BufferedInts&& vals, simdb::ConcurrentQueue<BufferedInts>& out, bool /*force_flush*/)
+            [](BufferedInts&& vals, simdb::ConcurrentQueue<BufferedInts>& out, bool /*force*/)
             {
                 for (auto& val : vals)
                 {
@@ -76,7 +76,7 @@ public:
             (BufferedInts&& vals,
              simdb::ConcurrentQueue<int>& out,
              simdb::pipeline::AppPreparedINSERTs* tables,
-             bool /*force_flush*/) mutable
+             bool /*force*/) mutable
             {
                 auto inserter = tables->getPreparedINSERT("TestData");
                 inserter->setColumnValue(0, vals);
@@ -91,9 +91,9 @@ public:
 
         // 6. Terminating function which sends the max value seen so far back to this app
         auto record_max = simdb::pipeline::createTask<simdb::pipeline::Function<int, void>>(
-            [this](int&& val, bool force_flush) mutable
+            [this](int&& val, bool force) mutable
             {
-                simdb::ConditionalLock<std::mutex> lock(mutex_, force_flush);
+                simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 max_val_ = std::max(max_val_, val);
             });
 
@@ -128,7 +128,7 @@ public:
         // Flush and immediately lock the database to prevent accidentally "cheating".
         // It will take a quick second to recreate the expected final values, and we
         // do not want the pipeline threads to sneak in more data.
-        flusher_->flush();
+        flusher_->waterfallFlush();
 
         db_mgr_->safeTransaction([&]()
             {

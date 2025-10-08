@@ -263,23 +263,17 @@ public:
     ///
     ///   2. Stop all pipeline threads. Some data is still in the pipeline.
     ///
-    ///   3. Call virtual TaskBase::flushToPipeline() for every task.
+    ///   3. Call virtual TaskBase::processAll(force=true) for every task.
     ///      They will be called in the same order as they are organized
     ///      in their respective TaskGroup. Do this for all except the
     ///      DB writers.
     ///
-    ///   4. Call AsyncDatabaseWriter::flushToPipeline() for all DB writers.
-    ///      This is done inside a BEGIN/COMMIT transaction.
-    ///
-    ///   5. Repeat steps 2-3 in a round-robin until all tasks say they
-    ///      have nothing left to do.
-    ///
-    ///   6. Destroy all pipelines (and therefore task groups, tasks, and
+    ///   4. Destroy all pipelines (and therefore task groups, tasks, and
     ///      their respective ConcurrentQueues).
     ///
-    ///   7. Destroy all threads.
+    ///   5. Destroy all threads.
     ///
-    ///   8. Call virtual App::postTeardown() in a BEGIN/COMMIT transaction.
+    ///   6. Call virtual App::postTeardown() in a BEGIN/COMMIT transaction.
     ///      This is the time to write your post-processing data, metadata,
     ///      and so on if you need to.
     ///
