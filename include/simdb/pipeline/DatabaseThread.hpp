@@ -55,9 +55,9 @@ private:
     }
 
     /// Overridden from PollingThread
-    bool run_(bool force_flush) override final
+    bool run_(bool force) override final
     {
-        bool ran = false;
+        bool did_work = false;
 
         // Put all runnables (AsyncDbWriters) in a BEGIN/COMMIT block
         // for fastest insert performance.
@@ -70,7 +70,7 @@ private:
                     continue_while = false;
                     for (auto& runnable : polling_runnables_)
                     {
-                        continue_while |= runnable->run(force_flush);
+                        continue_while |= runnable->processOne(force);
 
                         // Give as high priority as possible for async DB access
                         if (dormant_thread_.hasTasks())
@@ -79,11 +79,11 @@ private:
                             break;
                         }
                     }
-                    ran |= continue_while;
+                    did_work |= continue_while;
                 } while (continue_while);
             });
 
-        return ran;
+        return did_work;
     }
 
     /// Overridden from PollingThread
@@ -101,14 +101,28 @@ private:
     }
 
     /// Overridden from PollingThread
-    bool flushRunnablesToPipelines() override
+    bool waterfallFlush() override
     {
         bool did_work = false;
 
         db_mgr_->safeTransaction(
             [&]
             {
-                did_work = PollingThread::flushRunnablesToPipelines();
+                did_work = PollingThread::waterfallFlush();
+            });
+
+        return did_work;
+    }
+
+    /// Overridden from PollingThread
+    bool roundRobinFlush() override
+    {
+        bool did_work = false;
+
+        db_mgr_->safeTransaction(
+            [&]
+            {
+                did_work = PollingThread::roundRobinFlush();
             });
 
         return did_work;

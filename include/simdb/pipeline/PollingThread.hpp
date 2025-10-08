@@ -38,12 +38,31 @@ public:
         runnables_.emplace_back(runnable);
     }
 
-    virtual bool flushRunnablesToPipelines()
+    virtual bool waterfallFlush()
     {
         bool did_work = false;
         for (auto runnable : runnables_)
         {
-            did_work |= runnable->flushToPipeline();
+            did_work |= runnable->processAll(true);
+        }
+        return did_work;
+    }
+
+    virtual bool roundRobinFlush()
+    {
+        bool did_work = false;
+        while (true)
+        {
+            bool processed = false;
+            for (auto runnable : runnables_)
+            {
+                processed |= runnable->processOne(true);
+            }
+            if (!processed)
+            {
+                break;
+            }
+            did_work = true;
         }
         return did_work;
     }
@@ -130,14 +149,23 @@ private:
         while (run_(true)) {}
     }
 
-    virtual bool run_(bool force_flush)
+    virtual bool run_(bool force)
     {
-        bool ran = false;
-        for (auto runner : runnables_)
+        bool did_work = false;
+        while (true)
         {
-            ran |= runner->run(force_flush);
+            bool processed = false;
+            for (auto runner : runnables_)
+            {
+                processed |= runner->processOne(force);
+            }
+            if (!processed)
+            {
+                break;
+            }
+            did_work = true;
         }
-        return ran;
+        return did_work;
     }
 
     const size_t interval_ms_;

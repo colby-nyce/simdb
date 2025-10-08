@@ -274,14 +274,14 @@ public:
         // This task reads InstEvents out of the cache and sends them down the pipeline
         auto source_task = simdb::pipeline::createTask<simdb::pipeline::Function<void, InstEvent>>(
             [this, send_evt = InstEvent()]
-            (simdb::ConcurrentQueue<InstEvent>& out, bool force_flush) mutable -> bool
+            (simdb::ConcurrentQueue<InstEvent>& out, bool force) mutable -> bool
             {
                 bool ran = false;
                 while (pipeline_input_queue_.try_pop(send_evt))
                 {
                     out.emplace(std::move(send_evt));
                     ran = true;
-                    if (!force_flush)
+                    if (!force)
                     {
                         break;
                     }
@@ -297,7 +297,7 @@ public:
         auto range_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEvents, InstEventsRange>>(
             [](InstEvents&& evts,
                simdb::ConcurrentQueue<InstEventsRange>& out,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 InstEventUID euid = evts.front().euid;
                 for (size_t i = 1; i < evts.size(); ++i)
@@ -320,7 +320,7 @@ public:
         auto serialize_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstEventsRange, EventsRangeAsBytes>>(
             [](InstEventsRange&& evts,
                simdb::ConcurrentQueue<EventsRangeAsBytes>& out,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 EventsRangeAsBytes range_as_bytes;
                 range_as_bytes.euid_range = evts.euid_range;
@@ -340,7 +340,7 @@ public:
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<EventsRangeAsBytes, EventsRangeAsBytes>>(
             [](EventsRangeAsBytes&& uncompressed,
                simdb::ConcurrentQueue<EventsRangeAsBytes>& out,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 EventsRangeAsBytes compressed;
                 compressed.euid_range = uncompressed.euid_range;
@@ -354,7 +354,7 @@ public:
             [](EventsRangeAsBytes&& evts,
                simdb::ConcurrentQueue<InstructionEventUIDRange>& out,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 auto inserter = tables->getPreparedINSERT("CompressedEvents");
 
@@ -370,7 +370,7 @@ public:
 
         // This task receives eviction notices from the sqlite task and notifies the cache
         auto eviction_task = simdb::pipeline::createTask<simdb::pipeline::Function<InstructionEventUIDRange, void>>(
-            [this](InstructionEventUIDRange&& euid_range, bool /*force_flush*/)
+            [this](InstructionEventUIDRange&& euid_range, bool /*force*/)
             {
                 std::lock_guard<std::mutex> lock(mutex_);
 

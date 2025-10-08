@@ -70,30 +70,22 @@ public:
     }
 
 private:
-    bool run(bool force_flush) override
+    bool processOne(bool force) override
     {
-        bool ran = false;
-        bool task_ran = false;
-        do
-        {
-            task_ran = false;
-            for (auto& task : tasks_)
-            {
-                task_ran |= task->run(force_flush);
-            }
-
-            ran |= task_ran;
-        } while(task_ran);
-
-        return ran;
-    }
-
-    bool flushToPipeline() override
-    {
-        bool did_work = Runnable::flushToPipeline();
+        bool did_work = false;
         for (auto& task : tasks_)
         {
-            did_work |= task->flushToPipeline();
+            did_work |= task->processOne(force);
+        }
+        return did_work;
+    }
+
+    bool processAll(bool force) override
+    {
+        bool did_work = false;
+        for (auto& task : tasks_)
+        {
+            did_work |= task->processAll(force);
         }
         return did_work;
     }

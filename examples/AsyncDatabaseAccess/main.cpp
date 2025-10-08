@@ -97,7 +97,7 @@ public:
             [](Packet&& in,
                simdb::ConcurrentQueue<Packet>& out,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 if (in.op != Packet::INSERT)
                 {
@@ -117,7 +117,7 @@ public:
             [](Packet&& in,
                simdb::ConcurrentQueue<Packet>& out,
                simdb::DatabaseManager* db_mgr,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 if (in.op == Packet::INSERT)
                 {
@@ -144,7 +144,7 @@ public:
         auto db_delete = db_accessor->createAsyncReader<Packet, void>(
             [](Packet&& in,
                simdb::DatabaseManager* db_mgr,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 if (in.op != Packet::DELETE)
                 {
@@ -204,7 +204,7 @@ private:
     void validateStrictFIFO_()
     {
         PROFILE_METHOD
-        pipeline_flusher_->flush();
+        pipeline_flusher_->waterfallFlush();
 
         auto query = db_mgr_->createQuery("Packets");
 
@@ -288,7 +288,7 @@ public:
         auto db_tasks = db_accessor->createAsyncWriter<StrictFIFO, Packet, void>(
             [this](Packet&& in,
                    simdb::pipeline::AppPreparedINSERTs* tables,
-                   bool /*force_flush*/)
+                   bool /*force*/)
             {
                 if (in.op == Packet::INSERT)
                 {
@@ -388,7 +388,7 @@ private:
     void validateRelaxedFifo_()
     {
         PROFILE_METHOD
-        pipeline_flusher_->flush();
+        pipeline_flusher_->waterfallFlush();
 
         std::lock_guard<std::mutex> lock(mutex_);
 

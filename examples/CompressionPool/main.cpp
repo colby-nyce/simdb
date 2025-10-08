@@ -55,9 +55,34 @@ class Task<ReorderBuffer> : public NonTerminalTask<CompressedTestData, Compresse
 {
 private:
     /// Process one item from the queue.
-    bool run(bool force_flush) override
+    bool processOne(bool /*force*/) override
     {
-        bool ran = false;
+        bool did_work = false;
+        CompressedTestData data;
+
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (this->input_queue_->get().try_pop(data))
+        {
+            rob_.push(data);
+            did_work = true;
+        }
+
+        if (!rob_.empty() && rob_.top().tick == next_expected_tick_)
+        {
+            ++next_expected_tick_;
+            this->output_queue_->get().emplace(std::move(rob_.top()));
+            rob_.pop();
+            did_work = true;
+        }
+ 
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool /*force*/) override
+    {
+        bool did_work = false;
         CompressedTestData data;
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -65,11 +90,7 @@ private:
         while (this->input_queue_->get().try_pop(data))
         {
             rob_.push(data);
-            ran = true;
-            if (!force_flush)
-            {
-                break;
-            }
+            did_work = true;
         }
 
         while (!rob_.empty() && rob_.top().tick == next_expected_tick_)
@@ -77,14 +98,10 @@ private:
             ++next_expected_tick_;
             this->output_queue_->get().emplace(std::move(rob_.top()));
             rob_.pop();
-            ran = true;
-            if (!force_flush)
-            {
-                break;
-            }
+            did_work = true;
         }
  
-        return ran;
+        return did_work;
     }
 
     std::string getDescription_() const override
@@ -136,7 +153,7 @@ public:
             return simdb::pipeline::createTask<simdb::pipeline::Function<TestData, CompressedTestData>>(
                 [](TestData&& in,
                    simdb::ConcurrentQueue<CompressedTestData>& out,
-                   bool /*force_flush*/)
+                   bool /*force*/)
                 {
                     CompressedTestData compressed;
                     compressed.tick = in.tick;
@@ -161,7 +178,7 @@ public:
         auto sqlite = db_accessor->createAsyncWriter<CompressionPool, CompressedTestData, void>(
             [](CompressedTestData&& in,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force_flush*/)
+               bool /*force*/)
             {
                 auto inserter = tables->getPreparedINSERT("CompressedData");
                 inserter->setColumnValue(0, in.tick);

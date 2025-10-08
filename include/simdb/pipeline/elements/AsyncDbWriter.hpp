@@ -56,22 +56,40 @@ private:
 
     friend class AsyncDatabaseAccessor;
 
-    /// Process one item from the queue. Always invoked on the database thread.
-    bool run(bool force_flush) override
+    /// Process one item from the queue.
+    bool processOne(bool force) override
     {
         if (!this->output_queue_)
         {
             throw DBException("Output queue not set!");
         }
 
-        bool ran = false;
+        bool did_work = false;
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), &app_tables_, force_flush);
-            ran = true;
+            func_(std::move(in), this->output_queue_->get(), &app_tables_, force);
+            did_work = true;
         }
-        return ran;
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool force) override
+    {
+        if (!this->output_queue_)
+        {
+            throw DBException("Output queue not set!");
+        }
+
+        bool did_work = false;
+        Input in;
+        while (this->input_queue_->get().try_pop(in))
+        {
+            func_(std::move(in), this->output_queue_->get(), &app_tables_, force);
+            did_work = true;
+        }
+        return did_work;
     }
 
     std::string getDescription_() const override
@@ -100,17 +118,30 @@ private:
 
     friend class AsyncDatabaseAccessor;
 
-    /// Process one item from the queue. Always invoked on the database thread.
-    bool run(bool force_flush) override
+    /// Process one item from the queue.
+    bool processOne(bool force) override
     {
-        bool ran = false;
+        bool did_work = false;
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), &app_tables_, force_flush);
-            ran = true;
+            func_(std::move(in), &app_tables_, force);
+            did_work = true;
         }
-        return ran;
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool force) override
+    {
+        bool did_work = false;
+        Input in;
+        while (this->input_queue_->get().try_pop(in))
+        {
+            func_(std::move(in), &app_tables_, force);
+            did_work = true;
+        }
+        return did_work;
     }
 
     std::string getDescription_() const override

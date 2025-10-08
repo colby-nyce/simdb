@@ -12,7 +12,7 @@ class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, Dat
 {
 private:
     /// Process one item from the queue.
-    bool run(bool force_flush) override
+    bool processOne(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -26,7 +26,7 @@ private:
             in = 0;
         }
 
-        bool ran = false;
+        bool did_work = false;
         if (this->input_queue_->get().try_pop(in))
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -36,42 +36,49 @@ private:
                 this->output_queue_->get().emplace(std::move(oldest));
             }
             circ_buf_.push(std::move(in));
-            ran = true;
+            did_work = true;
         }
 
-        if (force_flush)
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool force) override
+    {
+        if (!this->output_queue_)
+        {
+            throw DBException("Output queue not set!");
+        }
+
+        DataT in;
+        if constexpr (std::is_arithmetic_v<DataT> && !std::is_pointer_v<DataT>)
+        {
+            // -Werror=maybe-uninitialized
+            in = 0;
+        }
+
+        bool did_work = false;
+        while (this->input_queue_->get().try_pop(in))
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (circ_buf_.full())
+            {
+                auto oldest = std::move(circ_buf_.pop());
+                this->output_queue_->get().emplace(std::move(oldest));
+            }
+            circ_buf_.push(std::move(in));
+            did_work = true;
+        }
+
+        if (force)
         {
             std::lock_guard<std::mutex> lock(mutex_);
             while (!circ_buf_.empty())
             {
                 auto oldest = std::move(circ_buf_.pop());
                 this->output_queue_->get().emplace(std::move(oldest));
-                ran = true;
+                did_work = true;
             }
-        }
-
-        return ran;
-    }
-
-    bool flushToPipeline() override
-    {
-        bool did_work = Runnable::flushToPipeline();
-
-        auto send_oldest = [&]() -> bool
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (!circ_buf_.empty())
-            {
-                auto oldest = std::move(circ_buf_.pop());
-                this->output_queue_->get().emplace(std::move(oldest));
-                return true;
-            }
-            return false;
-        };
-
-        while (send_oldest())
-        {
-            did_work = true;
         }
 
         return did_work;

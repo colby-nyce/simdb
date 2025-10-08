@@ -33,7 +33,7 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool run(bool force_flush) override
+    bool processOne(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -49,10 +49,10 @@ private:
 
         std::lock_guard<std::mutex> lock(mutex_);
 
-        bool ran = false;
+        bool did_work = false;
         if (this->input_queue_->get().try_pop(in))
         {
-            ran = true;
+            did_work = true;
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)
             {
@@ -60,13 +60,44 @@ private:
             }
         }
 
-        if (force_flush && (full_() || (!empty_() && flush_partial_)))
+        return did_work;
+    }
+
+    /// Process all items from the queue.
+    bool processAll(bool force) override
+    {
+        if (!this->output_queue_)
         {
-            this->output_queue_->get().emplace(std::move(buffer_));
-            ran = true;
+            throw DBException("Output queue not set!");
         }
 
-        return ran;
+        InputType in;
+        if constexpr (std::is_arithmetic_v<InputType> && !std::is_pointer_v<InputType>)
+        {
+            // -Werror=maybe-uninitialized
+            in = 0;
+        }
+
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        bool did_work = false;
+        while (this->input_queue_->get().try_pop(in))
+        {
+            did_work = true;
+            buffer_.emplace_back(std::move(in));
+            if (buffer_.size() == buffer_len_)
+            {
+                this->output_queue_->get().emplace(std::move(buffer_));
+            }
+        }
+
+        if (force && (full_() || (!empty_() && flush_partial_)))
+        {
+            this->output_queue_->get().emplace(std::move(buffer_));
+            did_work = true;
+        }
+
+        return did_work;
     }
 
     bool full_() const

@@ -15,7 +15,7 @@
 /// larger pipelines and SimDB apps.
 
 /// ------ simdb::pipeline::Function --------------------------------------------
-void DoublerFunctionTask(int&& val, simdb::ConcurrentQueue<int>& out, bool /*force_flush*/)
+void DoublerFunctionTask(int&& val, simdb::ConcurrentQueue<int>& out, bool /*force*/)
 {
     out.push(val * 2);
 }
@@ -29,7 +29,7 @@ void TestPipelineFunction(simdb::DatabaseManager* db_mgr)
 
     // Create a function task using a lambda.
     auto func2 = simdb::pipeline::createTask<simdb::pipeline::Function<int, int>>(
-        [](int&& val, simdb::ConcurrentQueue<int>& out, bool /*force_flush*/)
+        [](int&& val, simdb::ConcurrentQueue<int>& out, bool /*force*/)
         {
             out.push(val * 2);
         }
@@ -334,7 +334,7 @@ void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
     auto writer = pipeline_mgr.getAsyncDatabaseAccessor()->createAsyncWriter<TestDataApp, TestData, void>(
         [](TestData&& test_data,
            simdb::pipeline::AppPreparedINSERTs* tables,
-           bool /*force_flush*/)
+           bool /*force*/)
         {
             auto inserter = tables->getPreparedINSERT("TestData");
             inserter->setColumnValue(0, test_data.intval);
