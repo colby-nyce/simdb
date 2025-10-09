@@ -67,19 +67,22 @@ double GetDotProduct(const BufferedDotProdInputs& in)
     return sum;
 }
 
-void SendDotProduct(BufferedDotProdInputs&& in, simdb::ConcurrentQueue<double>& out, bool /*force*/)
+simdb::pipeline::RunnableOutcome SendDotProduct(BufferedDotProdInputs&& in, simdb::ConcurrentQueue<double>& out, bool /*force*/)
 {
     out.push(GetDotProduct(in));
+    return simdb::pipeline::RunnableOutcome::DID_WORK;
 }
 
-void CompressBytes(BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out, bool /*force*/)
+simdb::pipeline::RunnableOutcome CompressBytes(BufferedDotProductValues&& in, simdb::ConcurrentQueue<CompressedBytes>& out, bool /*force*/)
 {
     CompressedBytes compressed;
     simdb::compressData(in, compressed);
     out.emplace(std::move(compressed));
+
+    return simdb::pipeline::RunnableOutcome::DID_WORK;
 }
 
-void WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSERTs* tables, bool /*force*/)
+simdb::pipeline::RunnableOutcome WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSERTs* tables, bool /*force*/)
 {
     // This is on the dedicated DB thread. Note that we are inside a
     // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
@@ -87,6 +90,8 @@ void WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSE
     auto inserter = tables->getPreparedINSERT("DotProducts");
     inserter->setColumnValue(0, in);
     inserter->createRecord();
+
+    return simdb::pipeline::RunnableOutcome::DID_WORK;
 }
 
 class DotProductApp : public simdb::App

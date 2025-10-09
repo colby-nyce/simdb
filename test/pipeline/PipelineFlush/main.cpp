@@ -52,6 +52,7 @@ public:
                     val = 0;
                 }
                 out.push(val);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             });
 
         // 3. Buffer of size 23
@@ -68,6 +69,7 @@ public:
                     val *= 2;
                 }
                 out.emplace(std::move(vals));
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             });
 
         // 5. DB writer that writes to TestData table
@@ -87,6 +89,7 @@ public:
                     max_int = std::max(max_int, val);
                 }
                 out.push(max_int);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             });
 
         // 6. Terminating function which sends the max value seen so far back to this app
@@ -95,6 +98,7 @@ public:
             {
                 simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 max_val_ = std::max(max_val_, val);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             });
 
         // Connect the pipeline elements.

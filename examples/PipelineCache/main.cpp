@@ -274,19 +274,19 @@ public:
         // This task reads InstEvents out of the cache and sends them down the pipeline
         auto source_task = simdb::pipeline::createTask<simdb::pipeline::Function<void, InstEvent>>(
             [this, send_evt = InstEvent()]
-            (simdb::ConcurrentQueue<InstEvent>& out, bool force) mutable -> bool
+            (simdb::ConcurrentQueue<InstEvent>& out, bool force) mutable
             {
-                bool ran = false;
+                simdb::pipeline::RunnableOutcome outcome = simdb::pipeline::RunnableOutcome::NO_OP;
                 while (pipeline_input_queue_.try_pop(send_evt))
                 {
                     out.emplace(std::move(send_evt));
-                    ran = true;
+                    outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
                     if (!force)
                     {
                         break;
                     }
                 }
-                return ran;
+                return outcome;
             }
         );
 
@@ -313,6 +313,8 @@ public:
                 range.euid_range = std::make_pair(evts.front().euid, evts.back().euid);
                 range.events = std::move(evts);
                 out.emplace(std::move(range));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -333,6 +335,7 @@ public:
                 os.flush();
 
                 out.emplace(std::move(range_as_bytes));
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -346,6 +349,8 @@ public:
                 compressed.euid_range = uncompressed.euid_range;
                 simdb::compressData(uncompressed.all_event_bytes, compressed.all_event_bytes);
                 out.emplace(std::move(compressed));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -365,6 +370,8 @@ public:
 
                 // Send this euid range for eviction from the cache
                 out.emplace(std::move(evts.euid_range));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -389,6 +396,8 @@ public:
 
                 // Erase range [first, last)
                 evt_cache_.erase(first, last);
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 

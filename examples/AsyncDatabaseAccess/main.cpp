@@ -110,6 +110,8 @@ public:
                 inserter->setColumnValue(2, in.data_vals.y);
                 inserter->setColumnValue(3, in.data_vals.z);
                 inserter->createRecord();
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -127,7 +129,7 @@ public:
                 if (in.op == Packet::DELETE)
                 {
                     out.emplace(std::move(in));
-                    return;
+                    return simdb::pipeline::RunnableOutcome::DID_WORK;
                 }
 
                 auto query = db_mgr->createQuery("Packets");
@@ -138,6 +140,8 @@ public:
                     SQL_TABLE("Packets"),
                     SQL_COLUMNS("Tick", "X", "Y", "Z"),
                     SQL_VALUES(in.tick, in.data_vals.x, in.data_vals.y, in.data_vals.z));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -154,6 +158,8 @@ public:
                 auto query = db_mgr->createQuery("Packets");
                 query->addConstraintForUInt64("Tick", simdb::Constraints::EQUAL, in.tick);
                 query->deleteResultSet();
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -290,6 +296,7 @@ public:
                    simdb::pipeline::AppPreparedINSERTs* tables,
                    bool /*force*/)
             {
+                simdb::pipeline::RunnableOutcome outcome = simdb::pipeline::RunnableOutcome::NO_OP;
                 if (in.op == Packet::INSERT)
                 {
                     auto inserter = tables->getPreparedINSERT("Packets");
@@ -298,6 +305,7 @@ public:
                     inserter->setColumnValue(2, in.data_vals.y);
                     inserter->setColumnValue(3, in.data_vals.z);
                     inserter->createRecord();
+                    outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
                 }
                 else
                 {
@@ -308,7 +316,7 @@ public:
 
                 if (pending_updates_.empty() && pending_deletes_.empty())
                 {
-                    return;
+                    return outcome;
                 }
 
                 auto query = db_mgr_->createQuery("Packets");
@@ -342,6 +350,8 @@ public:
                     query->deleteResultSet();
                     pending_deletes_.clear();
                 }
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 

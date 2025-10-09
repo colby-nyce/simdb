@@ -44,6 +44,7 @@ public:
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in * 2);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -53,6 +54,7 @@ public:
             {
                 simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 final_pipeline_values_.push_back(in);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -113,6 +115,7 @@ public:
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in * 2);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -121,6 +124,7 @@ public:
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in * 3);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -129,6 +133,7 @@ public:
             [](uint64_t&& in, simdb::ConcurrentQueue<uint64_t>& out, bool /*force*/)
             {
                 out.push(in >> 1);
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -143,6 +148,8 @@ public:
                 inserter->setColumnValue(0, in);
                 auto record_id = inserter->createRecord();
                 out.push(record_id);
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -151,6 +158,7 @@ public:
             [](int&& id, bool /*force*/)
             {
                 std::cout << "Committed record with ID " << id << "\n";
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -228,6 +236,8 @@ public:
                 ZlibOut compressed;
                 simdb::compressData(in, compressed);
                 out.emplace(std::move(compressed));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -245,6 +255,8 @@ public:
                 auto record_id = inserter->createRecord();
                 DatabaseOut o = std::make_pair(record_id, in.size());
                 out.emplace(std::move(o));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -262,6 +274,8 @@ public:
 
                 TallyOut o = std::make_pair(num_db_records_, size_t(running_mean_.mean()));
                 out.emplace(std::move(o));
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -275,6 +289,7 @@ public:
             {
                 simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 final_report_ = in;
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -349,6 +364,8 @@ public:
                 inserter->setColumnValue(0, new_entry.first);
                 inserter->setColumnValue(1, new_entry.second);
                 inserter->createRecord();
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 

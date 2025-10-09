@@ -55,9 +55,9 @@ class Task<ReorderBuffer> : public NonTerminalTask<CompressedTestData, Compresse
 {
 private:
     /// Process one item from the queue.
-    bool processOne(bool /*force*/) override
+    simdb::pipeline::RunnableOutcome processOne(bool /*force*/) override
     {
-        bool did_work = false;
+        simdb::pipeline::RunnableOutcome outcome = simdb::pipeline::RunnableOutcome::NO_OP;
         CompressedTestData data;
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -65,7 +65,7 @@ private:
         if (this->input_queue_->get().try_pop(data))
         {
             rob_.push(data);
-            did_work = true;
+            outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
         }
 
         if (!rob_.empty() && rob_.top().tick == next_expected_tick_)
@@ -73,16 +73,16 @@ private:
             ++next_expected_tick_;
             this->output_queue_->get().emplace(std::move(rob_.top()));
             rob_.pop();
-            did_work = true;
+            outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
         }
  
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool /*force*/) override
+    simdb::pipeline::RunnableOutcome processAll(bool /*force*/) override
     {
-        bool did_work = false;
+        simdb::pipeline::RunnableOutcome outcome = simdb::pipeline::RunnableOutcome::NO_OP;
         CompressedTestData data;
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -90,7 +90,7 @@ private:
         while (this->input_queue_->get().try_pop(data))
         {
             rob_.push(data);
-            did_work = true;
+            outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
         }
 
         while (!rob_.empty() && rob_.top().tick == next_expected_tick_)
@@ -98,10 +98,10 @@ private:
             ++next_expected_tick_;
             this->output_queue_->get().emplace(std::move(rob_.top()));
             rob_.pop();
-            did_work = true;
+            outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
         }
  
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override
@@ -159,6 +159,8 @@ public:
                     compressed.tick = in.tick;
                     simdb::compressData(in.data, compressed.compressed_bytes);
                     out.emplace(std::move(compressed));
+
+                    return simdb::pipeline::RunnableOutcome::DID_WORK;
                 }
             );
         };
@@ -184,6 +186,8 @@ public:
                 inserter->setColumnValue(0, in.tick);
                 inserter->setColumnValue(1, in.compressed_bytes);
                 inserter->createRecord();
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 

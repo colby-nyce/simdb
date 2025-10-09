@@ -45,7 +45,7 @@ template <typename App, typename Input, typename Output>
 class Task<AsyncDatabaseWriter<App, Input, Output>> : public NonTerminalTask<Input, Output>
 {
 private:
-    using Func = std::function<void(Input&&, ConcurrentQueue<Output>&, AppPreparedINSERTs*, bool)>;
+    using Func = std::function<RunnableOutcome(Input&&, ConcurrentQueue<Output>&, AppPreparedINSERTs*, bool)>;
 
     /// Not meant to be publicly constructible.
     Task(DatabaseManager* db_mgr, AppPreparedINSERTs&& app_tables, Func func)
@@ -57,39 +57,62 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue.
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
         if (!this->output_queue_)
         {
             throw DBException("Output queue not set!");
         }
 
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), &app_tables_, force);
-            did_work = true;
+            auto o = func_(std::move(in), this->output_queue_->get(), &app_tables_, force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
         if (!this->output_queue_)
         {
             throw DBException("Output queue not set!");
         }
 
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         Input in;
         while (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), &app_tables_, force);
-            did_work = true;
+            auto o = func_(std::move(in), this->output_queue_->get(), &app_tables_, force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+                break;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override
@@ -107,7 +130,7 @@ template <typename App, typename Input>
 class Task<AsyncDatabaseWriter<App, Input, void>> : public TerminalTask<Input>
 {
 private:
-    using Func = std::function<void(Input&&, AppPreparedINSERTs*, bool)>;
+    using Func = std::function<RunnableOutcome(Input&&, AppPreparedINSERTs*, bool)>;
 
     /// Not meant to be publicly constructible.
     Task(DatabaseManager* db_mgr, AppPreparedINSERTs&& app_tables, Func func)
@@ -119,29 +142,52 @@ private:
     friend class AsyncDatabaseAccessor;
 
     /// Process one item from the queue.
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         Input in;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), &app_tables_, force);
-            did_work = true;
+            auto o = func_(std::move(in), &app_tables_, force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         Input in;
         while (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), &app_tables_, force);
-            did_work = true;
+            auto o = func_(std::move(in), &app_tables_, force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+                break;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override

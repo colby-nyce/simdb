@@ -70,24 +70,37 @@ public:
     }
 
 private:
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
-        bool did_work = false;
-        for (auto& task : tasks_)
-        {
-            did_work |= task->processOne(force);
-        }
-        return did_work;
+        return process_(true, force);
     }
 
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
-        bool did_work = false;
+        return process_(false, force);
+    }
+
+    RunnableOutcome process_(bool one, bool force)
+    {
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         for (auto& task : tasks_)
         {
-            did_work |= task->processAll(force);
+            auto o = one ? task->processOne(force) : task->processAll(force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+                break;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override

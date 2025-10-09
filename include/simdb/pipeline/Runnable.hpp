@@ -13,6 +13,23 @@
 
 namespace simdb::pipeline {
 
+/// Various outcomes for each processOne/processAll calls to a runnable:
+enum class RunnableOutcome
+{
+    // Return if the runnable (task) pushed any data to its output queue,
+    // or otherwise should leave the pipeline tasks greedily executing
+    // as normal.
+    DID_WORK,
+
+    // Return if the runnable had no data to consume or otherwise should
+    // tell the pipeline thread to go back to sleep for a bit.
+    NO_OP,
+
+    // Return if the runnable should explicitly stop a RunnableFlusher
+    // from continuing to flush the whole pipeline.
+    ABORT_FLUSH
+};
+
 /// Base class for all things that can be run on a pipeline thread.
 class Runnable
 {
@@ -33,11 +50,11 @@ public:
 
     /// Process one item from the input queue, returning true
     /// if this runnable did anything.
-    virtual bool processOne(bool force) = 0;
+    virtual RunnableOutcome processOne(bool force) = 0;
 
     /// Flush and process everything from the input queue,
     /// returning true if this runnable did anything.
-    virtual bool processAll(bool force) = 0;
+    virtual RunnableOutcome processAll(bool force) = 0;
 
     /// Print info about this runnable for reporting purposes.
     virtual void print(std::ostream& os, int indent) const
@@ -74,27 +91,7 @@ public:
     /// Flush: a, b, c, d, e, f, g, h, i, j, k, l
     void waterfallFlush()
     {
-        db_mgr_.safeTransaction(
-            [&]()
-            {
-                bool continue_while;
-                do
-                {
-                    continue_while = false;
-                    for (Runnable* r : runnables_)
-                    {
-                        try
-                        {
-                            continue_while |= r->processAll(true);
-                        }
-                        catch(const FlushCancelledException&)
-                        {
-                            continue_while = false;
-                            break;
-                        }
-                    }
-                } while (continue_while);
-            });
+        process_(false);
     }
 
     /// Call processOne() on all runnables in a single transaction.
@@ -109,6 +106,12 @@ public:
     /// Flush: a, e, i, b, f, j, c, g, k, d, h, l
     void roundRobinFlush()
     {
+        process_(true);
+    }
+
+private:
+    void process_(bool one)
+    {
         db_mgr_.safeTransaction(
             [&]()
             {
@@ -118,21 +121,21 @@ public:
                     continue_while = false;
                     for (Runnable* r : runnables_)
                     {
-                        try
-                        {
-                            continue_while |= r->processOne(true);
-                        }
-                        catch(const FlushCancelledException&)
+                        auto outcome = one ? r->processOne(true) : r->processAll(true);
+                        if (outcome == RunnableOutcome::ABORT_FLUSH)
                         {
                             continue_while = false;
                             break;
+                        }
+                        else if (outcome == RunnableOutcome::DID_WORK)
+                        {
+                            continue_while = true;
                         }
                     }
                 } while (continue_while);
             });
     }
 
-private:
     template <typename T>
     Runnable* unwrap_(T* ptr) const
     {

@@ -14,14 +14,14 @@ template <typename FunctionIn, typename FunctionOut>
 class Task<Function<FunctionIn, FunctionOut>> : public NonTerminalTask<FunctionIn, FunctionOut>
 {
 public:
-    using Func = std::function<void(FunctionIn&&, ConcurrentQueue<FunctionOut>&, bool)>;
+    using Func = std::function<RunnableOutcome(FunctionIn&&, ConcurrentQueue<FunctionOut>&, bool)>;
     Task(Func func) : func_(func) {}
 
     using TaskBase::getTypedInputQueue;
 
 private:
     /// Process one item from the queue.
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -29,17 +29,28 @@ private:
         }
 
         FunctionIn in;
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), force);
-            did_work = true;
+            auto o = func_(std::move(in), this->output_queue_->get(), force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -47,13 +58,25 @@ private:
         }
 
         FunctionIn in;
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         while (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), this->output_queue_->get(), force);
-            did_work = true;
+            auto o = func_(std::move(in), this->output_queue_->get(), force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+                break;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override
@@ -69,34 +92,57 @@ template <typename FunctionIn>
 class Task<Function<FunctionIn, void>> : public TerminalTask<FunctionIn>
 {
 public:
-    using Func = std::function<void(FunctionIn&&, bool)>;
+    using Func = std::function<RunnableOutcome(FunctionIn&&, bool)>;
     Task(Func func) : func_(func) {}
 
 private:
     /// Process one item from the queue.
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
         FunctionIn in;
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         if (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), force);
-            did_work = true;
+            auto o = func_(std::move(in), force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
         FunctionIn in;
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         while (this->input_queue_->get().try_pop(in))
         {
-            func_(std::move(in), force);
-            did_work = true;
+            auto o = func_(std::move(in), force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+                break;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override
@@ -112,23 +158,45 @@ template <typename FunctionOut>
 class Task<Function<void, FunctionOut>> : public TaskBase
 {
 public:
-    /// Return true if your function pushed at least one item to the queue
-    using Func = std::function<bool(ConcurrentQueue<FunctionOut>&, bool)>;
+    /// Return DID_WORK if your function pushed at least one item to the queue
+    using Func = std::function<RunnableOutcome(ConcurrentQueue<FunctionOut>&, bool)>;
     Task(Func func) : func_(func) {}
 
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
-        return func_(this->output_queue_->get(), force);
+        auto outcome = func_(this->output_queue_->get(), force);
+        if (outcome == RunnableOutcome::ABORT_FLUSH && !force)
+        {
+            throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+        }
+        return outcome;
     }
 
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
-        bool did_work = false;
-        while (processOne(force))
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
+        while (true)
         {
-            did_work = true;
+            auto o = processOne(force);
+            if (o == RunnableOutcome::ABORT_FLUSH && !force)
+            {
+                throw DBException("Cannot issue ABORT_FLUSH when we are not flushing!");
+            }
+            else if (o == RunnableOutcome::ABORT_FLUSH)
+            {
+                outcome = RunnableOutcome::ABORT_FLUSH;
+                break;
+            }
+            else if (o == RunnableOutcome::DID_WORK)
+            {
+                outcome = RunnableOutcome::DID_WORK;
+            }
+            else
+            {
+                break;
+            }
         }
-        return did_work;
+        return outcome;
     }
 
 protected:
