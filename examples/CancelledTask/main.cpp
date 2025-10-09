@@ -144,7 +144,7 @@ public:
         );
 
         // Task 4: Used in order to short-circuit RunnableFlusher. Will only be enabled
-        // prior to a flush and disabled right after. Unlike the more expensive Task 1
+        // prior to a flush and disabled right after. Unlike the first pipeline task
         // which implements a more robust but more expensive flush abort, this task
         // will just look at the incoming committed ticks without a database query.
         auto streaming_ticks_flush_abort = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, void>>(
@@ -263,13 +263,12 @@ public:
                 streaming_ticks_flush_abort_->enable(true);
             }
 
-            // Perform a "round robin" flush to give the DB task (the last task
-            // in the pipeline) many more chances to see the 5000th tick and
-            // abort the flush early.
+            // Perform a "round robin" flush to give the ABORT_FLUSH task(s)
+            // many more chances to see the 5000th tick and abort the flush early.
             //
-            // This is much faster than a waterfall flush which would have to
-            // wait for all earlier tasks (e.g. compression) to finish processing
-            // all their data before the DB task even sees the 5000th tick.
+            // This is much faster than a waterfall flush which would have to wait
+            // for all earlier tasks (e.g. compress all, write all to DB) to finish
+            // processing all their data before the trailing abort task gets to run.
             pipeline_flusher_->roundRobinFlush();
 
             // Ensure that one of the ABORT_FLUSH tasks found the data.
@@ -290,9 +289,8 @@ public:
         }
         else
         {
-            // If we are not using cancellable tasks, then just to a waterfall flush.
-            // It should be a bit faster, and besides, the round robin flush is really
-            // only used to speed up cancellable RunnableFlush.
+            // If we are not using cancellable tasks, then just to a waterfall flush. The
+            // round robin flush is really only used to speed up cancellable RunnableFlush.
             pipeline_flusher_->waterfallFlush();
         }
 
