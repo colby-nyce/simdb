@@ -70,6 +70,11 @@ private:
                     continue_while = false;
                     for (auto& runnable : polling_runnables_)
                     {
+                        if (!runnable->enabled())
+                        {
+                            continue;
+                        }
+
                         // We call processOne() here instead of processAll() to use a smaller
                         // granularity of tasks to "inject" break statements more frequently
                         // in the event of pending async DB access requests.

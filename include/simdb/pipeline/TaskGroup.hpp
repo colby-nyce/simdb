@@ -69,6 +69,12 @@ public:
         }
     }
 
+    void enable(bool enable = true) override final
+    {
+        (void)enable;
+        throw DBException("Cannot disable an entire TaskGroup");
+    }
+
 private:
     RunnableOutcome processOne(bool force) override
     {
@@ -85,6 +91,11 @@ private:
         RunnableOutcome outcome = RunnableOutcome::NO_OP;
         for (auto& task : tasks_)
         {
+            if (!task->enabled())
+            {
+                continue;
+            }
+
             auto o = one ? task->processOne(force) : task->processAll(force);
             if (o == RunnableOutcome::ABORT_FLUSH && !force)
             {

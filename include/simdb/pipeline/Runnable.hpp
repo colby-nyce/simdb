@@ -62,9 +62,23 @@ public:
         os << std::string(indent, ' ') << getDescription() << "\n";
     }
 
+    /// Check if this runnable is enabled.
+    bool enabled() const
+    {
+        return enabled_;
+    }
+
+    /// Disable/re-enable this runnable. Subclasses that do not
+    /// allow this control override and throw.
+    virtual void enable(bool enable = true)
+    {
+        enabled_ = enable;
+    }
+
 private:
     virtual std::string getDescription_() const = 0;
     std::string description_;
+    bool enabled_ = true;
 };
 
 /// This class takes a variable number of Runnable pointers (raw or smart)
@@ -89,9 +103,11 @@ public:
     ///    a-b-c-d--e-f-g-h--i-j-k-l
     ///
     /// Flush: a, b, c, d, e, f, g, h, i, j, k, l
-    void waterfallFlush()
+    ///
+    /// Returns true if there was anything to flush at all.
+    bool waterfallFlush()
     {
-        process_(false);
+        return process_(false, SIZE_MAX);
     }
 
     /// Call processOne() on all runnables in a single transaction.
@@ -104,23 +120,41 @@ public:
     ///    a-b-c-d--e-f-g-h--i-j-k-l
     ///
     /// Flush: a, e, i, b, f, j, c, g, k, d, h, l
-    void roundRobinFlush()
+    ///
+    /// Optionally pass in the max number of round robins we should perform.
+    ///
+    /// Returns true if there was anything to flush at all.
+    bool roundRobinFlush(size_t max_round_robins = SIZE_MAX)
     {
-        process_(true);
+        return process_(true, max_round_robins);
     }
 
 private:
-    void process_(bool one)
+    bool process_(bool one, size_t max_loops)
     {
+        // Max loops of zero does not make sense.
+        if (max_loops == 0)
+        {
+            max_loops = SIZE_MAX;
+        }
+
+        bool did_anything = false;
+
         db_mgr_.safeTransaction(
             [&]()
             {
                 bool continue_while;
+                size_t num_loops = 0;
                 do
                 {
                     continue_while = false;
                     for (Runnable* r : runnables_)
                     {
+                        if (!r->enabled())
+                        {
+                            continue;
+                        }
+
                         auto outcome = one ? r->processOne(true) : r->processAll(true);
                         if (outcome == RunnableOutcome::ABORT_FLUSH)
                         {
@@ -130,10 +164,18 @@ private:
                         else if (outcome == RunnableOutcome::DID_WORK)
                         {
                             continue_while = true;
+                            did_anything = true;
                         }
+                    }
+
+                    if (++num_loops == max_loops)
+                    {
+                        continue_while = false;
                     }
                 } while (continue_while);
             });
+
+        return did_anything;
     }
 
     template <typename T>
