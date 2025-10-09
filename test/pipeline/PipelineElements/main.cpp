@@ -15,9 +15,10 @@
 /// larger pipelines and SimDB apps.
 
 /// ------ simdb::pipeline::Function --------------------------------------------
-void DoublerFunctionTask(int&& val, simdb::ConcurrentQueue<int>& out, bool /*force*/)
+simdb::pipeline::RunnableOutcome DoublerFunctionTask(int&& val, simdb::ConcurrentQueue<int>& out, bool /*force*/)
 {
     out.push(val * 2);
+    return simdb::pipeline::RunnableOutcome::DID_WORK;
 }
 
 void TestPipelineFunction(simdb::DatabaseManager* db_mgr)
@@ -32,6 +33,7 @@ void TestPipelineFunction(simdb::DatabaseManager* db_mgr)
         [](int&& val, simdb::ConcurrentQueue<int>& out, bool /*force*/)
         {
             out.push(val * 2);
+            return simdb::pipeline::RunnableOutcome::DID_WORK;
         }
     );
 
@@ -342,6 +344,8 @@ void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
             inserter->setColumnValue(2, test_data.strval);
             inserter->setColumnValue(3, test_data.blobval);
             inserter->createRecord();
+
+            return simdb::pipeline::RunnableOutcome::DID_WORK;
         }
     );
 
@@ -392,7 +396,7 @@ int main()
 
     TestPipelineFunction(&db_mgr);
     TestPipelineBuffer(&db_mgr, true);
-    //TestPipelineBuffer(&db_mgr, false);
+    TestPipelineBuffer(&db_mgr, false);
     TestCircularBuffer();
     TestPipelineCircularBuffer(&db_mgr);
     TestAsyncDatabaseWriter(&db_mgr);

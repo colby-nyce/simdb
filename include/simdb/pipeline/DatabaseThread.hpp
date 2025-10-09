@@ -70,7 +70,13 @@ private:
                     continue_while = false;
                     for (auto& runnable : polling_runnables_)
                     {
-                        continue_while |= runnable->processOne(force);
+                        // We call processOne() here instead of processAll() to use a smaller
+                        // granularity of tasks to "inject" break statements more frequently
+                        // in the event of pending async DB access requests.
+                        if (runnable->processOne(force) == RunnableOutcome::DID_WORK)
+                        {
+                            continue_while = true;
+                        }
 
                         // Give as high priority as possible for async DB access
                         if (dormant_thread_.hasTasks())
@@ -101,28 +107,14 @@ private:
     }
 
     /// Overridden from PollingThread
-    bool waterfallFlush() override
+    bool flushRunnables() override
     {
         bool did_work = false;
 
         db_mgr_->safeTransaction(
             [&]
             {
-                did_work = PollingThread::waterfallFlush();
-            });
-
-        return did_work;
-    }
-
-    /// Overridden from PollingThread
-    bool roundRobinFlush() override
-    {
-        bool did_work = false;
-
-        db_mgr_->safeTransaction(
-            [&]
-            {
-                did_work = PollingThread::roundRobinFlush();
+                did_work = PollingThread::flushRunnables();
             });
 
         return did_work;

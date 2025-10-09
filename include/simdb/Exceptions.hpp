@@ -93,18 +93,4 @@ private:
     friend class WorkerInterrupt;
 };
 
-/*!
- * \class FlushCancelledException
- *
- * \brief Exception class thrown when RunnableFlusher::flush() needs to be cancelled.
- */
-class FlushCancelledException : public std::exception
-{
-public:
-    const char* what() const noexcept override
-    {
-        return "RunnableFlusher flush cancelled";
-    }
-};
-
 } // namespace simdb

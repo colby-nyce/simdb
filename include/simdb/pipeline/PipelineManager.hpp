@@ -97,14 +97,7 @@ public:
 
         auto close_thread = [&](PollingThread* thread)
         {
-            try
-            {
-                thread->close();
-            }
-            catch (const FlushCancelledException&)
-            {
-                // We don't care if a flush was cancelled during teardown
-            }
+            thread->close();
 
             if (perf_report)
             {
@@ -129,7 +122,7 @@ public:
             it = polling_threads_.begin();
             while (it != polling_threads_.end())
             {
-                continue_while |= (*it)->waterfallFlush();
+                continue_while |= (*it)->flushRunnables();
                 ++it;
             }
         } while (continue_while);

@@ -12,7 +12,7 @@ class Task<CircularBuffer<DataT, BufferLen>> : public NonTerminalTask<DataT, Dat
 {
 private:
     /// Process one item from the queue.
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -26,7 +26,7 @@ private:
             in = 0;
         }
 
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         if (this->input_queue_->get().try_pop(in))
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -36,14 +36,14 @@ private:
                 this->output_queue_->get().emplace(std::move(oldest));
             }
             circ_buf_.push(std::move(in));
-            did_work = true;
+            outcome = RunnableOutcome::DID_WORK;
         }
 
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -57,7 +57,7 @@ private:
             in = 0;
         }
 
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         while (this->input_queue_->get().try_pop(in))
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -67,7 +67,7 @@ private:
                 this->output_queue_->get().emplace(std::move(oldest));
             }
             circ_buf_.push(std::move(in));
-            did_work = true;
+            outcome = RunnableOutcome::DID_WORK;
         }
 
         if (force)
@@ -77,11 +77,11 @@ private:
             {
                 auto oldest = std::move(circ_buf_.pop());
                 this->output_queue_->get().emplace(std::move(oldest));
-                did_work = true;
+                outcome = RunnableOutcome::DID_WORK;
             }
         }
 
-        return did_work;
+        return outcome;
     }
 
     std::string getDescription_() const override

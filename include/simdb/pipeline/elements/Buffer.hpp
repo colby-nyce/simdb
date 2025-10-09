@@ -33,7 +33,7 @@ public:
 
 private:
     /// Process one item from the queue.
-    bool processOne(bool force) override
+    RunnableOutcome processOne(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -49,10 +49,10 @@ private:
 
         std::lock_guard<std::mutex> lock(mutex_);
 
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         if (this->input_queue_->get().try_pop(in))
         {
-            did_work = true;
+            outcome = RunnableOutcome::DID_WORK;
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)
             {
@@ -60,11 +60,11 @@ private:
             }
         }
 
-        return did_work;
+        return outcome;
     }
 
     /// Process all items from the queue.
-    bool processAll(bool force) override
+    RunnableOutcome processAll(bool force) override
     {
         if (!this->output_queue_)
         {
@@ -80,10 +80,10 @@ private:
 
         std::lock_guard<std::mutex> lock(mutex_);
 
-        bool did_work = false;
+        RunnableOutcome outcome = RunnableOutcome::NO_OP;
         while (this->input_queue_->get().try_pop(in))
         {
-            did_work = true;
+            outcome = RunnableOutcome::DID_WORK;
             buffer_.emplace_back(std::move(in));
             if (buffer_.size() == buffer_len_)
             {
@@ -94,10 +94,10 @@ private:
         if (force && (full_() || (!empty_() && flush_partial_)))
         {
             this->output_queue_->get().emplace(std::move(buffer_));
-            did_work = true;
+            outcome = RunnableOutcome::DID_WORK;
         }
 
-        return did_work;
+        return outcome;
     }
 
     bool full_() const

@@ -47,6 +47,7 @@ public:
                 compressed.tick = input.tick;
                 simdb::compressData(input.data, compressed.compressed_data);
                 out.emplace(std::move(compressed));
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -66,9 +67,11 @@ public:
                     if (pending_request_.pending && input.tick >= pending_request_.tick)
                     {
                         pending_request_.pending = false;
-                        throw simdb::FlushCancelledException();
+                        return simdb::pipeline::RunnableOutcome::ABORT_FLUSH;
                     }
                 }
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
@@ -104,7 +107,8 @@ public:
 
         // Perform a "round robin" flush to give the DB task (the last task
         // in the pipeline) many more chances to see the 5000th tick and
-        // throw the FlushCancelledException to abort the flush early.
+        // abort the flush early.
+        //
         // This is much faster than a waterfall flush which would have to
         // wait for all earlier tasks (e.g. compression) to finish processing
         // all their data before the DB task even sees the 5000th tick.

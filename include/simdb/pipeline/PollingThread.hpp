@@ -38,31 +38,15 @@ public:
         runnables_.emplace_back(runnable);
     }
 
-    virtual bool waterfallFlush()
+    virtual bool flushRunnables()
     {
         bool did_work = false;
         for (auto runnable : runnables_)
         {
-            did_work |= runnable->processAll(true);
-        }
-        return did_work;
-    }
-
-    virtual bool roundRobinFlush()
-    {
-        bool did_work = false;
-        while (true)
-        {
-            bool processed = false;
-            for (auto runnable : runnables_)
+            if (runnable->processAll(true) == RunnableOutcome::DID_WORK)
             {
-                processed |= runnable->processOne(true);
+                did_work = true;
             }
-            if (!processed)
-            {
-                break;
-            }
-            did_work = true;
         }
         return did_work;
     }
@@ -157,7 +141,10 @@ private:
             bool processed = false;
             for (auto runner : runnables_)
             {
-                processed |= runner->processOne(force);
+                if (runner->processOne(force) == RunnableOutcome::DID_WORK)
+                {
+                    processed = true;
+                }
             }
             if (!processed)
             {
