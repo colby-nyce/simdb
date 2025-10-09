@@ -43,6 +43,11 @@ public:
         bool did_work = false;
         for (auto runnable : runnables_)
         {
+            if (!runnable->enabled())
+            {
+                continue;
+            }
+
             if (runnable->processAll(true) == RunnableOutcome::DID_WORK)
             {
                 did_work = true;
@@ -141,6 +146,11 @@ private:
             bool processed = false;
             for (auto runner : runnables_)
             {
+                if (!runner->enabled())
+                {
+                    continue;
+                }
+
                 if (runner->processOne(force) == RunnableOutcome::DID_WORK)
                 {
                     processed = true;
