@@ -468,7 +468,7 @@ public:
     uint64_t count()
     {
         std::ostringstream oss;
-        oss << "SELECT COUNT(Id) FROM " << table_name_ << " ";
+        oss << "SELECT COUNT(*) FROM " << table_name_ << " ";
         appendConstraintClauses_(oss);
         appendLimitClause_(oss);
 
