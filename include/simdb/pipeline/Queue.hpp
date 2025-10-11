@@ -4,6 +4,7 @@
 
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Demangle.hpp"
+#include <functional>
 
 namespace simdb::pipeline {
 
@@ -15,6 +16,11 @@ public:
     virtual ~QueueBase() = default;
     virtual std::string stringifiedType() const = 0;
     virtual size_t size() const = 0;
+
+private:
+    virtual bool hasSnooper_() const = 0;
+    virtual QueueSnooperOutcome snoop_(const QueuePrivateIterator&) = 0;
+    friend class RunnableFlusher;
 };
 
 /// Wrapper around a concurrent queue which is used by
@@ -38,7 +44,24 @@ public:
     }
 
 private:
+    void assignSnooper_(SnooperCallback<T> cb)
+    {
+        snooper_callback_ = cb;
+    }
+
+    bool hasSnooper_() const override
+    {
+        return snooper_callback_ != nullptr;
+    }
+
+    QueueSnooperOutcome snoop_(const QueuePrivateIterator& iter) override
+    {
+        return queue_.snoop(iter, snooper_callback_);
+    }
+
     ConcurrentQueue<T> queue_;
+    SnooperCallback<T> snooper_callback_ = nullptr;
+    friend class RunnableFlusher;
 };
 
 template <typename InputType>

@@ -51,7 +51,7 @@ public:
         // Task 1: Used in order to short-circuit RunnableFlusher. Will only be enabled
         // prior to a flush and disabled right after.
         auto db_query_flush_abort = simdb::pipeline::createTask<simdb::pipeline::Function<void, SimData>>(
-            [this](simdb::ConcurrentQueue<SimData>& out, bool force) mutable
+            [this](simdb::ConcurrentQueue<SimData>& out, bool force)
             {
                 // Note that the pipeline head (first stop for new SimData) is the second
                 // task, not this one. We use Function<void,SimData> simply to allow this
@@ -148,7 +148,7 @@ public:
         // which implements a more robust but more expensive flush abort, this task
         // will just look at the incoming committed ticks without a database query.
         auto streaming_ticks_flush_abort = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, void>>(
-            [this](uint64_t&& tick, bool force) mutable
+            [this](uint64_t&& tick, bool force)
             {
                 // This task should never have been enabled unless we are configured to
                 // use cancellable flushes.

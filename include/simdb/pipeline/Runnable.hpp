@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/utils/Snoopers.hpp"
 #include "simdb/Exceptions.hpp"
 
 #include <iostream>
@@ -12,6 +13,8 @@
 #include <vector>
 
 namespace simdb::pipeline {
+
+class TaskBase;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
 enum class RunnableOutcome
@@ -94,7 +97,19 @@ public:
         : db_mgr_(db_mgr)
     {
         addRunnables_(std::forward<Args>(args)...);
+        addTasks_();
     }
+
+    /// Assign a snooper callback to a task's input queue. The task
+    /// must be part of this RunnableFlusher, and the input queue
+    /// must be of the correct type T.
+    template <typename T>
+    void assignSnooper(TaskBase& t, const SnooperCallback<T>& cb);
+
+    /// Snoop all tasks that have snoopers assigned, returning
+    /// an outcome that indicates if any snooper found what it
+    /// was looking for.
+    SnooperOutcome snoopAll();
 
     /// Call processAll() on all runnables in a single transaction.
     /// This will flush the leftmost runnable first, then the next, etc.
@@ -219,8 +234,12 @@ private:
     {
     }
 
+    // Store the TaskBase* for faster snooping without dynamic_cast
+    void addTasks_();
+
     DatabaseManager& db_mgr_;
     std::vector<Runnable*> runnables_;
+    std::vector<TaskBase*> tasks_;
 };
 
 } // namespace simdb::pipeline

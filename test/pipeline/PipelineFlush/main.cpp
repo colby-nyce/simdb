@@ -94,7 +94,7 @@ public:
 
         // 6. Terminating function which sends the max value seen so far back to this app
         auto record_max = simdb::pipeline::createTask<simdb::pipeline::Function<int, void>>(
-            [this](int&& val, bool force) mutable
+            [this](int&& val, bool force)
             {
                 simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 max_val_ = std::max(max_val_, val);

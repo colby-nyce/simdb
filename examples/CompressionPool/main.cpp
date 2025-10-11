@@ -8,6 +8,7 @@
 #include "simdb/sqlite/PreparedINSERT.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
+#include <queue>
 
 static constexpr auto INVALID_TICK = std::numeric_limits<int64_t>::max();
 
