@@ -84,6 +84,36 @@ private:
     bool enabled_ = true;
 };
 
+/// RAII utility used to disable all runnables in a RunnableFlusher
+/// while in scope, re-enabling them when going out of scope.
+class ScopedRunnableDisabler
+{
+public:
+    ~ScopedRunnableDisabler()
+    {
+        for (auto r : disabled_)
+        {
+            r->enable(true);
+        }
+    }
+
+private:
+    ScopedRunnableDisabler(const std::vector<Runnable*>& runnables)
+    {
+        for (auto r : runnables)
+        {
+            if (r->enabled())
+            {
+                r->enable(false);
+                disabled_.push_back(r);
+            }
+        }
+    }
+
+    std::vector<Runnable*> disabled_;
+    friend class RunnableFlusher;
+};
+
 /// This class takes a variable number of Runnable pointers (raw or smart)
 /// and flushes them on demand using a "waterfall" or "round robin" algo.
 class RunnableFlusher
@@ -110,6 +140,16 @@ public:
     /// an outcome that indicates if any snooper found what it
     /// was looking for.
     SnooperOutcome snoopAll();
+
+    /// Use this API to temporarily disable all runnables while snooping.
+    /// This is useful if you want to ensure that no data is processed
+    /// or augmented or destroyed while snooping the pipeline task queues.
+    /// The use case for doing so is if you want to use data directly from
+    /// the queues instead of copying/cloning for better performance.
+    ScopedRunnableDisabler scopedDisableAll()
+    {
+        return ScopedRunnableDisabler(runnables_);
+    }
 
     /// Call processAll() on all runnables in a single transaction.
     /// This will flush the leftmost runnable first, then the next, etc.
