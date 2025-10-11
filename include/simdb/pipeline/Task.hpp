@@ -99,6 +99,7 @@ protected:
     Queue<OutputType>* output_queue_ = nullptr;
 };
 
+/// Defined here so we can avoid circular includes
 template <typename T>
 inline void RunnableFlusher::assignSnooper(TaskBase& t, const SnooperCallback<T>& cb)
 {
@@ -123,6 +124,7 @@ inline void RunnableFlusher::assignSnooper(TaskBase& t, const SnooperCallback<T>
     q_typed->assignSnooper_(cb);
 }
 
+/// Defined here so we can avoid circular includes
 inline SnooperOutcome RunnableFlusher::snoopAll()
 {
     SnooperOutcome outcome;
@@ -152,8 +154,7 @@ inline SnooperOutcome RunnableFlusher::snoopAll()
     return outcome;
 }
 
-/// Defined here so we can avoid circular includes. Needed for
-/// the dynamic_cast in RunnableFlusher::addTasks_().
+/// Defined here so we can avoid circular includes
 inline void RunnableFlusher::addTasks_()
 {
     for (auto r : runnables_)

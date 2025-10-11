@@ -266,7 +266,7 @@ public:
         using TallyOut = std::pair<size_t, size_t>; // Total records created, avg # bytes
 
         auto running_tally_task = simdb::pipeline::createTask<simdb::pipeline::Function<TallyIn, TallyOut>>(
-            [this](TallyIn&& in, simdb::ConcurrentQueue<TallyOut>& out, bool force) mutable
+            [this](TallyIn&& in, simdb::ConcurrentQueue<TallyOut>& out, bool force)
             {
                 simdb::ConditionalLock<std::mutex> lock(mutex_, force);
                 ++num_db_records_;
@@ -358,7 +358,7 @@ public:
         auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
             [](NewStringEntry&& new_entry,
                simdb::pipeline::AppPreparedINSERTs* tables,
-               bool /*force*/) mutable
+               bool /*force*/)
             {
                 auto inserter = tables->getPreparedINSERT("TinyStringIDs");
                 inserter->setColumnValue(0, new_entry.first);
