@@ -1,0 +1,7 @@
+find_package(Boost COMPONENTS serialization CONFIG)
+if(Boost_FOUND AND Boost_SERIALIZATION_FOUND)
+    simdb_test(PipelineSnooper main.cpp)
+    target_link_libraries(PipelineSnooper PRIVATE Boost::serialization)
+else()
+    message(STATUS "Boost serialization library not found - cannot run PipelineSnooper test.")
+endif()

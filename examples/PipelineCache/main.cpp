@@ -12,6 +12,7 @@
 #include "SimDBTester.hpp"
 #include <optional>
 #include <limits>
+#include <queue>
 
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>

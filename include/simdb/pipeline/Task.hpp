@@ -99,6 +99,72 @@ protected:
     Queue<OutputType>* output_queue_ = nullptr;
 };
 
+template <typename T>
+inline void RunnableFlusher::assignSnooper(TaskBase& t, const SnooperCallback<T>& cb)
+{
+    auto it = std::find(tasks_.begin(), tasks_.end(), &t);
+    if (it == tasks_.end())
+    {
+        throw DBException("Task is not part of this RunnableFlusher");
+    }
+
+    auto q = t.getInputQueue();
+    if (!q)
+    {
+        throw DBException("Task has no input queue");
+    }
+
+    auto q_typed = dynamic_cast<Queue<T>*>(q);
+    if (!q_typed)
+    {
+        throw DBException("Task input queue is not of the correct type");
+    }
+
+    q_typed->assignSnooper_(cb);
+}
+
+inline SnooperOutcome RunnableFlusher::snoopAll()
+{
+    SnooperOutcome outcome;
+
+    for (auto t : tasks_)
+    {
+        auto q = t->getInputQueue();
+
+        if (q && q->hasSnooper_())
+        {
+            auto task_snooper_outcome = q->snoop_(QueuePrivateIterator{});
+            outcome.num_items_peeked += task_snooper_outcome.num_items_peeked;
+            outcome.num_queues_peeked += 1;
+
+            if (task_snooper_outcome.found)
+            {
+                outcome.found = true;
+            }
+
+            if (task_snooper_outcome.done)
+            {
+                break;
+            }
+        }
+    }
+
+    return outcome;
+}
+
+/// Defined here so we can avoid circular includes. Needed for
+/// the dynamic_cast in RunnableFlusher::addTasks_().
+inline void RunnableFlusher::addTasks_()
+{
+    for (auto r : runnables_)
+    {
+        if (auto t = dynamic_cast<TaskBase*>(r))
+        {
+            tasks_.push_back(t);
+        }
+    }
+}
+
 template <typename Element>
 class Task;
 
