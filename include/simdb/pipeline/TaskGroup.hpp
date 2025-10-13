@@ -141,6 +141,20 @@ inline void RunnableFlusher::determineDisablerRunnables_()
         return;
     }
 
+    // Add any runnables that are not part of a TaskGroup. These are the DatabaseThread's
+    // tasks which we want to disable first since they are typically near the end of the
+    // pipeline.
+    for (auto r : runnables_)
+    {
+        if (!r->getTaskGroup_())
+        {
+            disabler_runnables_.push_back(r);
+        }
+    }
+
+    // Now handle runnables that are part of TaskGroups. If all tasks in a TaskGroup
+    // are part of the flusher, then disable the entire TaskGroup. Otherwise, disable
+    // only the individual tasks that are part of the flusher.
     std::map<TaskGroup*, std::vector<Runnable*>> tg_map;
     for (auto r : runnables_)
     {
@@ -166,21 +180,9 @@ inline void RunnableFlusher::determineDisablerRunnables_()
         }
     }
 
-    // Add any runnables that are not part of a TaskGroup
-    for (auto r : runnables_)
-    {
-        if (!r->getTaskGroup_())
-        {
-            disabler_runnables_.push_back(r);
-        }
-    }
-
     // Ensure no duplicates
     auto end = std::unique(disabler_runnables_.begin(), disabler_runnables_.end());
     disabler_runnables_.erase(end, disabler_runnables_.end());
-
-    // It is more efficient to disable/enable runnables in reverse order
-    //std::reverse(disabler_runnables_.begin(), disabler_runnables_.end());
 }
 
 } // namespace simdb::pipeline
