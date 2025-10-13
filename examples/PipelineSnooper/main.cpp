@@ -171,9 +171,9 @@ public:
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(
             *db_mgr_, serialize_task, zlib_task, db_writer);
 
-        pipeline_flusher_->assignSnooper<DummyData>(
+        pipeline_flusher_->assignQueueItemSnooper<DummyData>(
             *serialize_task,
-            [this](const DummyData& item) -> simdb::QueueItemSnooperOutcome
+            [this](const DummyData& item) -> simdb::SnooperCallbackOutcome
             {
                 assert(!snooping_for_uuid_.empty());
 
@@ -182,15 +182,15 @@ public:
                 {
                     snooped_data_ = item;
                     ++snooped_in_task1_;
-                    return simdb::QueueItemSnooperOutcome::FOUND_STOP;
+                    return simdb::SnooperCallbackOutcome::FOUND_STOP;
                 }
-                return simdb::QueueItemSnooperOutcome::NOT_FOUND_CONTINUE;
+                return simdb::SnooperCallbackOutcome::NOT_FOUND_CONTINUE;
             }
         );
 
-        pipeline_flusher_->assignSnooper<DummyDataBytes>(
+        pipeline_flusher_->assignQueueItemSnooper<DummyDataBytes>(
             *zlib_task,
-            [this](const DummyDataBytes& item) -> simdb::QueueItemSnooperOutcome
+            [this](const DummyDataBytes& item) -> simdb::SnooperCallbackOutcome
             {
                 assert(!snooping_for_uuid_.empty());
 
@@ -203,15 +203,15 @@ public:
                     ia >> snooped_data_;
 
                     ++snooped_in_task2_;
-                    return simdb::QueueItemSnooperOutcome::FOUND_STOP;
+                    return simdb::SnooperCallbackOutcome::FOUND_STOP;
                 }
-                return simdb::QueueItemSnooperOutcome::NOT_FOUND_CONTINUE;
+                return simdb::SnooperCallbackOutcome::NOT_FOUND_CONTINUE;
             }
         );
 
-        pipeline_flusher_->assignSnooper<DummyDataBytes>(
+        pipeline_flusher_->assignQueueItemSnooper<DummyDataBytes>(
             *db_writer,
-            [this](const DummyDataBytes& item) -> simdb::QueueItemSnooperOutcome
+            [this](const DummyDataBytes& item) -> simdb::SnooperCallbackOutcome
             {
                 assert(!snooping_for_uuid_.empty());
 
@@ -228,9 +228,9 @@ public:
                     ia >> snooped_data_;
 
                     ++snooped_in_task3_;
-                    return simdb::QueueItemSnooperOutcome::FOUND_STOP;
+                    return simdb::SnooperCallbackOutcome::FOUND_STOP;
                 }
-                return simdb::QueueItemSnooperOutcome::NOT_FOUND_CONTINUE;
+                return simdb::SnooperCallbackOutcome::NOT_FOUND_CONTINUE;
             }
         );
 

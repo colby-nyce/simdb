@@ -19,7 +19,7 @@ public:
 
 private:
     virtual bool hasSnooper_() const = 0;
-    virtual QueueSnooperOutcome snoop_(const QueuePrivateIterator&) = 0;
+    virtual SingleQueueSnooperOutcome snoop_(const QueuePrivateIterator&) = 0;
     friend class RunnableFlusher;
 };
 
@@ -44,23 +44,34 @@ public:
     }
 
 private:
-    void assignSnooper_(SnooperCallback<T> cb)
+    void assignQueueItemSnooper_(QueueItemSnooperCallback<T> cb)
     {
-        snooper_callback_ = cb;
+        queue_item_snooper_callback_ = cb;
+    }
+
+    void assignWholeQueueSnooper_(WholeQueueSnooperCallback<T> cb)
+    {
+        whole_queue_snooper_callback_ = cb;
     }
 
     bool hasSnooper_() const override
     {
-        return snooper_callback_ != nullptr;
+        return queue_item_snooper_callback_ != nullptr || whole_queue_snooper_callback_ != nullptr;
     }
 
-    QueueSnooperOutcome snoop_(const QueuePrivateIterator& iter) override
+    SingleQueueSnooperOutcome snoop_(const QueuePrivateIterator& iter) override
     {
-        return queue_.snoop(iter, snooper_callback_);
+        // Give priority to whole-queue snooper if both are set
+        if (whole_queue_snooper_callback_)
+        {
+            return queue_.snoop(iter, whole_queue_snooper_callback_);
+        }
+        return queue_.snoop(iter, queue_item_snooper_callback_);
     }
 
     ConcurrentQueue<T> queue_;
-    SnooperCallback<T> snooper_callback_ = nullptr;
+    QueueItemSnooperCallback<T> queue_item_snooper_callback_ = nullptr;
+    WholeQueueSnooperCallback<T> whole_queue_snooper_callback_ = nullptr;
     friend class RunnableFlusher;
 };
 

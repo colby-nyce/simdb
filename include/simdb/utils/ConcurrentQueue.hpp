@@ -83,34 +83,63 @@ public:
         return queue_.empty();
     }
 
-    /// \brief Snoop all items in the queue without popping them.
-    QueueSnooperOutcome snoop(const pipeline::QueuePrivateIterator&, const SnooperCallback<T>& cb)
+    /// \brief Snoop all items in the queue without popping them (one item at a time).
+    SingleQueueSnooperOutcome snoop(const pipeline::QueuePrivateIterator&, const QueueItemSnooperCallback<T>& cb)
     {
         std::lock_guard<std::mutex> guard(mutex_);
 
-        QueueSnooperOutcome outcome;
+        SingleQueueSnooperOutcome outcome;
         for (const auto& item : queue_)
         {
             outcome.num_items_peeked++;
             auto cb_outcome = cb(item);
             switch (cb_outcome)
             {
-                case QueueItemSnooperOutcome::FOUND_STOP:
+                case SnooperCallbackOutcome::FOUND_STOP:
                     outcome.found = true;
                     outcome.done = true;
                     return outcome;
 
-                case QueueItemSnooperOutcome::FOUND_CONTINUE:
+                case SnooperCallbackOutcome::FOUND_CONTINUE:
                     outcome.found = true;
                     break;
 
-                case QueueItemSnooperOutcome::NOT_FOUND_STOP:
+                case SnooperCallbackOutcome::NOT_FOUND_STOP:
                     outcome.done = true;
                     return outcome;
 
-                case QueueItemSnooperOutcome::NOT_FOUND_CONTINUE:
+                case SnooperCallbackOutcome::NOT_FOUND_CONTINUE:
                     break;
             }
+        }
+        return outcome;
+    }
+
+    /// \brief Snoop the whole queue at once.
+    SingleQueueSnooperOutcome snoop(const pipeline::QueuePrivateIterator&, const WholeQueueSnooperCallback<T>& cb)
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        auto cb_outcome = cb(queue_);
+
+        SingleQueueSnooperOutcome outcome;
+        outcome.num_items_peeked = queue_.size();
+        switch (cb_outcome)
+        {
+            case SnooperCallbackOutcome::FOUND_STOP:
+                outcome.found = true;
+                outcome.done = true;
+                break;
+
+            case SnooperCallbackOutcome::FOUND_CONTINUE:
+                outcome.found = true;
+                break;
+
+            case SnooperCallbackOutcome::NOT_FOUND_STOP:
+                outcome.done = true;
+                break;
+
+            case SnooperCallbackOutcome::NOT_FOUND_CONTINUE:
+                break;
         }
         return outcome;
     }
