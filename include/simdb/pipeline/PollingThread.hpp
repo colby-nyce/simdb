@@ -276,15 +276,6 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(
     const std::vector<Runnable*>& runnables,
     const std::vector<PollingThread*>& polling_threads)
 {
-    for (auto r : runnables)
-    {
-        if (r->enabled())
-        {
-            r->enable(false);
-            disabled_runnables_.push_back(r);
-        }
-    }
-
     for (auto pt : polling_threads)
     {
         if (!pt->paused())
@@ -293,19 +284,28 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(
             paused_threads_.push_back(pt);
         }
     }
+
+    for (auto r : runnables)
+    {
+        if (r->enabled())
+        {
+            r->enable(false);
+            disabled_runnables_.push_back(r);
+        }
+    }
 }
 
 /// Defined here so we can avoid circular includes
 inline ScopedRunnableDisabler::~ScopedRunnableDisabler()
 {
-    for (auto r : disabled_runnables_)
-    {
-        r->enable(true);
-    }
-
     for (auto pt : paused_threads_)
     {
         pt->resume();
+    }
+
+    for (auto r : disabled_runnables_)
+    {
+        r->enable(true);
     }
 }
 

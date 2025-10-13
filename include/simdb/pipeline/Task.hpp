@@ -6,6 +6,7 @@
 #include "simdb/pipeline/Queue.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Demangle.hpp"
+#include <map>
 #include <memory>
 
 namespace simdb::pipeline {
@@ -185,6 +186,9 @@ inline void RunnableFlusher::addPollingThreads_()
             }
         }
     }
+
+    // It is more efficient to pause/resume threads in reverse order
+    std::reverse(polling_threads_.begin(), polling_threads_.end());
 }
 
 template <typename Element>

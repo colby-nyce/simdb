@@ -17,6 +17,7 @@ namespace simdb::pipeline {
 class RunnableFlusher;
 class PollingThread;
 class TaskBase;
+class TaskGroup;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
 enum class RunnableOutcome
@@ -88,16 +89,27 @@ private:
         polling_thread_ = pt;
     }
 
+    void setTaskGroup_(TaskGroup* tg)
+    {
+        task_group_ = tg;
+    }
+
     friend class RunnableFlusher;
     PollingThread* getPollingThread_() const
     {
         return polling_thread_;
     }
 
+    TaskGroup* getTaskGroup_() const
+    {
+        return task_group_;
+    }
+
     virtual std::string getDescription_() const = 0;
     std::string description_;
     bool enabled_ = true;
     PollingThread* polling_thread_ = nullptr;
+    TaskGroup* task_group_ = nullptr;
 };
 
 /// RAII utility used to disable all runnables in a RunnableFlusher
@@ -151,7 +163,8 @@ public:
     ScopedRunnableDisabler scopedDisableAll(bool disable_threads_too = true)
     {
         addPollingThreads_();
-        return ScopedRunnableDisabler(runnables_, disable_threads_too ? polling_threads_ : std::vector<PollingThread*>{});
+        determineDisablerRunnables_();
+        return ScopedRunnableDisabler(disabler_runnables_, disable_threads_too ? polling_threads_ : std::vector<PollingThread*>{});
     }
 
     /// Call processAll() on all runnables in a single transaction.
@@ -283,10 +296,14 @@ private:
     // Store the PollingThreads so we can pause/resume them during snooping
     void addPollingThreads_();
 
+    // Figure out the minimum set of runnables to disable
+    void determineDisablerRunnables_();
+
     DatabaseManager& db_mgr_;
     std::vector<Runnable*> runnables_;
     std::vector<TaskBase*> tasks_;
     std::vector<PollingThread*> polling_threads_;
+    std::vector<Runnable*> disabler_runnables_;
 };
 
 } // namespace simdb::pipeline

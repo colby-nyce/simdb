@@ -36,6 +36,7 @@ public:
             task_desc += " (" + description + ")";
         }
         task->setDescription(task_desc);
+        task->setTaskGroup_(this);
         tasks_.emplace_back(std::move(task));
         return this;
     }
@@ -67,12 +68,6 @@ public:
         {
             task->print(os, indent + 4);
         }
-    }
-
-    void enable(bool enable = true) override final
-    {
-        (void)enable;
-        throw DBException("Cannot disable an entire TaskGroup");
     }
 
 private:
@@ -137,5 +132,55 @@ private:
     std::string description_;
     std::vector<std::unique_ptr<TaskBase>> tasks_;
 };
+
+/// Defined here so we can avoid circular includes
+inline void RunnableFlusher::determineDisablerRunnables_()
+{
+    if (!disabler_runnables_.empty())
+    {
+        return;
+    }
+
+    std::map<TaskGroup*, std::vector<Runnable*>> tg_map;
+    for (auto r : runnables_)
+    {
+        if (auto tg = r->getTaskGroup_())
+        {
+            tg_map[tg].push_back(r);
+        }
+    }
+
+    for (auto& [tg, rs] : tg_map)
+    {
+        if (rs.size() == tg->getTasks().size())
+        {
+            // All tasks in this TaskGroup are part of the flusher,
+            // so disable the entire TaskGroup instead of individual tasks.
+            disabler_runnables_.push_back(tg);
+        }
+        else
+        {
+            // Only some tasks in this TaskGroup are part of the flusher,
+            // so disable individual tasks instead of the entire TaskGroup.
+            disabler_runnables_.insert(disabler_runnables_.end(), rs.begin(), rs.end());
+        }
+    }
+
+    // Add any runnables that are not part of a TaskGroup
+    for (auto r : runnables_)
+    {
+        if (!r->getTaskGroup_())
+        {
+            disabler_runnables_.push_back(r);
+        }
+    }
+
+    // Ensure no duplicates
+    auto end = std::unique(disabler_runnables_.begin(), disabler_runnables_.end());
+    disabler_runnables_.erase(end, disabler_runnables_.end());
+
+    // It is more efficient to disable/enable runnables in reverse order
+    //std::reverse(disabler_runnables_.begin(), disabler_runnables_.end());
+}
 
 } // namespace simdb::pipeline
