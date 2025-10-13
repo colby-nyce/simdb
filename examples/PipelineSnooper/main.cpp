@@ -278,7 +278,7 @@ public:
             // that they do not "magically appear" anyway in the database because
             // the item that was to be removed was missed by the snooper while it
             // was being processed by a task.
-            constexpr bool disable_threads_too = true;
+            constexpr bool disable_threads_too = false;
             auto disabler = pipeline_flusher_->scopedDisableAll(disable_threads_too);
 
             snooping_for_uuid_ = uuid;
