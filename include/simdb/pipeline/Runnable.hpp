@@ -14,6 +14,8 @@
 
 namespace simdb::pipeline {
 
+class RunnableFlusher;
+class PollingThread;
 class TaskBase;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
@@ -79,9 +81,23 @@ public:
     }
 
 private:
+    friend class PollingThread;
+    friend class TaskGroup;
+    virtual void setPollingThread_(PollingThread* pt)
+    {
+        polling_thread_ = pt;
+    }
+
+    friend class RunnableFlusher;
+    PollingThread* getPollingThread_() const
+    {
+        return polling_thread_;
+    }
+
     virtual std::string getDescription_() const = 0;
     std::string description_;
     bool enabled_ = true;
+    PollingThread* polling_thread_ = nullptr;
 };
 
 /// RAII utility used to disable all runnables in a RunnableFlusher
@@ -89,28 +105,14 @@ private:
 class ScopedRunnableDisabler
 {
 public:
-    ~ScopedRunnableDisabler()
-    {
-        for (auto r : disabled_)
-        {
-            r->enable(true);
-        }
-    }
+    ~ScopedRunnableDisabler();
 
 private:
-    ScopedRunnableDisabler(const std::vector<Runnable*>& runnables)
-    {
-        for (auto r : runnables)
-        {
-            if (r->enabled())
-            {
-                r->enable(false);
-                disabled_.push_back(r);
-            }
-        }
-    }
+    ScopedRunnableDisabler(const std::vector<Runnable*>& runnables,
+                           const std::vector<PollingThread*>& polling_threads);
 
-    std::vector<Runnable*> disabled_;
+    std::vector<Runnable*> disabled_runnables_;
+    std::vector<PollingThread*> paused_threads_;
     friend class RunnableFlusher;
 };
 
@@ -146,9 +148,10 @@ public:
     /// or augmented or destroyed while snooping the pipeline task queues.
     /// The use case for doing so is if you want to use data directly from
     /// the queues instead of copying/cloning for better performance.
-    ScopedRunnableDisabler scopedDisableAll()
+    ScopedRunnableDisabler scopedDisableAll(bool disable_threads_too = true)
     {
-        return ScopedRunnableDisabler(runnables_);
+        addPollingThreads_();
+        return ScopedRunnableDisabler(runnables_, disable_threads_too ? polling_threads_ : std::vector<PollingThread*>{});
     }
 
     /// Call processAll() on all runnables in a single transaction.
@@ -277,9 +280,13 @@ private:
     // Store the TaskBase* for faster snooping without dynamic_cast
     void addTasks_();
 
+    // Store the PollingThreads so we can pause/resume them during snooping
+    void addPollingThreads_();
+
     DatabaseManager& db_mgr_;
     std::vector<Runnable*> runnables_;
     std::vector<TaskBase*> tasks_;
+    std::vector<PollingThread*> polling_threads_;
 };
 
 } // namespace simdb::pipeline

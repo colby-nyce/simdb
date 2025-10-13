@@ -166,6 +166,27 @@ inline void RunnableFlusher::addTasks_()
     }
 }
 
+/// Defined here so we can avoid circular includes
+inline void RunnableFlusher::addPollingThreads_()
+{
+    if (!polling_threads_.empty())
+    {
+        return;
+    }
+
+    for (auto t : tasks_)
+    {
+        if (auto pt = t->getPollingThread_())
+        {
+            // Avoid duplicates
+            if (std::find(polling_threads_.begin(), polling_threads_.end(), pt) == polling_threads_.end())
+            {
+                polling_threads_.push_back(pt);
+            }
+        }
+    }
+}
+
 template <typename Element>
 class Task;
 

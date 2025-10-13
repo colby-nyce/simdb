@@ -252,12 +252,42 @@ public:
 
     DummyData snoopPipeline(const std::string& uuid)
     {
-        snooping_for_uuid_ = uuid;
-        auto outcome = pipeline_flusher_->snoopAll();
+        PROFILE_METHOD
 
-        if (outcome.found)
+        // Use RAII to disable the entire pipeline. There are edge cases where
+        // the pipeline might look like this:
+        //
+        //    Task1 input queue:       3 items
+        //    Task1 evaluating lambda: 1 item
+        //    Task2 input queue:       3 items
+        //
+        // Without pausing the pipeline and waiting for the std::promise to be
+        // fulfilled, we might miss the item we are looking for if it is currently
+        // being processed by a task. The snooper can only look into the task input
+        // queues.
         {
-            return snooped_data_;
+            // We don't have to take the extra overhead to asynchronously pause
+            // the polling threads. The reason for doing that is if we 100% need
+            // to be sure that we do not miss any items being processed by a task.
+            // In those edge cases, we will fall back to flushing the whole pipeline
+            // and querying the database. The overall performance is faster for this
+            // use case if we only disable the runnables and not the polling threads.
+            //
+            // To contrast, the use case for pausing the polling threads is if you
+            // want to flush specific items from the pipeline and you want to ensure
+            // that they do not "magically appear" anyway in the database because
+            // the item that was to be removed was missed by the snooper while it
+            // was being processed by a task.
+            constexpr bool disable_threads_too = false;
+            auto disabler = pipeline_flusher_->scopedDisableAll(disable_threads_too);
+
+            snooping_for_uuid_ = uuid;
+            auto outcome = pipeline_flusher_->snoopAll();
+
+            if (outcome.found)
+            {
+                return snooped_data_;
+            }
         }
 
         // Since we couldn't get the DummyData from snooping, flush the whole pipeline

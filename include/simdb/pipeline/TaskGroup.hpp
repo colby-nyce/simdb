@@ -124,6 +124,15 @@ private:
         return name;
     }
 
+    void setPollingThread_(PollingThread* pt) override
+    {
+        Runnable::setPollingThread_(pt);
+        for (auto& task : tasks_)
+        {
+            task->setPollingThread_(pt);
+        }
+    }
+
     std::string pipeline_name_;
     std::string description_;
     std::vector<std::unique_ptr<TaskBase>> tasks_;
