@@ -153,6 +153,15 @@ public:
     template <typename T>
     void assignQueueItemSnooper(TaskBase& t, const QueueItemSnooperCallback<T>& cb);
 
+    /// Assign a snooper callback to a task's input queue. The task
+    /// must be part of this RunnableFlusher, and the input queue
+    /// must be of the correct type T.
+    ///
+    /// This snooper will be called on a per-queue basis. If you want
+    /// to snoop one item at a time, use assignQueueItemSnooper().
+    template <typename T>
+    void assignQueueSnooper(TaskBase& t, const WholeQueueSnooperCallback<T>& cb);
+
     /// Snoop all tasks that have snoopers assigned, returning
     /// an outcome that indicates if any snooper found what it
     /// was looking for.
