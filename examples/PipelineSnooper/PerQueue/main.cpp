@@ -15,8 +15,6 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 
-const std::string lookfor_uuid = "0c65-fcd7-9c32-3683-aa78-3f31-b397-3163";
-
 // This test shows how to create a pipeline that has "snoopers" assigned
 // to each task. Snoopers allow us to peek into every inter-task queue
 // in the pipeline looking for specific item(s).
