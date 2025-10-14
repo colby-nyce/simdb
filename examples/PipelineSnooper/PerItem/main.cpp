@@ -17,8 +17,12 @@
 
 // This test shows how to create a pipeline that has "snoopers" assigned
 // to each task. Snoopers allow us to peek into every inter-task queue
-// in the pipeline looking for specific item(s) and copying that item
-// right then instead of waiting on the whole pipeline to flush.
+// in the pipeline looking for specific item(s).
+//
+// This test shows how to snoop on a per-item basis, meaning that we
+// look at each item in the queue one at a time. The per-item snoopers
+// work on const-qualified items, so they typically would be used to
+// extract copies of items already in the pipeline.
 
 struct DummyData
 {
