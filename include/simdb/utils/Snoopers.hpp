@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <deque>
 #include <functional>
 
 /// Utilities which support task queue "snoopers". A snooper is a
@@ -13,7 +14,7 @@
 
 namespace simdb {
 
-enum class QueueItemSnooperOutcome
+enum class SnooperCallbackOutcome
 {
     // The snooper found what it was looking for, and wants
     // to stop further snooping.
@@ -32,11 +33,16 @@ enum class QueueItemSnooperOutcome
     NOT_FOUND_CONTINUE
 };
 
+/// Callback for per-item queue snooping.
 template <typename T>
-using SnooperCallback = std::function<QueueItemSnooperOutcome(const T& queue_item)>;
+using QueueItemSnooperCallback = std::function<SnooperCallbackOutcome(const T& queue_item)>;
+
+/// Callback for whole-queue snooping.
+template <typename T>
+using WholeQueueSnooperCallback = std::function<SnooperCallbackOutcome(std::deque<T>& queue)>;
 
 /// Outcome of a single queue snoop operation.
-struct QueueSnooperOutcome
+struct SingleQueueSnooperOutcome
 {
     bool found = false;
     bool done = false;
@@ -44,7 +50,7 @@ struct QueueSnooperOutcome
 };
 
 /// Outcome of a RunnableFlusher snoop operation.
-struct SnooperOutcome
+struct RunnableFlusherSnooperOutcome
 {
     bool found = false;
     uint32_t num_queues_peeked = 0;

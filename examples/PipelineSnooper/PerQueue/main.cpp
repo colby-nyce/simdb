@@ -6,7 +6,7 @@
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/TickTock.hpp"
 #include "SimDBTester.hpp"
-#include <queue>
+#include <unordered_set>
 
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -15,10 +15,16 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 
+const std::string lookfor_uuid = "0c65-fcd7-9c32-3683-aa78-3f31-b397-3163";
+
 // This test shows how to create a pipeline that has "snoopers" assigned
 // to each task. Snoopers allow us to peek into every inter-task queue
-// in the pipeline looking for specific item(s) and copying that item
-// right then instead of waiting on the whole pipeline to flush.
+// in the pipeline looking for specific item(s).
+//
+// This test shows how to snoop on a per-queue basis, meaning that we
+// look at all items in the queue at once. The per-queue snoopers
+// work on non-const-qualified items, so they could be used to remove
+// entire ranges of items from the pipeline if desired.
 
 struct DummyData
 {
@@ -26,7 +32,7 @@ struct DummyData
     std::vector<double> dbl_values;
     std::vector<std::string> str_values;
 
-    static std::string randomString()
+    static std::string generateUUID()
     {
         std::string uuid;
         for (size_t i = 0; i < 32; ++i)
@@ -37,20 +43,23 @@ struct DummyData
                 uuid += "-";
             }
         }
+
+        static std::unordered_set<std::string> existing_uuids;
+        EXPECT_TRUE(existing_uuids.insert(uuid).second); // Ensure uniqueness
         return uuid;
     }
 
     static DummyData createRandom()
     {
         DummyData data;
-        data.uuid = randomString();
+        data.uuid = generateUUID();
         for (auto i = 0; i < 10 + rand() % 1000; ++i)
         {
             data.dbl_values.push_back(static_cast<double>(rand()));
         }
         for (auto i = 0; i < 10 + rand() % 100; ++i)
         {
-            data.str_values.push_back(randomString());
+            data.str_values.push_back(generateUUID());
         }
         return data;
     }
@@ -140,19 +149,20 @@ public:
 
         // Task 2: Compress the serialized data
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<DummyDataBytes, DummyDataBytes>>(
-            [this](DummyDataBytes&& in,
+            [this](DummyDataBytes&& data,
                    simdb::ConcurrentQueue<DummyDataBytes>& out,
                    bool /*force*/)
             {
-                in.compress();
-                out.emplace(std::move(in));
+                data.compress();
+                out.emplace(std::move(data));
                 return simdb::pipeline::RunnableOutcome::DID_WORK;
             }
         );
 
         // Task 3: Write the compressed data to the database
-        auto db_writer = db_accessor->createAsyncWriter<PipelineSnooper, DummyDataBytes, void>(
+        auto db_writer = db_accessor->createAsyncWriter<PipelineSnooper, DummyDataBytes, std::vector<std::string>>(
             [this](DummyDataBytes&& data,
+                   simdb::ConcurrentQueue<std::vector<std::string>>&,
                    simdb::pipeline::AppPreparedINSERTs* tables,
                    bool /*force*/)
             {
@@ -164,78 +174,56 @@ public:
             }
         );
 
+        // Task 4: Delete any remaining UUIDs that could not be snooped and deleted from the pipeline
+        auto uuid_deleter = db_accessor->createAsyncReader<std::vector<std::string>, void>(
+            [](std::vector<std::string>&& uuids,
+               simdb::DatabaseManager* db_mgr,
+               bool /*force*/)
+            {
+                auto query = db_mgr->createQuery("SimDataBlobs");
+                query->addConstraintForString("UUID", simdb::SetConstraints::IN_SET, uuids);
+                query->deleteResultSet();
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
+            }
+        );
+
         // Connect tasks ---------------------------------------------------------------------------
-        *serialize_task >> *zlib_task >> *db_writer;
+        *serialize_task >> *zlib_task >> *db_writer >> *uuid_deleter;
 
         // Create the flusher -----------------------------------------------------------------------
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(
-            *db_mgr_, serialize_task, zlib_task, db_writer);
+            *db_mgr_, serialize_task, zlib_task, db_writer, uuid_deleter);
 
-        pipeline_flusher_->assignSnooper<DummyData>(
+        // Assign snoopers to each task's input queue ----------------------------------------------
+        pipeline_flusher_->assignQueueSnooper<DummyData>(
             *serialize_task,
-            [this](const DummyData& item) -> simdb::QueueItemSnooperOutcome
+            [this](std::deque<DummyData>& queue) -> simdb::SnooperCallbackOutcome
             {
-                assert(!snooping_for_uuid_.empty());
-
-                // If the uuid matches, take a copy of the DummyData.
-                if (item.uuid == snooping_for_uuid_)
-                {
-                    snooped_data_ = item;
-                    ++snooped_in_task1_;
-                    return simdb::QueueItemSnooperOutcome::FOUND_STOP;
-                }
-                return simdb::QueueItemSnooperOutcome::NOT_FOUND_CONTINUE;
+                return removeFromQueue_(queue, snooped_in_task1_);
             }
         );
 
-        pipeline_flusher_->assignSnooper<DummyDataBytes>(
+        pipeline_flusher_->assignQueueSnooper<DummyDataBytes>(
             *zlib_task,
-            [this](const DummyDataBytes& item) -> simdb::QueueItemSnooperOutcome
+            [this](std::deque<DummyDataBytes>& queue) -> simdb::SnooperCallbackOutcome
             {
-                assert(!snooping_for_uuid_.empty());
-
-                // If the uuid matches, deserialize the bytes back into a DummyData struct
-                if (item.uuid == snooping_for_uuid_)
-                {
-                    boost::iostreams::array_source src(item.bytes.data(), item.bytes.size());
-                    boost::iostreams::stream<boost::iostreams::array_source> is(src);
-                    boost::archive::binary_iarchive ia(is);
-                    ia >> snooped_data_;
-
-                    ++snooped_in_task2_;
-                    return simdb::QueueItemSnooperOutcome::FOUND_STOP;
-                }
-                return simdb::QueueItemSnooperOutcome::NOT_FOUND_CONTINUE;
+                return removeFromQueue_(queue, snooped_in_task2_);
             }
         );
 
-        pipeline_flusher_->assignSnooper<DummyDataBytes>(
+        pipeline_flusher_->assignQueueSnooper<DummyDataBytes>(
             *db_writer,
-            [this](const DummyDataBytes& item) -> simdb::QueueItemSnooperOutcome
+            [this](std::deque<DummyDataBytes>& queue) -> simdb::SnooperCallbackOutcome
             {
-                assert(!snooping_for_uuid_.empty());
-
-                // If the uuid matches, decompress and deserialize the bytes back into a DummyData struct
-                if (item.uuid == snooping_for_uuid_)
-                {
-                    DummyDataBytes decompressed;
-                    decompressed.uuid = item.uuid;
-                    simdb::decompressData(item.bytes, decompressed.bytes);
-
-                    boost::iostreams::array_source src(decompressed.bytes.data(), decompressed.bytes.size());
-                    boost::iostreams::stream<boost::iostreams::array_source> is(src);
-                    boost::archive::binary_iarchive ia(is);
-                    ia >> snooped_data_;
-
-                    ++snooped_in_task3_;
-                    return simdb::QueueItemSnooperOutcome::FOUND_STOP;
-                }
-                return simdb::QueueItemSnooperOutcome::NOT_FOUND_CONTINUE;
+                return removeFromQueue_(queue, snooped_in_task3_);
             }
         );
 
         // Store the head of the pipeline for sending data -----------------------------------------
         pipeline_head_ = serialize_task->getTypedInputQueue<DummyData>();
+
+        // Store the tail of the pipeline for sending UUIDs to delete ------------------------------
+        pipeline_tail_ = uuid_deleter->getTypedInputQueue<std::vector<std::string>>();
 
         // Assign threads (task groups) ------------------------------------------------------------
         pipeline->createTaskGroup("Processing")
@@ -250,7 +238,7 @@ public:
         pipeline_head_->emplace(std::move(data));
     }
 
-    DummyData snoopPipeline(const std::string& uuid)
+    void deleteFromPipeline(const std::vector<std::string>& uuids)
     {
         PROFILE_METHOD
 
@@ -262,71 +250,28 @@ public:
         //    Task2 input queue:       3 items
         //
         // Without pausing the pipeline and waiting for the std::promise to be
-        // fulfilled, we might miss the item we are looking for if it is currently
+        // fulfilled, we might miss the items we are looking for if they are currently
         // being processed by a task. The snooper can only look into the task input
         // queues.
         {
-            // We don't have to take the extra overhead to asynchronously pause
-            // the polling threads. The reason for doing that is if we 100% need
-            // to be sure that we do not miss any items being processed by a task.
-            // In those edge cases, we will fall back to flushing the whole pipeline
-            // and querying the database. The overall performance is faster for this
-            // use case if we only disable the runnables and not the polling threads.
-            //
-            // To contrast, the use case for pausing the polling threads is if you
-            // want to flush specific items from the pipeline and you want to ensure
-            // that they do not "magically appear" anyway in the database because
-            // the item that was to be removed was missed by the snooper while it
-            // was being processed by a task.
-            constexpr bool disable_threads_too = false;
-            auto disabler = pipeline_flusher_->scopedDisableAll(disable_threads_too);
-
-            snooping_for_uuid_ = uuid;
+            snooping_for_uuids_ = std::unordered_set<std::string>(uuids.begin(), uuids.end());
+            auto disabler = pipeline_flusher_->scopedDisableAll(false);
             auto outcome = pipeline_flusher_->snoopAll();
-
             if (outcome.found)
             {
-                return snooped_data_;
+                EXPECT_TRUE(snooping_for_uuids_.empty());
+                return;
             }
         }
 
-        // Since we couldn't get the DummyData from snooping, flush the whole pipeline
-        // and just query the database. This is the fallback, and quite a bit slower
-        // for deep pipelines.
-        pipeline_flusher_->waterfallFlush();
+        EXPECT_FALSE(snooping_for_uuids_.empty());
 
-        DummyData db_dummy_data;
-
-        // SELECT DataBlob FROM SimDataBlobs WHERE UUID = <uuid>
-        auto query = db_mgr_->createQuery("SimDataBlobs");
-        query->addConstraintForString("UUID", simdb::Constraints::EQUAL, uuid);
-
-        DummyDataBytes dummy_data_bytes;
-        dummy_data_bytes.compressed = true; // we know it's compressed in the DB
-        query->select("DataBlob", dummy_data_bytes.bytes);
-
-        auto results = query->getResultSet();
-        if (!results.getNextRecord())
-        {
-            throw simdb::DBException("Could not find data with uuid ") << uuid;
-        }
-
-        // Decompress
-        dummy_data_bytes.decompress();
-
-        // Deserialize the blob back into a DummyData struct
-        boost::iostreams::array_source src(dummy_data_bytes.bytes.data(), dummy_data_bytes.bytes.size());
-        boost::iostreams::stream<boost::iostreams::array_source> is(src);
-        boost::archive::binary_iarchive ia(is);
-        ia >> db_dummy_data;
-
-        // Sanity check
-        if (db_dummy_data.uuid != uuid)
-        {
-            throw simdb::DBException("Database returned data with incorrect uuid");
-        }
-
-        return db_dummy_data;
+        // Since we couldn't flush every UUID from the pipeline queues, delete the remainders
+        // from the database directly. Don't do this in the main thread however; simply forward
+        // these remaining UUIDs to the last task in the pipeline which will delete them.
+        const std::vector<std::string> remaining_uuids(snooping_for_uuids_.begin(), snooping_for_uuids_.end());
+        snooping_for_uuids_.clear();
+        pipeline_tail_->emplace(std::move(remaining_uuids));
     }
 
     void postTeardown() override
@@ -340,11 +285,34 @@ public:
     }
 
 private:
+    template <typename T>
+    simdb::SnooperCallbackOutcome removeFromQueue_(std::deque<T>& queue, uint32_t& snooped_in_task)
+    {
+        auto it = std::remove_if(queue.begin(), queue.end(),
+            [this, &snooped_in_task](const T& item)
+            {
+                if (snooping_for_uuids_.find(item.uuid) != snooping_for_uuids_.end())
+                {
+                    ++snooped_in_task;
+                    snooping_for_uuids_.erase(item.uuid);
+                    return true; // Remove this item from the queue
+                }
+                return false; // Keep this item in the queue
+            });
+
+        queue.erase(it, queue.end());
+        if (snooping_for_uuids_.empty())
+        {
+            return simdb::SnooperCallbackOutcome::FOUND_STOP;
+        }
+        return simdb::SnooperCallbackOutcome::NOT_FOUND_CONTINUE;
+    }
+
     simdb::DatabaseManager* db_mgr_ = nullptr;
     std::unique_ptr<simdb::pipeline::RunnableFlusher> pipeline_flusher_;
     simdb::ConcurrentQueue<DummyData>* pipeline_head_ = nullptr;
-    std::string snooping_for_uuid_;
-    DummyData snooped_data_;
+    simdb::ConcurrentQueue<std::vector<std::string>>* pipeline_tail_ = nullptr;
+    std::unordered_set<std::string> snooping_for_uuids_;
     uint32_t snooped_in_task1_ = 0;
     uint32_t snooped_in_task2_ = 0;
     uint32_t snooped_in_task3_ = 0;
@@ -367,40 +335,41 @@ int main()
 
     // Simulate...
     auto app = app_mgr.getApp<PipelineSnooper>();
-
-    std::vector<DummyData> verif_data;
-
-    auto flush_verif_queue = [&]()
-    {
-        std::shuffle(verif_data.begin(), verif_data.end(), std::mt19937{std::random_device{}()});
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-        for (const auto& expected : verif_data)
-        {
-            auto actual = app->snoopPipeline(expected.uuid);
-            EXPECT_EQUAL(actual.uuid, expected.uuid);
-            EXPECT_EQUAL(actual.dbl_values, expected.dbl_values);
-            EXPECT_EQUAL(actual.str_values, expected.str_values);
-        }
-        verif_data.clear();
-    };
+    std::vector<std::string> uuids_to_delete;
+    std::vector<std::string> expect_deleted_uuids;
 
     for (uint64_t tick = 1; tick < 10000; ++tick)
     {
         auto data = DummyData::createRandom();
-        verif_data.push_back(data);
+        if (rand() % 50 == 0)
+        {
+            uuids_to_delete.push_back(data.uuid);
+        }
+
         app->sendOne(std::move(data));
 
-        if (rand() % 500 == 0)
+        if (uuids_to_delete.size() == 10)
         {
-            flush_verif_queue();
+            app->deleteFromPipeline(uuids_to_delete);
+            expect_deleted_uuids.insert(expect_deleted_uuids.end(), uuids_to_delete.begin(), uuids_to_delete.end());
+            uuids_to_delete.clear();
         }
     }
 
-    flush_verif_queue();
+    if (!uuids_to_delete.empty())
+    {
+        app->deleteFromPipeline(uuids_to_delete);
+        expect_deleted_uuids.insert(expect_deleted_uuids.end(), uuids_to_delete.begin(), uuids_to_delete.end());
+        uuids_to_delete.clear();
+    }
 
     // Finish...
     app_mgr.postSimLoopTeardown();
+
+    // Verify that all expected UUIDs were deleted
+    auto query = db_mgr.createQuery("SimDataBlobs");
+    query->addConstraintForString("UUID", simdb::SetConstraints::IN_SET, expect_deleted_uuids);
+    EXPECT_EQUAL(query->count(), 0);
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

@@ -147,13 +147,28 @@ public:
     /// Assign a snooper callback to a task's input queue. The task
     /// must be part of this RunnableFlusher, and the input queue
     /// must be of the correct type T.
+    ///
+    /// This snooper will be called on a per-item basis. If you want
+    /// to snoop an entire queue at a time, use assignQueueSnooper().
     template <typename T>
-    void assignSnooper(TaskBase& t, const SnooperCallback<T>& cb);
+    void assignQueueItemSnooper(TaskBase& t, const QueueItemSnooperCallback<T>& cb);
+
+    /// Assign a snooper callback to a task's input queue. The task
+    /// must be part of this RunnableFlusher, and the input queue
+    /// must be of the correct type T.
+    ///
+    /// This snooper will be called on a per-queue basis. If you want
+    /// to snoop one item at a time, use assignQueueItemSnooper().
+    template <typename T>
+    void assignQueueSnooper(TaskBase& t, const WholeQueueSnooperCallback<T>& cb);
 
     /// Snoop all tasks that have snoopers assigned, returning
     /// an outcome that indicates if any snooper found what it
     /// was looking for.
-    SnooperOutcome snoopAll();
+    ///
+    /// If a task has a "per-item" snooper as well as a "whole-queue"
+    /// snooper, only the whole-queue snooper will be called.
+    RunnableFlusherSnooperOutcome snoopAll();
 
     /// Use this API to temporarily disable all runnables while snooping.
     /// This is useful if you want to ensure that no data is processed

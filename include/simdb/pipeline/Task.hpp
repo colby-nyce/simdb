@@ -102,7 +102,7 @@ protected:
 
 /// Defined here so we can avoid circular includes
 template <typename T>
-inline void RunnableFlusher::assignSnooper(TaskBase& t, const SnooperCallback<T>& cb)
+inline void RunnableFlusher::assignQueueItemSnooper(TaskBase& t, const QueueItemSnooperCallback<T>& cb)
 {
     auto it = std::find(tasks_.begin(), tasks_.end(), &t);
     if (it == tasks_.end())
@@ -122,13 +122,38 @@ inline void RunnableFlusher::assignSnooper(TaskBase& t, const SnooperCallback<T>
         throw DBException("Task input queue is not of the correct type");
     }
 
-    q_typed->assignSnooper_(cb);
+    q_typed->assignQueueItemSnooper_(cb);
 }
 
 /// Defined here so we can avoid circular includes
-inline SnooperOutcome RunnableFlusher::snoopAll()
+template <typename T>
+inline void RunnableFlusher::assignQueueSnooper(TaskBase& t, const WholeQueueSnooperCallback<T>& cb)
 {
-    SnooperOutcome outcome;
+    auto it = std::find(tasks_.begin(), tasks_.end(), &t);
+    if (it == tasks_.end())
+    {
+        throw DBException("Task is not part of this RunnableFlusher");
+    }
+
+    auto q = t.getInputQueue();
+    if (!q)
+    {
+        throw DBException("Task has no input queue");
+    }
+
+    auto q_typed = dynamic_cast<Queue<T>*>(q);
+    if (!q_typed)
+    {
+        throw DBException("Task input queue is not of the correct type");
+    }
+
+    q_typed->assignWholeQueueSnooper_(cb);
+}
+
+/// Defined here so we can avoid circular includes
+inline RunnableFlusherSnooperOutcome RunnableFlusher::snoopAll()
+{
+    RunnableFlusherSnooperOutcome outcome;
 
     for (auto t : tasks_)
     {
