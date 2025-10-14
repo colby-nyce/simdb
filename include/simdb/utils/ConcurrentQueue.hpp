@@ -119,10 +119,11 @@ public:
     SingleQueueSnooperOutcome snoop(const pipeline::QueuePrivateIterator&, const WholeQueueSnooperCallback<T>& cb)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        auto cb_outcome = cb(queue_);
 
         SingleQueueSnooperOutcome outcome;
         outcome.num_items_peeked = queue_.size();
+
+        auto cb_outcome = cb(queue_);
         switch (cb_outcome)
         {
             case SnooperCallbackOutcome::FOUND_STOP:
