@@ -123,10 +123,6 @@ public:
 
     bool paused()
     {
-        if (!is_running_)
-        {
-            throw DBException("Cannot check paused state of a non-running thread");
-        }
         return paused_;
     }
 
