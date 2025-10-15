@@ -162,13 +162,9 @@ inline RunnableFlusherSnooperOutcome RunnableFlusher::snoopAll()
         if (q && q->hasSnooper_())
         {
             auto task_snooper_outcome = q->snoop_(QueuePrivateIterator{});
+            outcome.num_hits += task_snooper_outcome.num_hits;
             outcome.num_items_peeked += task_snooper_outcome.num_items_peeked;
             outcome.num_queues_peeked += 1;
-
-            if (task_snooper_outcome.found)
-            {
-                outcome.found = true;
-            }
 
             if (task_snooper_outcome.done)
             {

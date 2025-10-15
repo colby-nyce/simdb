@@ -288,7 +288,7 @@ public:
             snooping_for_uuid_ = uuid;
             auto outcome = pipeline_flusher_->snoopAll();
 
-            if (outcome.found)
+            if (outcome.found())
             {
                 return snooped_data_;
             }

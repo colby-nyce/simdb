@@ -255,7 +255,7 @@ public:
             snooping_for_uuids_ = std::unordered_set<std::string>(uuids.begin(), uuids.end());
             auto disabler = pipeline_flusher_->scopedDisableAll(false);
             auto outcome = pipeline_flusher_->snoopAll();
-            if (outcome.found)
+            if (outcome.found())
             {
                 EXPECT_TRUE(snooping_for_uuids_.empty());
                 return;
