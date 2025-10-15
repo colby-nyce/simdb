@@ -96,12 +96,12 @@ public:
             switch (cb_outcome)
             {
                 case SnooperCallbackOutcome::FOUND_STOP:
-                    outcome.found = true;
+                    outcome.num_found++;
                     outcome.done = true;
                     return outcome;
 
                 case SnooperCallbackOutcome::FOUND_CONTINUE:
-                    outcome.found = true;
+                    outcome.num_found++;
                     break;
 
                 case SnooperCallbackOutcome::NOT_FOUND_STOP:
@@ -127,12 +127,12 @@ public:
         switch (cb_outcome)
         {
             case SnooperCallbackOutcome::FOUND_STOP:
-                outcome.found = true;
+                outcome.num_found++;
                 outcome.done = true;
                 break;
 
             case SnooperCallbackOutcome::FOUND_CONTINUE:
-                outcome.found = true;
+                outcome.num_found++;
                 break;
 
             case SnooperCallbackOutcome::NOT_FOUND_STOP:

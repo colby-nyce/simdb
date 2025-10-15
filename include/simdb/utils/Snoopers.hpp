@@ -44,17 +44,26 @@ using WholeQueueSnooperCallback = std::function<SnooperCallbackOutcome(std::dequ
 /// Outcome of a single queue snoop operation.
 struct SingleQueueSnooperOutcome
 {
-    bool found = false;
     bool done = false;
     uint32_t num_items_peeked = 0;
+    uint32_t num_found = 0;
 };
 
 /// Outcome of a RunnableFlusher snoop operation.
 struct RunnableFlusherSnooperOutcome
 {
-    bool found = false;
     uint32_t num_queues_peeked = 0;
     uint32_t num_items_peeked = 0;
+
+    /// Number of items found by all snoopers. For QueueItemSnooperCallbacks,
+    /// this is incremented once per item found. For WholeQueueSnooperCallbacks,
+    /// this is incremented once per queue that found at least one item.
+    uint32_t num_found = 0;
+
+    bool found() const
+    {
+        return num_found > 0;
+    }
 };
 
 } // namespace simdb
