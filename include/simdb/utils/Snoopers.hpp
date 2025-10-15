@@ -46,7 +46,7 @@ struct SingleQueueSnooperOutcome
 {
     bool done = false;
     uint32_t num_items_peeked = 0;
-    uint32_t num_found = 0;
+    uint32_t num_hits = 0;
 };
 
 /// Outcome of a RunnableFlusher snoop operation.
@@ -55,14 +55,14 @@ struct RunnableFlusherSnooperOutcome
     uint32_t num_queues_peeked = 0;
     uint32_t num_items_peeked = 0;
 
-    /// Number of items found by all snoopers. For QueueItemSnooperCallbacks,
+    /// Number of "hits" found by all snoopers. For QueueItemSnooperCallbacks,
     /// this is incremented once per item found. For WholeQueueSnooperCallbacks,
     /// this is incremented once per queue that found at least one item.
-    uint32_t num_found = 0;
+    uint32_t num_hits = 0;
 
     bool found() const
     {
-        return num_found > 0;
+        return num_hits > 0;
     }
 };
 
