@@ -8,7 +8,6 @@
 
 #include <iostream>
 #include <memory>
-#include <stack>
 #include <string>
 #include <type_traits>
 #include <vector>
