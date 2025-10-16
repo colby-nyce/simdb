@@ -120,9 +120,10 @@ public:
     ~ScopedRunnableDisabler();
 
 private:
-    ScopedRunnableDisabler(const std::vector<Runnable*>& runnables,
+    ScopedRunnableDisabler(RunnableFlusher* flusher, const std::vector<Runnable*>& runnables,
                            const std::vector<PollingThread*>& polling_threads);
 
+    RunnableFlusher* flusher_;
     std::vector<Runnable*> disabled_runnables_;
     std::vector<PollingThread*> paused_threads_;
     friend class RunnableFlusher;
@@ -175,11 +176,28 @@ public:
     /// or augmented or destroyed while snooping the pipeline task queues.
     /// The use case for doing so is if you want to use data directly from
     /// the queues instead of copying/cloning for better performance.
-    ScopedRunnableDisabler scopedDisableAll(bool disable_threads_too = true)
+    std::unique_ptr<ScopedRunnableDisabler> scopedDisableAll(bool disable_threads_too = true)
     {
+        if (disabler_active_)
+        {
+            return nullptr;
+        }
+
         addPollingThreads_();
         determineDisablerRunnables_();
-        return ScopedRunnableDisabler(disabler_runnables_, disable_threads_too ? polling_threads_ : std::vector<PollingThread*>{});
+
+        std::unique_ptr<ScopedRunnableDisabler> disabler;
+        if (disable_threads_too)
+        {
+            disabler.reset(new ScopedRunnableDisabler(this, disabler_runnables_, polling_threads_));
+        }
+        else
+        {
+            disabler.reset(new ScopedRunnableDisabler(this, disabler_runnables_, std::vector<PollingThread*>{}));
+        }
+
+        disabler_active_ = true;
+        return disabler;
     }
 
     /// Call processAll() on all runnables in a single transaction.
@@ -319,6 +337,15 @@ private:
     std::vector<TaskBase*> tasks_;
     std::vector<PollingThread*> polling_threads_;
     std::vector<Runnable*> disabler_runnables_;
+    bool disabler_active_ = false;
+
+    // Get a notification when a disabler goes out of scope
+    friend class ScopedRunnableDisabler;
+    void onDisablerDestruction_()
+    {
+        assert(disabler_active_);
+        disabler_active_ = false;
+    }
 };
 
 } // namespace simdb::pipeline

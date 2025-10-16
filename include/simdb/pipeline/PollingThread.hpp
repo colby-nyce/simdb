@@ -269,8 +269,10 @@ private:
 
 /// Defined here so we can avoid circular includes
 inline ScopedRunnableDisabler::ScopedRunnableDisabler(
+    RunnableFlusher* flusher,
     const std::vector<Runnable*>& runnables,
     const std::vector<PollingThread*>& polling_threads)
+    : flusher_(flusher)
 {
     for (auto pt : polling_threads)
     {
@@ -303,6 +305,8 @@ inline ScopedRunnableDisabler::~ScopedRunnableDisabler()
     {
         r->enable(true);
     }
+
+    flusher_->onDisablerDestruction_();
 }
 
 } // namespace simdb::pipeline
