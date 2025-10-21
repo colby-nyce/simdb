@@ -36,7 +36,7 @@ public:
     Pipeline* createPipeline(const std::string& name)
     {
         checkOpen_();
-        std::unique_ptr<Pipeline> pipeline(new Pipeline(db_mgr_, name));
+        auto pipeline = std::make_unique<Pipeline>(db_mgr_, name);
         pipelines_.emplace_back(std::move(pipeline));
         return pipelines_.back().get();
     }
