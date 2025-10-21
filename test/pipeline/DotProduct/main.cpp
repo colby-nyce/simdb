@@ -119,9 +119,10 @@ public:
         (void)argv;
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Thread 1 tasks
         auto dot_prod_task1 = simdb::pipeline::createTask<simdb::pipeline::Buffer<DotProdInput>>(DOT_PROD_ARRAY_LEN);
@@ -150,8 +151,6 @@ public:
         // Thread 2:
         pipeline->createTaskGroup("Compression")
             ->addTask(std::move(zlib_task));
-
-        return pipeline;
     }
 
     void process(std::vector<double>&& input)

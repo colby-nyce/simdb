@@ -237,10 +237,10 @@ public:
         tbl.createCompoundIndexOn({"StartEuid", "EndEuid"});
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Recall the pipeline we want to build:
         //                   ________________________________________________________
@@ -415,7 +415,6 @@ public:
             ->addTask(std::move(eviction_task));
 
         async_db_accessor_ = db_accessor;
-        return pipeline;
     }
 
     void process(InstEvent&& evt)

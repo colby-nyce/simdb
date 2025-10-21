@@ -43,10 +43,10 @@ public:
         tbl.createIndexOn("Tick");
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Task 1: Used in order to short-circuit RunnableFlusher. Will only be enabled
         // prior to a flush and disabled right after.
@@ -230,8 +230,6 @@ public:
             ->addTask(std::move(db_query_flush_abort))
             ->addTask(std::move(zlib_task))
             ->addTask(std::move(streaming_ticks_flush_abort));
-
-        return pipeline;
     }
 
     void process(uint64_t tick, const std::vector<double>& data)

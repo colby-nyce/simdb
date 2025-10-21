@@ -143,10 +143,10 @@ public:
         tbl.createIndexOn("Tick");
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Create 4 inputs for our pool. These tasks will run on their own threads.
         auto create_compressor = [&]()
@@ -227,8 +227,6 @@ public:
         // Note that there is no API to put the AsyncDatabaseWriter on a
         // thread (TaskGroup) of your choice since they all have to run
         // on the shared database thread (SimDB rule for performance).
-
-        return pipeline;
     }
 
     void process(TestData&& data)

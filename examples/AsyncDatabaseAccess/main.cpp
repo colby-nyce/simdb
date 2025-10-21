@@ -88,10 +88,10 @@ public:
         tbl.createIndexOn("Tick");
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         auto db_write = db_accessor->createAsyncWriter<StrictFIFO, Packet, Packet>(
             [](Packet&& in,
@@ -172,8 +172,6 @@ public:
         // Create pipeline flusher -----------------------------------------------------------------
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(
             *db_mgr_, db_write, db_update, db_delete);
-
-        return pipeline;
     }
 
     void sendPacket(uint64_t tick)
@@ -286,10 +284,10 @@ public:
         tbl.createIndexOn("Tick");
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         auto db_tasks = db_accessor->createAsyncWriter<StrictFIFO, Packet, void>(
             [this](Packet&& in,
@@ -360,8 +358,6 @@ public:
 
         // Create pipeline flusher -----------------------------------------------------------------
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(*db_mgr_, db_tasks);
-
-        return pipeline;
     }
 
     void sendPacket(uint64_t tick)

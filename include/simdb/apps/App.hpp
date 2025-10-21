@@ -41,7 +41,7 @@ class Schema;
 
 namespace pipeline {
     class AsyncDatabaseAccessor;
-    class Pipeline;
+    class PipelineManager;
 }
 
 /// Base class for SimDB applications. Note that app subclasses are given
@@ -53,7 +53,7 @@ class App
 public:
     virtual ~App() = default;
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
-    virtual std::unique_ptr<pipeline::Pipeline> createPipeline(pipeline::AsyncDatabaseAccessor*) { return nullptr; }
+    virtual void createPipeline(pipeline::PipelineManager*) {}
     virtual void preTeardown() {}
     virtual void postTeardown() {}
 

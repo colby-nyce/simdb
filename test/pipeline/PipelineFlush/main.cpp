@@ -35,10 +35,10 @@ public:
         tbl.addColumn("IntBlob", dt::blob_t);
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // 1. CircularBuffer of size 17
         auto circbuf = simdb::pipeline::createTask<simdb::CircularBuffer<int, 17>>();
@@ -118,8 +118,6 @@ public:
             ->addTask(std::move(buffer))
             ->addTask(std::move(doubler))
             ->addTask(std::move(record_max));
-
-        return pipeline;
     }
 
     void process(const int value)
