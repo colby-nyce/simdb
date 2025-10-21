@@ -119,6 +119,7 @@ public:
 
     void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
+        pipeline_mgr_ = pipeline_mgr;
         auto pipeline = pipeline_mgr->createPipeline(NAME);
         auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
@@ -281,7 +282,7 @@ public:
             // the item that was to be removed was missed by the snooper while it
             // was being processed by a task.
             constexpr bool disable_threads_too = false;
-            auto disabler = pipeline_flusher_->scopedDisableAll(disable_threads_too);
+            auto disabler = pipeline_mgr_->scopedDisableAll(disable_threads_too);
 
             snooping_for_uuid_ = uuid;
             auto outcome = pipeline_flusher_->snoopAll();
@@ -343,6 +344,7 @@ public:
 
 private:
     simdb::DatabaseManager* db_mgr_ = nullptr;
+    simdb::pipeline::PipelineManager* pipeline_mgr_ = nullptr;
     std::unique_ptr<simdb::pipeline::RunnableFlusher> pipeline_flusher_;
     simdb::ConcurrentQueue<DummyData>* pipeline_head_ = nullptr;
     std::string snooping_for_uuid_;

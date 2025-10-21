@@ -122,6 +122,7 @@ public:
 
     void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
+        pipeline_mgr_ = pipeline_mgr;
         auto pipeline = pipeline_mgr->createPipeline(NAME);
         auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
@@ -251,7 +252,7 @@ public:
         // queues.
         {
             snooping_for_uuids_ = std::unordered_set<std::string>(uuids.begin(), uuids.end());
-            auto disabler = pipeline_flusher_->scopedDisableAll(false);
+            auto disabler = pipeline_mgr_->scopedDisableAll(false);
             auto outcome = pipeline_flusher_->snoopAll();
             if (outcome.found())
             {
@@ -305,6 +306,7 @@ private:
     }
 
     simdb::DatabaseManager* db_mgr_ = nullptr;
+    simdb::pipeline::PipelineManager* pipeline_mgr_ = nullptr;
     std::unique_ptr<simdb::pipeline::RunnableFlusher> pipeline_flusher_;
     simdb::ConcurrentQueue<DummyData>* pipeline_head_ = nullptr;
     simdb::ConcurrentQueue<std::vector<std::string>>* pipeline_tail_ = nullptr;
