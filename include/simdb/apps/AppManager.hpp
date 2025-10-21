@@ -222,13 +222,9 @@ public:
         }
 
         pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
-        auto db_accessor = pipeline_mgr_->getAsyncDatabaseAccessor();
         for (const auto& [app_name, app] : apps_)
         {
-            if (auto pipeline = app->createPipeline(db_accessor))
-            {
-                pipeline_mgr_->addPipeline(std::move(pipeline));
-            }
+            app->createPipeline(pipeline_mgr_.get());
         }
 
         pipeline_mgr_->openPipelines();

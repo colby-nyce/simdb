@@ -35,9 +35,9 @@ public:
     {
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor*) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
 
         // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
@@ -72,8 +72,6 @@ public:
         // Thread 2:
         pipeline->createTaskGroup("PreDB_Thread2")
             ->addTask(std::move(tripler_task));
-
-        return pipeline;
     }
 
     void process(uint64_t val)
@@ -106,9 +104,10 @@ public:
         dp_tbl.addColumn("IntVal", dt::uint64_t);
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Thread 1 task
         auto doubler_task = simdb::pipeline::createTask<simdb::pipeline::Function<uint64_t, uint64_t>>(
@@ -184,8 +183,6 @@ public:
         // Thread 4
         pipeline->createTaskGroup("PostDB_Thread1")
             ->addTask(std::move(stdout_task));
-
-        return pipeline;
     }
 
     void process(uint64_t val)
@@ -216,9 +213,10 @@ public:
         dp_tbl.addColumn("DataBlob", dt::blob_t);
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Thread 1 tasks (database thread)
 
@@ -312,8 +310,6 @@ public:
         // Thread 3:
         pipeline->createTaskGroup("PostDB_Thread2")
             ->addTask(std::move(report_task));
-
-        return pipeline;
     }
 
     void process(uint64_t val)
@@ -350,9 +346,10 @@ public:
         tbl.addColumn("StringID", dt::int32_t);
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Thread 1 task (database thread)
         auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
@@ -371,8 +368,6 @@ public:
 
         // Get the pipeline input (head) ---------------------------------------------------
         pipeline_head_ = db_task->getTypedInputQueue<NewStringEntry>();
-
-        return pipeline;
     }
 
     void process(uint64_t val)

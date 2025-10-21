@@ -15,8 +15,9 @@ class PipelineManager
 {
 public:
     PipelineManager(DatabaseManager* db_mgr)
+        : db_mgr_(db_mgr)
     {
-        polling_threads_.emplace_back(std::make_unique<pipeline::DatabaseThread>(db_mgr));
+        polling_threads_.emplace_back(std::make_unique<DatabaseThread>(db_mgr));
     }
 
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor()
@@ -24,12 +25,20 @@ public:
         checkOpen_();
         for (auto& thread : polling_threads_)
         {
-            if (auto db_thread = dynamic_cast<pipeline::DatabaseThread*>(thread.get()))
+            if (auto db_thread = dynamic_cast<DatabaseThread*>(thread.get()))
             {
                 return db_thread->getAsyncDatabaseAccessor();
             }
         }
         return nullptr;
+    }
+
+    Pipeline* createPipeline(const std::string& name)
+    {
+        checkOpen_();
+        std::unique_ptr<Pipeline> pipeline(new Pipeline(db_mgr_, name));
+        pipelines_.emplace_back(std::move(pipeline));
+        return pipelines_.back().get();
     }
 
     void addPipeline(std::unique_ptr<Pipeline> pipeline)
@@ -64,7 +73,7 @@ public:
 
         for (size_t i = 0; i < num_proc_threads; ++i)
         {
-            polling_threads_.emplace_back(std::make_unique<pipeline::PollingThread>());
+            polling_threads_.emplace_back(std::make_unique<PollingThread>());
         }
 
         // Move the DB thread from the front to the back
@@ -131,11 +140,14 @@ public:
     }
 
 private:
+    /// Associated DatabaseManager.
+    DatabaseManager* db_mgr_ = nullptr;
+
     /// Instantiated pipelines.
-    std::vector<std::unique_ptr<pipeline::Pipeline>> pipelines_;
+    std::vector<std::unique_ptr<Pipeline>> pipelines_;
 
     /// Instantiated threads.
-    std::vector<std::unique_ptr<pipeline::PollingThread>> polling_threads_;
+    std::vector<std::unique_ptr<PollingThread>> polling_threads_;
 
     /// Flag saying whether postSimLoopTeardown() was called.
     bool closed_ = false;

@@ -120,10 +120,10 @@ public:
         tbl.createIndexOn("UUID");
     }
 
-    std::unique_ptr<simdb::pipeline::Pipeline> createPipeline(
-        simdb::pipeline::AsyncDatabaseAccessor* db_accessor) override
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = std::make_unique<simdb::pipeline::Pipeline>(db_mgr_, NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Task 1: Run the DummyData structs through boost::serialization
         auto serialize_task = simdb::pipeline::createTask<simdb::pipeline::Function<DummyData, DummyDataBytes>>(
@@ -227,8 +227,6 @@ public:
         pipeline->createTaskGroup("Processing")
             ->addTask(std::move(serialize_task))
             ->addTask(std::move(zlib_task));
-
-        return pipeline;
     }
 
     void sendOne(DummyData&& data)
