@@ -15,6 +15,7 @@
 namespace simdb::pipeline {
 
 class RunnableFlusher;
+class PipelineManager;
 class PollingThread;
 class TaskBase;
 class TaskGroup;
@@ -82,51 +83,9 @@ public:
     }
 
 private:
-    friend class PollingThread;
-    friend class TaskGroup;
-    virtual void setPollingThread_(PollingThread* pt)
-    {
-        polling_thread_ = pt;
-    }
-
-    void setTaskGroup_(TaskGroup* tg)
-    {
-        task_group_ = tg;
-    }
-
-    friend class RunnableFlusher;
-    PollingThread* getPollingThread_() const
-    {
-        return polling_thread_;
-    }
-
-    TaskGroup* getTaskGroup_() const
-    {
-        return task_group_;
-    }
-
     virtual std::string getDescription_() const = 0;
     std::string description_;
     bool enabled_ = true;
-    PollingThread* polling_thread_ = nullptr;
-    TaskGroup* task_group_ = nullptr;
-};
-
-/// RAII utility used to disable all runnables in a RunnableFlusher
-/// while in scope, re-enabling them when going out of scope.
-class ScopedRunnableDisabler
-{
-public:
-    ~ScopedRunnableDisabler();
-
-private:
-    ScopedRunnableDisabler(RunnableFlusher* flusher, const std::vector<Runnable*>& runnables,
-                           const std::vector<PollingThread*>& polling_threads);
-
-    RunnableFlusher* flusher_;
-    std::vector<Runnable*> disabled_runnables_;
-    std::vector<PollingThread*> paused_threads_;
-    friend class RunnableFlusher;
 };
 
 /// This class takes a variable number of Runnable pointers (raw or smart)
@@ -170,35 +129,6 @@ public:
     /// If a task has a "per-item" snooper as well as a "whole-queue"
     /// snooper, only the whole-queue snooper will be called.
     RunnableFlusherSnooperOutcome snoopAll();
-
-    /// Use this API to temporarily disable all runnables while snooping.
-    /// This is useful if you want to ensure that no data is processed
-    /// or augmented or destroyed while snooping the pipeline task queues.
-    /// The use case for doing so is if you want to use data directly from
-    /// the queues instead of copying/cloning for better performance.
-    std::unique_ptr<ScopedRunnableDisabler> scopedDisableAll(bool disable_threads_too = true)
-    {
-        if (disabler_active_)
-        {
-            return nullptr;
-        }
-
-        addPollingThreads_();
-        determineDisablerRunnables_();
-
-        std::unique_ptr<ScopedRunnableDisabler> disabler;
-        if (disable_threads_too)
-        {
-            disabler.reset(new ScopedRunnableDisabler(this, disabler_runnables_, polling_threads_));
-        }
-        else
-        {
-            disabler.reset(new ScopedRunnableDisabler(this, disabler_runnables_, std::vector<PollingThread*>{}));
-        }
-
-        disabler_active_ = true;
-        return disabler;
-    }
 
     /// Call processAll() on all runnables in a single transaction.
     /// This will flush the leftmost runnable first, then the next, etc.
@@ -326,26 +256,32 @@ private:
     // Store the TaskBase* for faster snooping without dynamic_cast
     void addTasks_();
 
-    // Store the PollingThreads so we can pause/resume them during snooping
-    void addPollingThreads_();
-
-    // Figure out the minimum set of runnables to disable
-    void determineDisablerRunnables_();
-
     DatabaseManager& db_mgr_;
     std::vector<Runnable*> runnables_;
     std::vector<TaskBase*> tasks_;
-    std::vector<PollingThread*> polling_threads_;
-    std::vector<Runnable*> disabler_runnables_;
-    bool disabler_active_ = false;
+};
 
-    // Get a notification when a disabler goes out of scope
-    friend class ScopedRunnableDisabler;
-    void onDisablerDestruction_()
-    {
-        assert(disabler_active_);
-        disabler_active_ = false;
-    }
+/// RAII utility used to disable all runnables in a RunnableFlusher
+/// while in scope, re-enabling them when going out of scope.
+class ScopedRunnableDisabler
+{
+public:
+    ~ScopedRunnableDisabler();
+
+private:
+    ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
+                           const std::vector<Runnable*>& runnables,
+                           const std::vector<PollingThread*>& polling_threads);
+
+    ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
+                           const std::vector<Runnable*>& runnables);
+
+    void notifyPipelineMgrReenabled_();
+
+    PipelineManager* pipeline_mgr_ = nullptr;
+    std::vector<Runnable*> disabled_runnables_;
+    std::vector<PollingThread*> paused_threads_;
+    friend class PipelineManager;
 };
 
 } // namespace simdb::pipeline

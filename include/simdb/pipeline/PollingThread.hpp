@@ -38,8 +38,12 @@ public:
         {
             throw DBException("Cannot add runnables while thread is running");
         }
-        runnable->setPollingThread_(this);
         runnables_.emplace_back(runnable);
+    }
+
+    const std::vector<Runnable*>& getRunnables() const
+    {
+        return runnables_;
     }
 
     virtual bool flushRunnables()
@@ -269,11 +273,22 @@ private:
 
 /// Defined here so we can avoid circular includes
 inline ScopedRunnableDisabler::ScopedRunnableDisabler(
-    RunnableFlusher* flusher,
+    PipelineManager* pipeline_mgr,
     const std::vector<Runnable*>& runnables,
     const std::vector<PollingThread*>& polling_threads)
-    : flusher_(flusher)
+    : pipeline_mgr_(pipeline_mgr)
 {
+    // Disable runnables
+    for (auto r : runnables)
+    {
+        if (r->enabled())
+        {
+            r->enable(false);
+            disabled_runnables_.push_back(r);
+        }
+    }
+
+    // Pause polling threads
     for (auto pt : polling_threads)
     {
         if (!pt->paused())
@@ -282,7 +297,15 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(
             paused_threads_.push_back(pt);
         }
     }
+}
 
+/// Defined here so we can avoid circular includes
+inline ScopedRunnableDisabler::ScopedRunnableDisabler(
+    PipelineManager* pipeline_mgr,
+    const std::vector<Runnable*>& runnables)
+    : pipeline_mgr_(pipeline_mgr)
+{
+    // Disable runnables
     for (auto r : runnables)
     {
         if (r->enabled())
@@ -306,7 +329,7 @@ inline ScopedRunnableDisabler::~ScopedRunnableDisabler()
         r->enable(true);
     }
 
-    flusher_->onDisablerDestruction_();
+    notifyPipelineMgrReenabled_();
 }
 
 } // namespace simdb::pipeline
