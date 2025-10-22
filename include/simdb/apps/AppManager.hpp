@@ -141,7 +141,7 @@ public:
             return apps_.find(app_name) != apps_.end();
         }
 
-        auto instantiated_count = 0;
+        size_t instantiated_count = 0;
         for (size_t i = 1; i <= num_instances; ++i)
         {
             std::string instance_name = app_name + std::string("-") + std::to_string(i);
