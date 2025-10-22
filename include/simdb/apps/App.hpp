@@ -52,19 +52,15 @@ class App
 {
 public:
     virtual ~App() = default;
+    void setInstance(size_t instance) { instance_ = instance; }
+    size_t getInstance() const { return instance_; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual void createPipeline(pipeline::PipelineManager*) {}
     virtual void preTeardown() {}
     virtual void postTeardown() {}
 
-protected:
-    int getAppID_() const { return app_id_; }
-
 private:
-    int app_id_ = 0;
-
-    // Allow AppManager to set the app ID
-    friend class AppManager;
+    size_t instance_ = 1;
 };
 
 class AppFactoryBase
@@ -72,7 +68,20 @@ class AppFactoryBase
 public:
     virtual ~AppFactoryBase() = default;
     virtual App* createApp(DatabaseManager*) = 0;
-    virtual void defineSchema(Schema& schema) const = 0;
+    void defineSchema(Schema& schema) const
+    {
+        if (!schema_defined_)
+        {
+            defineSchema_(schema);
+            schema_defined_ = true;
+        }
+    }
+
+private:
+    virtual void defineSchema_(Schema& schema) const = 0;
+    void resetSchemaDefined_() { schema_defined_ = false; }
+    mutable bool schema_defined_ = false;
+    friend class AppManager;
 };
 
 template <typename AppT>
@@ -84,7 +93,8 @@ public:
         return new AppT(db_mgr);
     }
 
-    void defineSchema(Schema& schema) const override
+private:
+    void defineSchema_(Schema& schema) const override
     {
         AppT::defineSchema(schema);
     }

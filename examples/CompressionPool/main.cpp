@@ -4,7 +4,6 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
-#include "simdb/pipeline/elements/AsyncDbWriter.hpp"
 #include "simdb/sqlite/PreparedINSERT.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
