@@ -359,6 +359,12 @@ public:
         return true;
     }
 
+    /// Equivalency check.
+    bool operator!=(const Table& rhs) const
+    {
+        return !(*this == rhs);
+    }
+
 private:
     /// Name of this table
     std::string name_;
