@@ -130,7 +130,7 @@ public:
                 {
                     // First create the table and its columns
                     std::ostringstream oss;
-                    oss << "CREATE TABLE " << table.getName() << "(";
+                    oss << "CREATE TABLE IF NOT EXISTS " << table.getName() << "(";
 
                     // All tables have an auto-incrementing primary key
                     if (table.use_auto_inc_primary_key_)
