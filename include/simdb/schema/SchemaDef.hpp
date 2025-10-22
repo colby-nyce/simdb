@@ -335,6 +335,30 @@ public:
         return columns_;
     }
 
+    /// Equivalency check.
+    bool operator==(const Table& rhs) const
+    {
+        if (name_ != rhs.name_)
+        {
+            return false;
+        }
+
+        if (columns_.size() != rhs.columns_.size())
+        {
+            return false;
+        }
+
+        for (size_t idx = 0; idx < columns_.size(); ++idx)
+        {
+            if (*(columns_[idx]) != *(rhs.columns_[idx]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 private:
     /// Name of this table
     std::string name_;
@@ -391,14 +415,17 @@ public:
         {
             if (hasTable(table.getName()))
             {
-                throw DBException("Cannot append schema - it has a table we already have by that name ")
-                    << "(" << table.getName() << ")";
+                auto& existing_table = getTable(table.getName());
+                if (existing_table != table)
+                {
+                    throw DBException("Cannot append schema - it has a table we already have by that name ")
+                        << "(" << table.getName() << ")";
+                }
             }
-        }
-
-        for (const auto& table : schema.getTables())
-        {
-            tables_.push_back(table);
+            else
+            {
+                tables_.push_back(table);
+            }
         }
     }
 

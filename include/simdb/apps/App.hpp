@@ -52,19 +52,15 @@ class App
 {
 public:
     virtual ~App() = default;
+    void setInstance(size_t instance) { instance_ = instance; }
+    size_t getInstance() const { return instance_; }
     virtual void postInit(int argc, char** argv) { (void)argc; (void)argv; }
     virtual void createPipeline(pipeline::PipelineManager*) {}
     virtual void preTeardown() {}
     virtual void postTeardown() {}
 
-protected:
-    int getAppID_() const { return app_id_; }
-
 private:
-    int app_id_ = 0;
-
-    // Allow AppManager to set the app ID
-    friend class AppManager;
+    size_t instance_ = 1;
 };
 
 class AppFactoryBase

@@ -4,7 +4,6 @@
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
 #include "simdb/pipeline/elements/CircularBuffer.hpp"
-#include "simdb/pipeline/elements/AsyncDbWriter.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/pipeline/Queue.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
