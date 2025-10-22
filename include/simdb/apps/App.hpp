@@ -68,20 +68,7 @@ class AppFactoryBase
 public:
     virtual ~AppFactoryBase() = default;
     virtual App* createApp(DatabaseManager*) = 0;
-    void defineSchema(Schema& schema) const
-    {
-        if (!schema_defined_)
-        {
-            defineSchema_(schema);
-            schema_defined_ = true;
-        }
-    }
-
-private:
-    virtual void defineSchema_(Schema& schema) const = 0;
-    void resetSchemaDefined_() { schema_defined_ = false; }
-    mutable bool schema_defined_ = false;
-    friend class AppManager;
+    virtual void defineSchema(Schema& schema) const = 0;
 };
 
 template <typename AppT>
@@ -93,8 +80,7 @@ public:
         return new AppT(db_mgr);
     }
 
-private:
-    void defineSchema_(Schema& schema) const override
+    void defineSchema(Schema& schema) const override
     {
         AppT::defineSchema(schema);
     }

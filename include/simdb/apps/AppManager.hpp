@@ -103,7 +103,6 @@ public:
         }
 
         enabled_apps_[app_name] = num_instances;
-        it->second->resetSchemaDefined_();
     }
 
     template <typename AppT>

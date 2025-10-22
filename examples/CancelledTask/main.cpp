@@ -381,8 +381,7 @@ public:
         return new AppT(db_mgr, cancellability_);
     }
 
-private:
-    void defineSchema_(Schema& schema) const override
+    void defineSchema(Schema& schema) const override
     {
         AppT::defineSchema(schema);
     }
