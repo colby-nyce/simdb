@@ -67,7 +67,7 @@ class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
-    virtual App* createApp(DatabaseManager*) = 0;
+    virtual App* createApp(DatabaseManager*, size_t instance_num = 0) = 0;
     virtual void defineSchema(Schema& schema) const = 0;
 };
 
@@ -75,8 +75,9 @@ template <typename AppT>
 class AppFactory : public AppFactoryBase
 {
 public:
-    App* createApp(DatabaseManager* db_mgr) override
+    App* createApp(DatabaseManager* db_mgr, size_t instance_num = 0) override
     {
+        (void)instance_num;
         return new AppT(db_mgr);
     }
 
