@@ -177,6 +177,7 @@ public:
             if (num_instances == 1)
             {
                 App* app = app_factories_[app_name]->createApp(db_mgr_, 0);
+                // Single-instance apps have instance number 0 already
                 apps_[app_name] = std::unique_ptr<App>(app);
             } else {
                 for (size_t instance_num = 1; instance_num <= num_instances; ++instance_num)

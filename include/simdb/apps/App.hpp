@@ -60,7 +60,9 @@ public:
     virtual void postTeardown() {}
 
 private:
-    size_t instance_ = 1;
+    /// Instance number for multi-instance apps (1-based).
+    /// If zero, then this is a single-instance app.
+    size_t instance_ = 0;
 };
 
 class AppFactoryBase
