@@ -376,8 +376,9 @@ public:
         cancellability_ = cancellability;
     }
 
-    AppT* createApp(DatabaseManager* db_mgr) override
+    AppT* createApp(DatabaseManager* db_mgr, size_t instance_num = 0) override
     {
+        (void)instance_num;
         return new AppT(db_mgr, cancellability_);
     }
 

@@ -11,11 +11,17 @@ class SimpleApp : public simdb::App
 public:
     static constexpr auto NAME = "simple-app";
 
-    SimpleApp(simdb::DatabaseManager* db_mgr)
+    SimpleApp(simdb::DatabaseManager* db_mgr, const std::string& desc)
         : db_mgr_(db_mgr)
+        , description_(desc)
     {}
 
     ~SimpleApp() noexcept = default;
+
+    std::string getDescription() const
+    {
+        return description_;
+    }
 
     static void defineSchema(simdb::Schema& schema)
     {
@@ -54,9 +60,45 @@ public:
 private:
     simdb::DatabaseManager* db_mgr_ = nullptr;
     simdb::ConcurrentQueue<int>* pipeline_head_ = nullptr;
+    std::string description_;
 };
 
 REGISTER_SIMDB_APPLICATION(SimpleApp);
+
+namespace simdb
+{
+
+template <>
+class AppFactory<SimpleApp> : public AppFactoryBase
+{
+public:
+    using AppT = SimpleApp;
+
+    void setDescription(size_t instance, const std::string& description)
+    {
+        instance_descriptions_[instance] = description;
+    }
+
+    AppT* createApp(DatabaseManager* db_mgr, size_t instance_num = 0) override
+    {
+        auto it = instance_descriptions_.find(instance_num);
+        if (it == instance_descriptions_.end())
+        {
+            throw DBException("No description set for instance ") << instance_num;
+        }
+        return new AppT(db_mgr, it->second);
+    }
+
+    void defineSchema(Schema& schema) const override
+    {
+        AppT::defineSchema(schema);
+    }
+
+private:
+    std::map<size_t, std::string> instance_descriptions_;
+};
+
+} // namespace simdb
 
 int main(int argc, char** argv)
 {
@@ -65,7 +107,24 @@ int main(int argc, char** argv)
 
     // Create 4 instances
     app_mgr.enableApp(SimpleApp::NAME, 4);
+
+    auto factory = app_mgr.getAppFactory<SimpleApp>();
+    factory->setDescription(1, "Foo");
+    factory->setDescription(2, "Bar");
+    factory->setDescription(3, "Fiz");
+    factory->setDescription(4, "Buz");
     app_mgr.createEnabledApps();
+
+    auto app1 = app_mgr.getApp<SimpleApp>(1);
+    auto app2 = app_mgr.getApp<SimpleApp>(2);
+    auto app3 = app_mgr.getApp<SimpleApp>(3);
+    auto app4 = app_mgr.getApp<SimpleApp>(4);
+
+    EXPECT_EQUAL(app1->getDescription(), "Foo");
+    EXPECT_EQUAL(app2->getDescription(), "Bar");
+    EXPECT_EQUAL(app3->getDescription(), "Fiz");
+    EXPECT_EQUAL(app4->getDescription(), "Buz");
+
     app_mgr.createSchemas();
     app_mgr.postInit(argc, argv);
     app_mgr.openPipelines();

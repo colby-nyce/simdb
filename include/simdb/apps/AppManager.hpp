@@ -176,14 +176,15 @@ public:
         {
             if (num_instances == 1)
             {
-                App* app = app_factories_[app_name]->createApp(db_mgr_);
+                App* app = app_factories_[app_name]->createApp(db_mgr_, 0);
+                // Single-instance apps have instance number 0 already
                 apps_[app_name] = std::unique_ptr<App>(app);
             } else {
-                for (size_t i = 1; i <= num_instances; ++i)
+                for (size_t instance_num = 1; instance_num <= num_instances; ++instance_num)
                 {
-                    App* app = app_factories_[app_name]->createApp(db_mgr_);
-                    app->setInstance(i);
-                    std::string instance_name = app_name + std::string("-") + std::to_string(i);
+                    App* app = app_factories_[app_name]->createApp(db_mgr_, instance_num);
+                    app->setInstance(instance_num);
+                    std::string instance_name = app_name + std::string("-") + std::to_string(instance_num);
                     apps_[instance_name] = std::unique_ptr<App>(app);
                 }
             }
