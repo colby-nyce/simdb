@@ -251,7 +251,11 @@ private:
         void executeCommand_(const char* cmd)
         {
             auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_, cmd, nullptr, nullptr, nullptr));
-            if (rc)
+            if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED || rc == SQLITE_READONLY)
+            {
+                throw SafeTransactionSilentException(rc);
+            }
+            else if (rc)
             {
                 throw DBException(sqlite3_errmsg(db_conn_));
             }
