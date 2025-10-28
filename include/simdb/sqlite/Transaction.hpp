@@ -177,6 +177,12 @@ public:
         }
     }
 
+    /// For debug purposes only.
+    bool isInTransaction() const
+    {
+        return in_transaction_flag_;
+    }
+
 protected:
     /// Underlying database connection
     sqlite3* db_conn_ = nullptr;
