@@ -122,6 +122,12 @@ public:
         db_conn_->safeTransaction(func);
     }
 
+    /// For debug purposes only.
+    bool isInTransaction() const
+    {
+        return db_conn_ && db_conn_->isInTransaction();
+    }
+
     /// \brief  Perform INSERT operation on this database.
     ///
     /// \note   The way to call this method is:
