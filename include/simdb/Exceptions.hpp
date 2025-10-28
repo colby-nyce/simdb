@@ -67,10 +67,17 @@ private:
 class SafeTransactionSilentException : public std::exception
 {
 public:
+    explicit SafeTransactionSilentException(int rc)
+        : msg_("The database is locked (return code " + std::to_string(rc) + ")")
+    {}
+
     const char* what() const noexcept override
     {
-        return "The database is locked";
+        return msg_.c_str();
     }
+
+private:
+    const std::string msg_;
 };
 
 /*!
