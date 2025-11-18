@@ -5,6 +5,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
 #include "simdb/pipeline/DatabaseThread.hpp"
+#include "simdb/utils/MTLogger.hpp"
 
 #include <iostream>
 
@@ -14,8 +15,9 @@ namespace simdb::pipeline {
 class PipelineManager
 {
 public:
-    PipelineManager(DatabaseManager* db_mgr)
+    PipelineManager(DatabaseManager* db_mgr, const std::string& pipeline_log_file = "")
         : db_mgr_(db_mgr)
+        , pipeline_logger_(pipeline_log_file)
     {
         polling_threads_.emplace_back(std::make_unique<DatabaseThread>(db_mgr));
     }
@@ -31,6 +33,11 @@ public:
             }
         }
         return nullptr;
+    }
+
+    utils::MTLogger* getPipelineLogger()
+    {
+        return &pipeline_logger_;
     }
 
     Pipeline* createPipeline(const std::string& name)
@@ -189,6 +196,9 @@ private:
     /// Flag saying whether a ScopedRunnableDisabler is active.
     /// Used in order to short-circuit nested disablers.
     bool disabler_active_ = false;
+
+    /// Multi-threaded pipeline logger.
+    utils::MTLogger pipeline_logger_;
 
     void getDisablerThreads_()
     {
