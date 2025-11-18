@@ -297,7 +297,7 @@ public:
     /// Call this once after all postInit(). This will create all pipelines
     /// for all enabled apps, and share resources between them to not create
     /// too many threads in total.
-    void openPipelines()
+    void openPipelines(const std::string& pipeline_log_file = "")
     {
         PROFILE_APP_PHASE
 
@@ -306,7 +306,7 @@ public:
             throw DBException("Pipelines already open");
         }
 
-        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
+        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_, pipeline_log_file);
         for (const auto& [app_name, app] : apps_)
         {
             app->createPipeline(pipeline_mgr_.get());
