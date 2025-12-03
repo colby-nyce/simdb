@@ -119,11 +119,11 @@ public:
                     return simdb::pipeline::RunnableOutcome::NO_OP;
                 }
 
-                auto& inserter = accessor.getTableInserter<DatabaseTaskTester>("CompressedArrays");
-                inserter.setColumnValue(0, (int)result.num_orig_bytes);
-                inserter.setColumnValue(1, (int)result.compressed_bytes.size());
-                inserter.setColumnValue(2, result.compressed_bytes);
-                inserter.createRecord();
+                auto inserter = accessor.getTableInserter<DatabaseTaskTester>("CompressedArrays");
+                inserter->setColumnValue(0, (int)result.num_orig_bytes);
+                inserter->setColumnValue(1, (int)result.compressed_bytes.size());
+                inserter->setColumnValue(2, result.compressed_bytes);
+                inserter->createRecord();
 
                 ++num_arrays_rcvd_;
                 return simdb::pipeline::RunnableOutcome::DID_WORK;

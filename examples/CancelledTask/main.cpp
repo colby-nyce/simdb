@@ -3,6 +3,7 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/Random.hpp"
@@ -115,13 +116,15 @@ public:
         );
 
         // Task 3: Write the sim data to the database.
-        auto db_task = db_accessor->createAsyncWriter<CancelledTask, CompressedSimData, uint64_t>(
+        using WriteTask = simdb::pipeline::DatabaseTask<CompressedSimData, uint64_t>;
+        auto db_task = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [this](CompressedSimData&& input,
                    simdb::ConcurrentQueue<uint64_t>& out,
-                   simdb::pipeline::AppPreparedINSERTs* tables,
+                   simdb::pipeline::DatabaseAccessor& accessor,
                    bool force)
             {
-                auto inserter = tables->getPreparedINSERT("SimDataBlobs");
+                auto inserter = accessor.getTableInserter<CancelledTask>("SimDataBlobs");
                 inserter->setColumnValue(0, input.tick);
                 inserter->setColumnValue(1, input.compressed_data);
                 inserter->createRecord();
@@ -226,10 +229,14 @@ public:
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(
             *db_mgr_, db_query_flush_abort, zlib_task, db_task, streaming_ticks_flush_abort);
 
+        // Add non-DB tasks to non-DB thread
         pipeline->createTaskGroup("ZlibPipeline")
             ->addTask(std::move(db_query_flush_abort))
             ->addTask(std::move(zlib_task))
             ->addTask(std::move(streaming_ticks_flush_abort));
+
+        // Add DB task to DB thread
+        db_accessor->addTask(std::move(db_task));
     }
 
     void process(uint64_t tick, const std::vector<double>& data)

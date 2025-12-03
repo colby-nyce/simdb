@@ -4,6 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/Random.hpp"
@@ -82,18 +83,6 @@ simdb::pipeline::RunnableOutcome CompressBytes(BufferedDotProductValues&& in, si
     return simdb::pipeline::RunnableOutcome::DID_WORK;
 }
 
-simdb::pipeline::RunnableOutcome WriteCompressedBytes(CompressedBytes&& in, simdb::pipeline::AppPreparedINSERTs* tables, bool /*force*/)
-{
-    // This is on the dedicated DB thread. Note that we are inside a
-    // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
-    // going on.
-    auto inserter = tables->getPreparedINSERT("DotProducts");
-    inserter->setColumnValue(0, in);
-    inserter->createRecord();
-
-    return simdb::pipeline::RunnableOutcome::DID_WORK;
-}
-
 class DotProductApp : public simdb::App
 {
 public:
@@ -133,7 +122,21 @@ public:
         auto zlib_task = simdb::pipeline::createTask<simdb::pipeline::Function<BufferedDotProductValues, CompressedBytes>>(CompressBytes);
 
         // Thread 3 task
-        auto sqlite_task = db_accessor->createAsyncWriter<DotProductApp, CompressedBytes, void>(WriteCompressedBytes);
+        using WriteTask = simdb::pipeline::DatabaseTask<CompressedBytes, void>;
+        auto sqlite_task = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
+            [](CompressedBytes&& in, simdb::pipeline::DatabaseAccessor& accessor, bool /*force*/)
+            {
+                // This is on the dedicated DB thread. Note that we are inside a
+                // larger BEGIN/COMMIT TRANSACTION block with many other DB writes
+                // going on.
+                auto inserter = accessor.getTableInserter<DotProductApp>("DotProducts");
+                inserter->setColumnValue(0, in);
+                inserter->createRecord();
+
+                return simdb::pipeline::RunnableOutcome::DID_WORK;
+            }
+        );
 
         // Connect tasks -------------------------------------------------------------------
         *dot_prod_task1 >> *dot_prod_task2 >> *dot_prod_task3 >> *zlib_task >> *sqlite_task;
@@ -151,6 +154,9 @@ public:
         // Thread 2:
         pipeline->createTaskGroup("Compression")
             ->addTask(std::move(zlib_task));
+
+        // DB thread:
+        db_accessor->addTask(std::move(sqlite_task));
     }
 
     void process(std::vector<double>&& input)

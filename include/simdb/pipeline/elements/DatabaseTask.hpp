@@ -26,7 +26,7 @@ public:
     }
 
     template <typename App>
-    PreparedINSERT& getTableInserter(const std::string& tbl_name)
+    PreparedINSERT* getTableInserter(const std::string& tbl_name)
     {
         auto& inserters = tbl_inserters_by_app_[App::NAME];
         if (inserters.empty())
@@ -56,7 +56,7 @@ public:
                 << App::NAME;
         }
 
-        return *inserter;
+        return inserter.get();
     }
 
 private:

@@ -4,6 +4,7 @@
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
 #include "simdb/pipeline/elements/CircularBuffer.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/pipeline/Queue.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
@@ -282,6 +283,21 @@ void TestPipelineCircularBuffer(simdb::DatabaseManager* db_mgr)
 }
 
 /// ------ simdb::pipeline::AsyncDatabaseWriter ---------------------------------
+struct TestDataApp
+{
+    static constexpr auto NAME = "test-data-app";
+
+    static void defineSchema(simdb::Schema& schema)
+    {
+        using dt = simdb::SqlDataType;
+        auto& tbl = schema.addTable("TestData");
+        tbl.addColumn("IntVal", dt::int32_t);
+        tbl.addColumn("DblVal", dt::double_t);
+        tbl.addColumn("StrVal", dt::string_t);
+        tbl.addColumn("BlobVal", dt::blob_t);
+    }
+};
+
 void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
 {
     simdb::pipeline::PipelineManager pipeline_mgr(db_mgr);
@@ -310,19 +326,6 @@ void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
         }
     };
 
-    struct TestDataApp
-    {
-        static void defineSchema(simdb::Schema& schema)
-        {
-            using dt = simdb::SqlDataType;
-            auto& tbl = schema.addTable("TestData");
-            tbl.addColumn("IntVal", dt::int32_t);
-            tbl.addColumn("DblVal", dt::double_t);
-            tbl.addColumn("StrVal", dt::string_t);
-            tbl.addColumn("BlobVal", dt::blob_t);
-        }
-    };
-
     if (!db_mgr->getSchema().hasTable("TestData"))
     {
         simdb::Schema schema;
@@ -332,12 +335,14 @@ void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
 
     // Create an async database writer to "batch process" all our data
     // on the dedicated database thread.
-    auto writer = pipeline_mgr.getAsyncDatabaseAccessor()->createAsyncWriter<TestDataApp, TestData, void>(
+    using WriteTask = simdb::pipeline::DatabaseTask<TestData, void>;
+    auto writer = simdb::pipeline::createTask<WriteTask>(
+        db_mgr,
         [](TestData&& test_data,
-           simdb::pipeline::AppPreparedINSERTs* tables,
+           simdb::pipeline::DatabaseAccessor& accessor,
            bool /*force*/)
         {
-            auto inserter = tables->getPreparedINSERT("TestData");
+            auto inserter = accessor.getTableInserter<TestDataApp>("TestData");
             inserter->setColumnValue(0, test_data.intval);
             inserter->setColumnValue(1, test_data.dblval);
             inserter->setColumnValue(2, test_data.strval);
@@ -350,6 +355,9 @@ void TestAsyncDatabaseWriter(simdb::DatabaseManager* db_mgr)
 
     // Get the buffer input.
     auto& test_data_in = dynamic_cast<simdb::pipeline::Queue<TestData>*>(writer->getInputQueue())->get();
+
+    // Add the task to the DB thread.
+    pipeline_mgr.getAsyncDatabaseAccessor()->addTask(std::move(writer));
 
     // Run data through the pipeline.
     pipeline_mgr.addPipeline(std::move(pipeline));

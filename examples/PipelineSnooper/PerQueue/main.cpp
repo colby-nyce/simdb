@@ -3,6 +3,7 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/TickTock.hpp"
 #include "SimDBTester.hpp"
@@ -159,13 +160,15 @@ public:
         );
 
         // Task 3: Write the compressed data to the database
-        auto db_writer = db_accessor->createAsyncWriter<PipelineSnooper, DummyDataBytes, std::vector<std::string>>(
+        using WriteTask = simdb::pipeline::DatabaseTask<DummyDataBytes, std::vector<std::string>>;
+        auto db_writer = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [this](DummyDataBytes&& data,
                    simdb::ConcurrentQueue<std::vector<std::string>>&,
-                   simdb::pipeline::AppPreparedINSERTs* tables,
+                   simdb::pipeline::DatabaseAccessor& accessor,
                    bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("SimDataBlobs");
+                auto inserter = accessor.getTableInserter<PipelineSnooper>("SimDataBlobs");
                 inserter->setColumnValue(0, data.uuid);
                 inserter->setColumnValue(1, data.bytes);
                 inserter->createRecord();
@@ -174,11 +177,14 @@ public:
         );
 
         // Task 4: Delete any remaining UUIDs that could not be snooped and deleted from the pipeline
-        auto uuid_deleter = db_accessor->createAsyncReader<std::vector<std::string>, void>(
+        using ReadTask = simdb::pipeline::DatabaseTask<std::vector<std::string>, void>;
+        auto uuid_deleter = simdb::pipeline::createTask<ReadTask>(
+            db_mgr_,
             [](std::vector<std::string>&& uuids,
-               simdb::DatabaseManager* db_mgr,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
+                auto db_mgr = accessor.getDatabaseManager();
                 auto query = db_mgr->createQuery("SimDataBlobs");
                 query->addConstraintForString("UUID", simdb::SetConstraints::IN_SET, uuids);
                 query->deleteResultSet();
@@ -228,6 +234,11 @@ public:
         pipeline->createTaskGroup("Processing")
             ->addTask(std::move(serialize_task))
             ->addTask(std::move(zlib_task));
+
+        db_accessor->addTasks(
+            std::move(db_writer),
+            std::move(uuid_deleter)
+        );
     }
 
     void sendOne(DummyData&& data)

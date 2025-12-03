@@ -3,6 +3,7 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "simdb/utils/TickTock.hpp"
 #include "SimDBTester.hpp"
@@ -156,12 +157,14 @@ public:
         );
 
         // Task 3: Write the compressed data to the database
-        auto db_writer = db_accessor->createAsyncWriter<PipelineSnooper, DummyDataBytes, void>(
+        using WriteTask = simdb::pipeline::DatabaseTask<DummyDataBytes, void>;
+        auto db_writer = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [this](DummyDataBytes&& data,
-                   simdb::pipeline::AppPreparedINSERTs* tables,
+                   simdb::pipeline::DatabaseAccessor& accessor,
                    bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("SimDataBlobs");
+                auto inserter = accessor.getTableInserter<PipelineSnooper>("SimDataBlobs");
                 inserter->setColumnValue(0, data.uuid);
                 inserter->setColumnValue(1, data.bytes);
                 inserter->createRecord();
@@ -246,6 +249,8 @@ public:
         pipeline->createTaskGroup("Processing")
             ->addTask(std::move(serialize_task))
             ->addTask(std::move(zlib_task));
+
+        db_accessor->addTask(std::move(db_writer));
     }
 
     void sendOne(DummyData&& data)

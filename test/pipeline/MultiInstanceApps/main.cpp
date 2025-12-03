@@ -4,6 +4,7 @@
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "SimDBTester.hpp"
 
 class SimpleApp : public simdb::App
@@ -37,12 +38,14 @@ public:
         pipeline_mgr->createPipeline(NAME + std::to_string(getInstance()));
         auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
-        auto db_task = db_accessor->createAsyncWriter<SimpleApp, int, void>(
+        using WriteTask = simdb::pipeline::DatabaseTask<int, void>;
+        auto db_task = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [this](int&& val,
-                   simdb::pipeline::AppPreparedINSERTs* tables,
+                   simdb::pipeline::DatabaseAccessor& accessor,
                    bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("SimpleTable");
+                auto inserter = accessor.getTableInserter<SimpleApp>("SimpleTable");
                 inserter->setColumnValue(0, val);
                 inserter->setColumnValue(1, (int)getInstance());
                 inserter->createRecord();
@@ -50,6 +53,7 @@ public:
             });
 
         pipeline_head_ = db_task->getTypedInputQueue<int>();
+        db_accessor->addTask(std::move(db_task));
     }
 
     void process(int val)

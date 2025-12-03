@@ -6,6 +6,7 @@
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
 #include "simdb/pipeline/elements/CircularBuffer.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/ConditionalLock.hpp"
@@ -72,14 +73,16 @@ public:
             });
 
         // 5. DB writer that writes to TestData table
-        auto db_writer = db_accessor->createAsyncWriter<PipelineFlushApp, BufferedInts, int>(
+        using WriteTask = simdb::pipeline::DatabaseTask<BufferedInts, int>;
+        auto db_writer = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [max_int = int(-1)]
             (BufferedInts&& vals,
              simdb::ConcurrentQueue<int>& out,
-             simdb::pipeline::AppPreparedINSERTs* tables,
+             simdb::pipeline::DatabaseAccessor& accessor,
              bool /*force*/) mutable
             {
-                auto inserter = tables->getPreparedINSERT("TestData");
+                auto inserter = accessor.getTableInserter<PipelineFlushApp>("TestData");
                 inserter->setColumnValue(0, vals);
                 inserter->createRecord();
 
@@ -117,6 +120,8 @@ public:
             ->addTask(std::move(buffer))
             ->addTask(std::move(doubler))
             ->addTask(std::move(record_max));
+
+        db_accessor->addTask(std::move(db_writer));
     }
 
     void process(const int value)
