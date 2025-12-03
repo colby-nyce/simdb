@@ -247,14 +247,14 @@ public:
         pipeline_head_->emplace(std::move(sim_data));
     }
 
-    std::vector<double> getDataAtTick5000()
+    std::vector<double> getDataAtTick9000()
     {
         if (cancellability_ != Cancellability::DISABLED)
         {
             // Get ready for the cancellable flush.
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                pending_request_.tick = 5000;
+                pending_request_.tick = 9000;
                 pending_request_.pending = true;
             }
 
@@ -269,7 +269,7 @@ public:
             }
 
             // Perform a "round robin" flush to give the ABORT_FLUSH task(s)
-            // many more chances to see the 5000th tick and abort the flush early.
+            // many more chances to see the 9000th tick and abort the flush early.
             //
             // This is much faster than a waterfall flush which would have to wait
             // for all earlier tasks (e.g. compress all, write all to DB) to finish
@@ -299,9 +299,9 @@ public:
             pipeline_flusher_->waterfallFlush();
         }
 
-        // Return the sim data at tick 5000.
+        // Return the sim data at tick 9000.
         auto query = db_mgr_->createQuery("SimDataBlobs");
-        query->addConstraintForUInt64("Tick", simdb::Constraints::EQUAL, 5000);
+        query->addConstraintForUInt64("Tick", simdb::Constraints::EQUAL, 9000);
 
         std::vector<char> compressed_data;
         query->select("Data", compressed_data);
@@ -416,24 +416,24 @@ void RunTest(Cancellability cancellability)
     auto app = app_mgr.getApp<CancelledTask>();
     constexpr uint64_t TICKS = 10000;
 
-    // Hold onto a copy of the 5000th tick's data so we can verify it later
-    std::vector<double> tick_5000_data;
+    // Hold onto a copy of the 9000th tick's data so we can verify it later
+    std::vector<double> tick_9000_data;
 
     for (uint64_t tick = 1; tick <= TICKS; ++tick)
     {
         auto rnd_data = simdb::utils::generateRandomData<double>(1000);
 
-        if (tick == 5000) {
-            tick_5000_data = rnd_data;
+        if (tick == 9000) {
+            tick_9000_data = rnd_data;
         }
         app->process(tick, rnd_data);
     }
 
-    // Ask for the 5000th tick's data and time the operation to see
+    // Ask for the 9000th tick's data and time the operation to see
     // the performance difference with cancellation enabled.
     {
         std::ostringstream oss;
-        oss << "Retrieve tick 5000 data ";
+        oss << "Retrieve tick 9000 data ";
         switch (cancellability)
         {
             case Cancellability::DISABLED:
@@ -459,7 +459,7 @@ void RunTest(Cancellability cancellability)
         }
 
         PROFILE_BLOCK(oss.str().c_str());
-        EXPECT_EQUAL(app->getDataAtTick5000(), tick_5000_data);
+        EXPECT_EQUAL(app->getDataAtTick9000(), tick_9000_data);
     }
 
     // Finish...
