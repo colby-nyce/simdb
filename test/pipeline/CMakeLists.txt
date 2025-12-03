@@ -1,3 +1,4 @@
+add_subdirectory(DatabaseTask)
 add_subdirectory(DotProduct)
 add_subdirectory(MultiInstanceApps)
 add_subdirectory(PipelineElements)

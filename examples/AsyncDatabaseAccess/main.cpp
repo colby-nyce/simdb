@@ -2,6 +2,7 @@
 
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/TickTock.hpp"
 #include "SimDBTester.hpp"
@@ -93,10 +94,12 @@ public:
         pipeline_mgr->createPipeline(NAME);
         auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
-        auto db_write = db_accessor->createAsyncWriter<StrictFIFO, Packet, Packet>(
+        using WriteTask = simdb::pipeline::DatabaseTask<Packet, Packet>;
+        auto db_write = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [](Packet&& in,
                simdb::ConcurrentQueue<Packet>& out,
-               simdb::pipeline::AppPreparedINSERTs* tables,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
                 if (in.op != Packet::INSERT)
@@ -104,7 +107,7 @@ public:
                     out.emplace(std::move(in));
                 }
 
-                auto inserter = tables->getPreparedINSERT("Packets");
+                auto inserter = accessor.getTableInserter<StrictFIFO>("Packets");
                 inserter->setColumnValue(0, in.tick);
                 inserter->setColumnValue(1, in.data_vals.x);
                 inserter->setColumnValue(2, in.data_vals.y);
@@ -115,10 +118,12 @@ public:
             }
         );
 
-        auto db_update = db_accessor->createAsyncReader<Packet, Packet>(
+        using UpdateTask = simdb::pipeline::DatabaseTask<Packet, Packet>;
+        auto db_update = simdb::pipeline::createTask<UpdateTask>(
+            db_mgr_,
             [](Packet&& in,
                simdb::ConcurrentQueue<Packet>& out,
-               simdb::DatabaseManager* db_mgr,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
                 if (in.op == Packet::INSERT)
@@ -132,6 +137,7 @@ public:
                     return simdb::pipeline::RunnableOutcome::DID_WORK;
                 }
 
+                auto db_mgr = accessor.getDatabaseManager();
                 auto query = db_mgr->createQuery("Packets");
                 query->addConstraintForUInt64("Tick", simdb::Constraints::EQUAL, in.tick);
                 query->deleteResultSet();
@@ -145,9 +151,11 @@ public:
             }
         );
 
-        auto db_delete = db_accessor->createAsyncReader<Packet, void>(
+        using DeleteTask = simdb::pipeline::DatabaseTask<Packet, void>;
+        auto db_delete = simdb::pipeline::createTask<DeleteTask>(
+            db_mgr_,
             [](Packet&& in,
-               simdb::DatabaseManager* db_mgr,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
                 if (in.op != Packet::DELETE)
@@ -155,6 +163,7 @@ public:
                     throw simdb::DBException("Cannot execute task - not a DELETE");
                 }
 
+                auto db_mgr = accessor.getDatabaseManager();
                 auto query = db_mgr->createQuery("Packets");
                 query->addConstraintForUInt64("Tick", simdb::Constraints::EQUAL, in.tick);
                 query->deleteResultSet();
@@ -172,6 +181,13 @@ public:
         // Create pipeline flusher -----------------------------------------------------------------
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(
             *db_mgr_, db_write, db_update, db_delete);
+
+        // Add tasks to DB thread
+        db_accessor->addTasks(
+            std::move(db_write),
+            std::move(db_update),
+            std::move(db_delete)
+        );
     }
 
     void sendPacket(uint64_t tick)
@@ -289,15 +305,17 @@ public:
         pipeline_mgr->createPipeline(NAME);
         auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
-        auto db_tasks = db_accessor->createAsyncWriter<StrictFIFO, Packet, void>(
+        using DatabaseTask = simdb::pipeline::DatabaseTask<Packet, void>;
+        auto db_tasks = simdb::pipeline::createTask<DatabaseTask>(
+            db_mgr_,
             [this](Packet&& in,
-                   simdb::pipeline::AppPreparedINSERTs* tables,
+                   simdb::pipeline::DatabaseAccessor& accessor,
                    bool /*force*/)
             {
                 simdb::pipeline::RunnableOutcome outcome = simdb::pipeline::RunnableOutcome::NO_OP;
                 if (in.op == Packet::INSERT)
                 {
-                    auto inserter = tables->getPreparedINSERT("Packets");
+                    auto inserter = accessor.getTableInserter<RelaxedFIFO>("Packets");
                     inserter->setColumnValue(0, in.tick);
                     inserter->setColumnValue(1, in.data_vals.x);
                     inserter->setColumnValue(2, in.data_vals.y);
@@ -358,6 +376,9 @@ public:
 
         // Create pipeline flusher -----------------------------------------------------------------
         pipeline_flusher_ = std::make_unique<simdb::pipeline::RunnableFlusher>(*db_mgr_, db_tasks);
+
+        // Add task to DB thread -------------------------------------------------------------------
+        db_accessor->addTask(std::move(db_tasks));
     }
 
     void sendPacket(uint64_t tick)

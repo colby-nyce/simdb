@@ -4,6 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/RunningMean.hpp"
 #include "simdb/utils/Compress.hpp"
@@ -137,13 +138,15 @@ public:
         );
 
         // Thread 4 task (database thread)
-        auto db_task = db_accessor->createAsyncWriter<App2, uint64_t, int>(
+        using WriteTask = simdb::pipeline::DatabaseTask<uint64_t, int>;
+        auto db_task = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [](uint64_t&& in,
                simdb::ConcurrentQueue<int>& out,
-               simdb::pipeline::AppPreparedINSERTs* tables,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("App2Data");
+                auto inserter = accessor.getTableInserter<App2>("App2Data");
                 inserter->setColumnValue(0, in);
                 auto record_id = inserter->createRecord();
                 out.push(record_id);
@@ -183,6 +186,9 @@ public:
         // Thread 4
         pipeline->createTaskGroup("PostDB_Thread1")
             ->addTask(std::move(stdout_task));
+
+        // DB thread
+        db_accessor->addTask(std::move(db_task));
     }
 
     void process(uint64_t val)
@@ -241,14 +247,16 @@ public:
 
         using DatabaseIn = ZlibOut;
         using DatabaseOut = std::pair<int, size_t>; // Database record ID, # compressed bytes
+        using WriteTask = simdb::pipeline::DatabaseTask<DatabaseIn, DatabaseOut>;
 
-        auto db_task = db_accessor->createAsyncWriter<App3, DatabaseIn, DatabaseOut>(
+        auto db_task = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [](DatabaseIn&& in,
                simdb::ConcurrentQueue<DatabaseOut>& out,
-               simdb::pipeline::AppPreparedINSERTs* tables,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("App3Data");
+                auto inserter = accessor.getTableInserter<App3>("App3Data");
                 inserter->setColumnValue(0, in);
                 auto record_id = inserter->createRecord();
                 DatabaseOut o = std::make_pair(record_id, in.size());
@@ -310,6 +318,9 @@ public:
         // Thread 3:
         pipeline->createTaskGroup("PostDB_Thread2")
             ->addTask(std::move(report_task));
+
+        // DB thread:
+        db_accessor->addTask(std::move(db_task));
     }
 
     void process(uint64_t val)
@@ -352,12 +363,14 @@ public:
         auto db_accessor = pipeline_mgr->getAsyncDatabaseAccessor();
 
         // Thread 1 task (database thread)
-        auto db_task = db_accessor->createAsyncWriter<App4, NewStringEntry, void>(
+        using WriteTask = simdb::pipeline::DatabaseTask<NewStringEntry, void>;
+        auto db_task = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [](NewStringEntry&& new_entry,
-               simdb::pipeline::AppPreparedINSERTs* tables,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("TinyStringIDs");
+                auto inserter = accessor.getTableInserter<App4>("TinyStringIDs");
                 inserter->setColumnValue(0, new_entry.first);
                 inserter->setColumnValue(1, new_entry.second);
                 inserter->createRecord();
@@ -368,6 +381,9 @@ public:
 
         // Get the pipeline input (head) ---------------------------------------------------
         pipeline_head_ = db_task->getTypedInputQueue<NewStringEntry>();
+
+        // Assign task to DB thread
+        db_accessor->addTask(std::move(db_task));
     }
 
     void process(uint64_t val)

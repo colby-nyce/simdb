@@ -4,6 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/sqlite/PreparedINSERT.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
@@ -177,12 +178,14 @@ public:
         // implicitly be done in batched BEGIN/COMMIT TRANSACTION blocks along with
         // other database work going on at the moment. The database writes are always
         // executed on the shared database thread.
-        auto sqlite = db_accessor->createAsyncWriter<CompressionPool, CompressedTestData, void>(
+        using WriteTask = simdb::pipeline::DatabaseTask<CompressedTestData, void>;
+        auto sqlite = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [](CompressedTestData&& in,
-               simdb::pipeline::AppPreparedINSERTs* tables,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("CompressedData");
+                auto inserter = accessor.getTableInserter<CompressionPool>("CompressedData");
                 inserter->setColumnValue(0, in.tick);
                 inserter->setColumnValue(1, in.compressed_bytes);
                 inserter->createRecord();
@@ -223,9 +226,8 @@ public:
         pipeline->createTaskGroup("ReorderBuffer")
             ->addTask(std::move(rob));
 
-        // Note that there is no API to put the AsyncDatabaseWriter on a
-        // thread (TaskGroup) of your choice since they all have to run
-        // on the shared database thread (SimDB rule for performance).
+        // Add the sqlite task to the DB thread.
+        db_accessor->addTask(std::move(sqlite));
     }
 
     void process(TestData&& data)

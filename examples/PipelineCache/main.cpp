@@ -4,6 +4,7 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/elements/Buffer.hpp"
 #include "simdb/pipeline/elements/Function.hpp"
+#include "simdb/pipeline/elements/DatabaseTask.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/utils/CircularBuffer.hpp"
 #include "simdb/utils/Compress.hpp"
@@ -356,13 +357,15 @@ public:
         );
 
         // This task receives EventsRangeAsBytes from the zlib task on one thread and writes them to disk on the DB thread
-        auto async_writer = db_accessor->createAsyncWriter<MultiStageCache, EventsRangeAsBytes, InstructionEventUIDRange>(
+        using WriteTask = simdb::pipeline::DatabaseTask<EventsRangeAsBytes, InstructionEventUIDRange>;
+        auto async_writer = simdb::pipeline::createTask<WriteTask>(
+            db_mgr_,
             [](EventsRangeAsBytes&& evts,
                simdb::ConcurrentQueue<InstructionEventUIDRange>& out,
-               simdb::pipeline::AppPreparedINSERTs* tables,
+               simdb::pipeline::DatabaseAccessor& accessor,
                bool /*force*/)
             {
-                auto inserter = tables->getPreparedINSERT("CompressedEvents");
+                auto inserter = accessor.getTableInserter<MultiStageCache>("CompressedEvents");
 
                 inserter->setColumnValue(0, evts.euid_range.first);
                 inserter->setColumnValue(1, evts.euid_range.second);
@@ -413,6 +416,8 @@ public:
             ->addTask(std::move(serialize_task))
             ->addTask(std::move(zlib_task))
             ->addTask(std::move(eviction_task));
+
+        db_accessor->addTask(std::move(async_writer));
 
         async_db_accessor_ = db_accessor;
     }
