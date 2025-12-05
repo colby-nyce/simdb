@@ -256,12 +256,6 @@ make -j simdb_regress
 
 ---
 
-## SimDB Architecture
-
-![alt text](image.png)
-
----
-
 ## Performance Benchmarks
 
 _Coming soon._
