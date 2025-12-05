@@ -1,6 +1,6 @@
 # SimDB — High-Performance Simulation Database
 
-**SimDB** is a high-performance module that unifies **concurrent data pipelines** with **SQLite** to power scalable simulation data engines, analysis tooling, and UI backends. It provides a clean, modular foundation suitable for both simple and complex features in large simulation codebases.
+SimDB is a high-performance module that unifies **concurrent data pipelines** with **SQLite** to power scalable simulation data engines, analysis tooling, and UI backends. It provides a clean, modular foundation suitable for both simple and complex features in large simulation codebases.
 
 SimDB is a header-only C++17 module whose only required dependency is sqlite3.
 
@@ -17,7 +17,7 @@ SimDB is designed for extremely high throughput suitable for concurrent / multi-
 - Minimizes transaction overhead
 - Eliminates database access contention
 - Shares worker threads across multiple running apps for efficient scaling
-- Uses move-only semantics for pipeline data
+- Supports move-only semantics for pipeline data, though you can copy data too
 
 ### A Clean Break for Complex Codebases
 Large simulation projects often suffer from tangled data paths, unbounded coupling, or legacy “write everything to files” architectures. SimDB replaces these with a clean, unified, highly optimized pipeline, helping teams reach performant solutions more quickly and with fewer moving parts.
@@ -63,7 +63,7 @@ SimDB pipelines are created by defining a series of stages (pipeline elements) w
 
 ### Pipeline Elements
 
-The following elements are provided by SimDB (other modules might call these "tasks", "filters", or "transforms"):
+The following elements are provided by SimDB (other modules might call these "tasks", "filters", "stages", or "transforms"):
 
 - Simple I/O function
 - Buffers, circular buffers
@@ -85,7 +85,7 @@ Here is a code snippet for a simple pipeline:
 namespace pipe = simdb::pipeline;
 
 // Task 1: Accept a timestamp and a vector of stats and compress them
-using ZlibIn = std::pair<uint64_t, std::vector<double>>;
+using ZlibIn  = std::pair<uint64_t, std::vector<double>>;
 using ZlibOut = std::pair<uint64_t, std::vector<char>>;
 
 auto compress = pipe::createTask<pipe::Function<ZlibIn, ZlibOut>>(
@@ -111,7 +111,7 @@ auto compress = pipe::createTask<pipe::Function<ZlibIn, ZlibOut>>(
 );
 
 // Task 2: Write compressed data to SQLite
-using DatabaseIn = ZlibOut;
+using DatabaseIn  = ZlibOut;
 using DatabaseOut = void;
 auto write = pipe::createTask<pipe::DatabaseTask<DatabaseIn, DatabaseOut>>(
     db_mgr_, // - - - - - - - - - - SimDB apps all have the database manager
@@ -186,7 +186,11 @@ See test/sqlite/Schema/Schema.cpp
 
 ```
 simdb::DatabaseManager db_mgr("stats.db");
+
+// You can call this method more than once if additional tables are needed later.
 db_mgr.appendSchema(schema);
+
+// SQLite connection is now open.
 ```
 
 ### Record INSERT
@@ -250,20 +254,14 @@ cmake ..
 make -j simdb_regress
 ```
 
-## Out-of-the-Box CPU Pipeline Viewer
-
-_Coming soon._
-
 ---
 
 ## SimDB Architecture
 
-_Coming soon._
+![alt text](image.png)
 
 ---
 
 ## Performance Benchmarks
 
 _Coming soon._
-
----
