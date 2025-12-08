@@ -28,12 +28,8 @@ public:
     template <typename AppT>
     static void registerApp()
     {
-        auto it = app_factories_.find(AppT::NAME);
-        if (it != app_factories_.end())
-        {
-            throw DBException("App already registered: ") << AppT::NAME;
-        }
-        app_factories_[AppT::NAME] = std::make_shared<AppFactory<AppT>>();
+        app_factory_instantiators_.emplace_back(
+            std::make_unique<AppFactoryInstantiatorT<AppT>>());
     }
 
     /// Access an app factory.
@@ -64,7 +60,17 @@ public:
         : db_mgr_(db_mgr)
         , msg_log_(msg_log)
         , err_log_(err_log)
-    {}
+    {
+        for (const auto& instantiator : app_factory_instantiators_)
+        {
+            std::string app_name = instantiator->getAppName();
+            if (app_factories_.find(app_name) != app_factories_.end())
+            {
+                throw DBException("App already registered: ") << app_name;
+            }
+            app_factories_[app_name] = instantiator->createFactory();
+        }
+    }
 
     /// After parsing command line arguments or configuration files,
     /// enable an app by its name. This will allow the app to be instantiated
@@ -409,7 +415,32 @@ private:
     }
 
     /// Registered app factories.
-    static inline std::map<std::string, std::shared_ptr<AppFactoryBase>> app_factories_;
+    std::map<std::string, std::shared_ptr<AppFactoryBase>> app_factories_;
+
+    class AppFactoryInstantiator
+    {
+    public:
+        virtual ~AppFactoryInstantiator() = default;
+        virtual std::string getAppName() const = 0;
+        virtual std::shared_ptr<AppFactoryBase> createFactory() const = 0;
+    };
+
+    template <typename AppT>
+    class AppFactoryInstantiatorT : public AppFactoryInstantiator
+    {
+    public:
+        std::string getAppName() const override
+        {
+            return AppT::NAME;
+        }
+
+        std::shared_ptr<AppFactoryBase> createFactory() const override
+        {
+            return std::make_shared<AppFactory<AppT>>();
+        }
+    };
+
+    static inline std::vector<std::unique_ptr<AppFactoryInstantiator>> app_factory_instantiators_;
 
     /// Instantiated apps (implicitly enabled).
     /// Key is the App's NAME static member, or NAME-<instance>
