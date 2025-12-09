@@ -1,7 +1,0 @@
-find_package(Boost COMPONENTS serialization CONFIG)
-if(Boost_FOUND AND Boost_SERIALIZATION_FOUND)
-    simdb_test(PerItemPipelineSnooper main.cpp)
-    target_link_libraries(PerItemPipelineSnooper PRIVATE Boost::serialization)
-else()
-    message(STATUS "Boost serialization library not found - cannot run PerItemPipelineSnooper test.")
-endif()

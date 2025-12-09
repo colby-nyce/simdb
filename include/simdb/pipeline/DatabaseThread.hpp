@@ -34,18 +34,17 @@ public:
         return &db_accessor_;
     }
 
+    void addRunnable(Runnable* runnable)
+    {
+        PollingThread::addRunnable(runnable);
+        polling_runnables_.emplace_back(runnable);
+    }
+
 private:
     /// Overridden from AsyncDatabaseAccessHandler
     DatabaseManager* getDatabaseManager() const override final
     {
         return db_mgr_;
-    }
-
-    /// Overridden from AsyncDatabaseAccessHandler
-    void addRunnable(std::unique_ptr<Runnable> runnable) override final
-    {
-        PollingThread::addRunnable(runnable.get());
-        polling_runnables_.emplace_back(std::move(runnable));
     }
 
     /// Overridden from AsyncDatabaseAccessHandler
@@ -248,7 +247,7 @@ private:
 
     DatabaseManager* db_mgr_ = nullptr;
     AsyncDatabaseAccessor db_accessor_{this};
-    std::vector<std::unique_ptr<Runnable>> polling_runnables_;
+    std::vector<Runnable*> polling_runnables_;
     DormantThread dormant_thread_;
 };
 

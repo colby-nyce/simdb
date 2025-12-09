@@ -19,7 +19,6 @@ public:
         : db_mgr_(db_mgr)
         , pipeline_logger_(pipeline_log_file)
     {
-        polling_threads_.emplace_back(std::make_unique<DatabaseThread>(db_mgr));
     }
 
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor()
@@ -69,42 +68,17 @@ public:
     void openPipelines()
     {
         checkOpen_();
-
-        // The number of non-database processing threads we need is equal to
-        // the max number of TaskGroups across all our pipelines.
-        size_t num_proc_threads = 0;
-        for (auto& pipeline : pipelines_)
-        {
-            num_proc_threads = std::max(num_proc_threads, pipeline->getTaskGroups().size());
-        }
-
-        for (size_t i = 0; i < num_proc_threads; ++i)
-        {
-            polling_threads_.emplace_back(std::make_unique<PollingThread>());
-        }
-
-        // Move the DB thread from the front to the back
-        std::rotate(polling_threads_.begin(), polling_threads_.begin() + 1, polling_threads_.end());
-
-        for (auto& pipeline : pipelines_)
-        {
-            auto it = polling_threads_.begin();
-            for (auto group : pipeline->getTaskGroups())
-            {
-                if (it == polling_threads_.end() - 1)
-                {
-                    throw DBException("Internal logic error while connecting threads and runnables");
-                }
-
-                (*it)->addRunnable(group);
-                ++it;
-            }
-        }
-
         for (auto& thread : polling_threads_)
         {
             thread->open();
         }
+    }
+
+    /// Finalize the given pipeline, assigning its stages to the appropriate threads.
+    void finalize(Pipeline* pipeline)
+    {
+        checkOpen_();
+        pipeline->assignStageThreads(polling_threads_);
     }
 
     /// Use this API to temporarily disable all pipeline tasks.

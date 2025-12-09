@@ -3,6 +3,8 @@
 #pragma once
 
 #include "simdb/pipeline/TaskGroup.hpp"
+#include "simdb/pipeline/Stage.hpp"
+#include "simdb/pipeline/QueueRepo.hpp"
 
 namespace simdb {
     class DatabaseManager;
@@ -31,6 +33,64 @@ public:
     std::string getName() const
     {
         return pipeline_name_;
+    }
+
+    template <typename StageType, typename... Args>
+    void addStage(const std::string& name, Args&&... args)
+    {
+        if (state_ != State::ACCEPTING_STAGES)
+        {
+            throw DBException("Cannot add stage '" + name + "' to pipeline '" + pipeline_name_ + "'; not accepting stages.");
+        }
+
+        auto& stage = stages_[name];
+        if (stage)
+        {
+            throw DBException("Stage '" + name + "' already exists in pipeline '" + pipeline_name_ + "'.");
+        }
+        stage = std::make_unique<StageType>(name, queue_repo_, std::forward<Args>(args)...);
+    }
+
+    void noMoreStages()
+    {
+        if (state_ != State::ACCEPTING_STAGES)
+        {
+            throw DBException("Cannot finalize stages for pipeline '" + pipeline_name_ + "'; stage changes already finalized.");
+        }
+        state_ = State::ACCEPTING_BINDINGS;
+    }
+
+    void bind(const std::string& output_port_full_name, const std::string& input_port_full_name)
+    {
+        if (state_ != State::ACCEPTING_BINDINGS)
+        {
+            throw DBException("Cannot bind ports for pipeline '" + pipeline_name_ + "'; not accepting bindings.");
+        }
+        queue_repo_.bind(output_port_full_name, input_port_full_name);
+    }
+
+    void noMoreBindings()
+    {
+        if (state_ != State::ACCEPTING_BINDINGS)
+        {
+            throw DBException("Cannot finalize bindings for pipeline '" + pipeline_name_ + "'; binding changes already finalized.");
+        }
+        queue_repo_.finalize();
+        state_ = State::FINALIZED;
+    }
+
+    template <typename T>
+    simdb::ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
+    {
+        return queue_repo_.getInPortQueue<T>(port_full_name);
+    }
+
+    void assignStageThreads(std::vector<std::unique_ptr<PollingThread>>& threads)
+    {
+        for (auto& [stage_name, stage] : stages_)
+        {
+            stage->assignThread(db_mgr_, threads);
+        }
     }
 
     TaskGroup* createTaskGroup(const std::string& description = "")
@@ -64,6 +124,16 @@ private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
     std::vector<std::unique_ptr<TaskGroup>> task_groups_;
+    std::unordered_map<std::string, std::unique_ptr<Stage>> stages_;
+    QueueRepo queue_repo_;
+
+    enum class State {
+        ACCEPTING_STAGES,
+        ACCEPTING_BINDINGS,
+        FINALIZED
+    };
+
+    State state_ = State::ACCEPTING_STAGES;
 };
 
 } // namespace simdb::pipeline

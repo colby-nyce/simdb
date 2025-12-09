@@ -1,7 +1,8 @@
 project(simdb_examples)
 
-add_subdirectory(AsyncDatabaseAccess)
-add_subdirectory(CancelledTask)
-add_subdirectory(CompressionPool)
-add_subdirectory(PipelineCache)
-add_subdirectory(PipelineSnooper)
+add_subdirectory(ConcurrentApps)
+add_subdirectory(MIMO)
+add_subdirectory(MultiLevelCache)
+add_subdirectory(PeekPipeline)
+add_subdirectory(SimplePipeline)
+add_subdirectory(StagePool)
