@@ -7,10 +7,13 @@
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
 
+/// This example demonstrates a simple two-stage pipeline that compresses
+/// data on one thread and writes it to a SQLite database on another thread.
+
 class SimplePipeline : public simdb::App
 {
 public:
-    static constexpr auto NAME = "pipeline-v2";
+    static constexpr auto NAME = "simple-pipeline";
 
     SimplePipeline(simdb::DatabaseManager* db_mgr)
         : db_mgr_(db_mgr)
