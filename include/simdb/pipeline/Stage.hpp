@@ -36,8 +36,27 @@ protected:
 private:
     virtual void assignThread(DatabaseManager*, std::vector<std::unique_ptr<PollingThread>>& threads)
     {
-        threads.emplace_back(std::make_unique<PollingThread>());
-        threads.back()->addRunnable(this);
+        // Create a new thread if none exist or if we don't share threads
+        if (!shareThreads_() || threads.empty())
+        {
+            threads.emplace_back(std::make_unique<PollingThread>());
+            threads.back()->addRunnable(this);
+            return;
+        }
+
+        // Add this stage to the thread that has the fewest runnables
+        auto min_thread_it = threads.begin();;
+        size_t min_runnables = SIZE_MAX;
+        for (auto it = threads.begin(); it != threads.end(); ++it)
+        {
+            size_t num_runnables = (*it)->getNumRunnables();
+            if (num_runnables < min_runnables)
+            {
+                min_runnables = num_runnables;
+                min_thread_it = it;;
+            }
+        }
+        (*min_thread_it)->addRunnable(this);
     }
 
     std::string getDescription_() const override {
@@ -76,6 +95,11 @@ private:
 
     virtual RunnableOutcome run_(bool force) = 0;
 
+    virtual bool shareThreads_() const
+    {
+        return true;
+    }
+
     std::string name_;
     QueueRepo& queue_repo_;
     friend class Pipeline;
@@ -111,6 +135,9 @@ protected:
 private:
     void assignThread(DatabaseManager* db_mgr, std::vector<std::unique_ptr<PollingThread>>& threads) override final
     {
+        // Prepare the DatabaseAccessor
+        db_accessor_ = std::make_unique<DatabaseAccessor>(db_mgr);
+
         // Look for dedicated database thread
         for (auto& thread : threads)
         {
@@ -124,9 +151,12 @@ private:
         // No dedicated database thread found, create a new one
         threads.emplace_back(std::make_unique<DatabaseThread>(db_mgr));
         threads.back()->addRunnable(this);
+    }
 
-        // Prepare the DatabaseAccessor
-        db_accessor_ = std::make_unique<DatabaseAccessor>(db_mgr);
+    bool shareThreads_() const override final
+    {
+        // Database stages never share threads
+        return false;
     }
 
     std::unique_ptr<DatabaseAccessor> db_accessor_;

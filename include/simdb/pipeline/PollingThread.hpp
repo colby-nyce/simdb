@@ -46,6 +46,11 @@ public:
         return runnables_;
     }
 
+    size_t getNumRunnables() const
+    {
+        return runnables_.size();
+    }
+
     virtual bool flushRunnables()
     {
         bool did_work = false;
