@@ -76,8 +76,8 @@ public:
         {
             throw DBException("Cannot finalize bindings for pipeline '" + pipeline_name_ + "'; binding changes already finalized.");
         }
-        queue_repo_.finalize();
-        state_ = State::FINALIZED;
+        queue_repo_.finalizeBindings();
+        state_ = State::BINDINGS_COMPLETE;
     }
 
     template <typename T>
@@ -88,10 +88,19 @@ public:
 
     void assignStageThreads(std::vector<std::unique_ptr<PollingThread>>& threads)
     {
+        if (state_ != State::BINDINGS_COMPLETE)
+        {
+            throw DBException("Cannot assign stage threads for pipeline '" + pipeline_name_ + "; noMoreBindings() never called");
+        }
+
+        queue_repo_.validateQueues();
+
         for (auto& [stage_name, stage] : stages_)
         {
             stage->assignThread(db_mgr_, threads);
         }
+
+        state_ = State::FINALIZED;
     }
 
     std::unique_ptr<Flusher> createFlusher(const std::vector<std::string>& stage_names)
@@ -158,6 +167,7 @@ private:
     enum class State {
         ACCEPTING_STAGES,
         ACCEPTING_BINDINGS,
+        BINDINGS_COMPLETE,
         FINALIZED
     };
 

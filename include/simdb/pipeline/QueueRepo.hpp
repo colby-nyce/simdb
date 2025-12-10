@@ -152,7 +152,7 @@ public:
         port_bindings_[output_port_full_name] = input_port_full_name;
     }
 
-    void finalize()
+    void finalizeBindings()
     {
         for (const auto& [out_port, in_port] : port_bindings_)
         {
@@ -178,6 +178,7 @@ public:
             {
                 auto queue = placeholder->createQueue();
                 queues_.emplace_back(std::move(queue));
+                unbound_input_queues_.insert(key);
             }
         }
 
@@ -187,10 +188,40 @@ public:
             {
                 auto queue = placeholder->createQueue();
                 queues_.emplace_back(std::move(queue));
+                unbound_output_queues_.insert(key);
             }
         }
 
         finalized_ = true;
+    }
+
+    void validateQueues()
+    {
+        std::ostringstream oss;
+
+        if (!unbound_input_queues_.empty())
+        {
+            oss << "The following input queues are not attached to anything:\n";
+            for (const auto& name : unbound_input_queues_)
+            {
+                oss << "    " << name << "\n";
+            }
+        }
+
+        if (!unbound_output_queues_.empty())
+        {
+            oss << "The following output queues are not attached to anything:\n";
+            for (const auto& name : unbound_output_queues_)
+            {
+                oss << "    " << name << "\n";
+            }
+        }
+
+        auto err = oss.str();
+        if (!err.empty())
+        {
+            throw DBException(err);
+        }
     }
 
     template <typename T>
@@ -206,6 +237,7 @@ public:
         {
             throw DBException("Incompatible queue types for input port '" + port_full_name + "'");
         }
+        unbound_input_queues_.erase(port_full_name);
         return typed_placeholder->getQueue();
     }
 
@@ -222,6 +254,7 @@ public:
         {
             throw DBException("Incompatible queue types for output port '" + port_full_name + "'");
         }
+        unbound_output_queues_.erase(port_full_name);
         return typed_placeholder->getQueue();
     }
 
@@ -229,6 +262,8 @@ private:
     std::unordered_map<std::string, std::unique_ptr<QueuePlaceholder>> input_placeholders_;
     std::unordered_map<std::string, std::unique_ptr<QueuePlaceholder>> output_placeholders_;
     std::unordered_map<std::string, std::string> port_bindings_;
+    std::set<std::string> unbound_input_queues_;
+    std::set<std::string> unbound_output_queues_;
     std::vector<std::unique_ptr<QueueBase>> queues_;
     bool finalized_ = false;
 };
