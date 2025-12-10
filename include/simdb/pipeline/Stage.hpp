@@ -118,14 +118,23 @@ private:
     std::string name_;
     QueueRepo& queue_repo_;
     friend class Pipeline;
+    friend class Flusher;
+};
+
+class DatabaseStageBase : public Stage
+{
+public:
+    DatabaseStageBase(const std::string& name, QueueRepo& queue_repo)
+        : Stage(name, queue_repo)
+    {}
 };
 
 template <typename AppT>
-class DatabaseStage : public Stage
+class DatabaseStage : public DatabaseStageBase
 {
 public:
     DatabaseStage(const std::string& name, QueueRepo& queue_repo)
-        : Stage(name, queue_repo)
+        : DatabaseStageBase(name, queue_repo)
     {}
 
 protected:

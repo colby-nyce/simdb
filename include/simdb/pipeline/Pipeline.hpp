@@ -5,6 +5,7 @@
 #include "simdb/pipeline/TaskGroup.hpp"
 #include "simdb/pipeline/Stage.hpp"
 #include "simdb/pipeline/QueueRepo.hpp"
+#include "simdb/pipeline/Flusher.hpp"
 
 namespace simdb {
     class DatabaseManager;
@@ -91,6 +92,33 @@ public:
         {
             stage->assignThread(db_mgr_, threads);
         }
+    }
+
+    std::unique_ptr<Flusher> createFlusher(const std::vector<std::string>& stage_names)
+    {
+        std::vector<Stage*> stages;
+        for (const auto & name : stage_names)
+        {
+            auto it = stages_.find(name);
+            if (it == stages_.end())
+            {
+                throw DBException("Stage does not exist: ") << name;
+            }
+            stages.emplace_back(it->second.get());
+        }
+
+        bool has_db_stage = false;
+        for (auto stage : stages)
+        {
+            if (dynamic_cast<DatabaseStageBase*>(stage))
+            {
+                has_db_stage = true;
+            }
+        }
+
+        return has_db_stage ?
+            std::make_unique<FlusherWithTransaction>(stages, db_mgr_) :
+            std::make_unique<Flusher>(stages);
     }
 
     TaskGroup* createTaskGroup(const std::string& description = "")
