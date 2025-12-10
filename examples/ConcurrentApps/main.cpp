@@ -255,6 +255,10 @@ int main()
     simdb::DatabaseManager db_mgr("test.db", true);
     simdb::AppManager app_mgr(&db_mgr);
 
+    // Disable pipeline messages; it clutters up stdout with so many running apps
+    app_mgr.disableMessageLog();
+    app_mgr.disableErrorLog();
+
     // Create 4 instances of the SimplePipeline app
     app_mgr.enableApp(SimplePipeline::NAME, 4);
 

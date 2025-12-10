@@ -72,6 +72,18 @@ public:
         }
     }
 
+    /// Disable all messages to stdout.
+    void disableMessageLog()
+    {
+        msg_log_.disable();
+    }
+
+    /// Disable all messages to stderr.
+    void disableErrorLog()
+    {
+        err_log_.disable();
+    }
+
     /// After parsing command line arguments or configuration files,
     /// enable an app by its name. This will allow the app to be instantiated
     /// and run during the simulation lifecycle.
@@ -467,11 +479,19 @@ private:
             , block_name_(block_name)
             , msg_out_(msg_out)
         {
-            *msg_out_ << "SimDB: Entering " << block_name << "\n";
+            if (msg_out_)
+            {
+                *msg_out_ << "SimDB: Entering " << block_name << "\n";
+            }
         }
 
         ~ScopedTimer()
         {
+            if (!msg_out_)
+            {
+                return;
+            }
+
             auto end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> dur = end - start_;
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(dur).count();
@@ -510,7 +530,7 @@ private:
         template <typename T>
         Logger& operator<<(const T& msg)
         {
-            if (out_)
+            if (out_ && enabled_)
             {
                 *out_ << msg;
                 out_->flush();
@@ -520,7 +540,7 @@ private:
 
         Logger& operator<<(const char* msg)
         {
-            if (out_)
+            if (out_ && enabled_)
             {
                 *out_ << msg;
                 out_->flush();
@@ -530,11 +550,22 @@ private:
 
         operator std::ostream*()
         {
-            return out_;
+            return enabled_ ? out_ : nullptr;
+        }
+
+        void disable()
+        {
+            enabled_ = false;
+        }
+
+        void enable()
+        {
+            enabled_ = true;
         }
 
     private:
         std::ostream* out_ = nullptr;
+        bool enabled_ = true;
     };
 
     Logger msg_log_;
