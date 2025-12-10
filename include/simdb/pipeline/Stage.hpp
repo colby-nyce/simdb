@@ -37,7 +37,7 @@ private:
     virtual void assignThread(DatabaseManager*, std::vector<std::unique_ptr<PollingThread>>& threads)
     {
         // Create a new thread if none exist or if we don't share threads
-        if (!shareThreads_() || threads.empty())
+        if (threads.empty() || !shareThreads_())
         {
             threads.emplace_back(std::make_unique<PollingThread>());
             threads.back()->addRunnable(this);
@@ -45,18 +45,33 @@ private:
         }
 
         // Add this stage to the thread that has the fewest runnables
-        auto min_thread_it = threads.begin();;
+        PollingThread* avail_thread = nullptr;
         size_t min_runnables = SIZE_MAX;
-        for (auto it = threads.begin(); it != threads.end(); ++it)
+        for (auto& thread : threads)
         {
-            size_t num_runnables = (*it)->getNumRunnables();
+            if (dynamic_cast<DatabaseThread*>(thread.get()))
+            {
+                // Cannot add to the DB thread
+                continue;
+            }
+
+            auto num_runnables = thread->getNumRunnables();
             if (num_runnables < min_runnables)
             {
                 min_runnables = num_runnables;
-                min_thread_it = it;;
+                avail_thread = thread.get();
             }
         }
-        (*min_thread_it)->addRunnable(this);
+
+        if (!avail_thread)
+        {
+            // The only instantiated thread is the DatabaseThread so far.
+            // Create a non-DB thread.
+            threads.emplace_back(std::make_unique<PollingThread>());
+            avail_thread = threads.back().get();
+        }
+
+        avail_thread->addRunnable(this);
     }
 
     std::string getDescription_() const override {

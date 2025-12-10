@@ -157,5 +157,6 @@ int main(int argc, char** argv)
         row_idx++;
     }
 
-    return 0;
+    REPORT_ERROR;
+    return ERROR_CODE;
 }

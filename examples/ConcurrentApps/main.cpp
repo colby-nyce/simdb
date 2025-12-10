@@ -227,5 +227,6 @@ int main()
         }
     }
 
-    return 0;
+    REPORT_ERROR;
+    return ERROR_CODE;
 }
