@@ -22,9 +22,6 @@ class AsyncDatabaseAccessHandler
 public:
     virtual ~AsyncDatabaseAccessHandler() = default;
 
-    /// Get the SimDB instance tied to the DatabaseThread.
-    virtual DatabaseManager* getDatabaseManager() const = 0;
-
     /// Put a task on the DB thread for evaluation, and BLOCK
     /// until it is called. The DB thread will complete its
     /// current transaction (INSERTs) immediately and evaluate

@@ -95,9 +95,22 @@ public:
 
         queue_repo_.validateQueues();
 
+        AsyncDatabaseAccessor* db_accessor = nullptr;
         for (auto& [stage_name, stage] : stages_)
         {
-            stage->assignThread(db_mgr_, threads);
+            stage->assignThread(db_mgr_, threads, db_accessor);
+        }
+
+        if (db_accessor)
+        {
+            for (auto& [stage_name, stage] : stages_)
+            {
+                // Only give the accessor to non-DB stages
+                if (!dynamic_cast<DatabaseStageBase*>(stage.get()))
+                {
+                    stage->setAsyncDatabaseAccessor_(db_accessor);
+                }
+            }
         }
 
         state_ = State::FINALIZED;

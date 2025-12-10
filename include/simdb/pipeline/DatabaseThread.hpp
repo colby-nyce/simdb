@@ -36,12 +36,6 @@ public:
 
 private:
     /// Overridden from AsyncDatabaseAccessHandler
-    DatabaseManager* getDatabaseManager() const override final
-    {
-        return db_mgr_;
-    }
-
-    /// Overridden from AsyncDatabaseAccessHandler
     void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0) override final
     {
         dormant_thread_.eval(std::move(task), timeout_seconds);
