@@ -6,18 +6,18 @@
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "SimDBTester.hpp"
 
-/// This test demonstrates a pipeline with a multi-input, multi-output stage (MIMO).
+/// This test demonstrates a pipeline with a multi-input, multi-output stage (MultiPortStages).
 
-class MIMO : public simdb::App
+class MultiPortStages : public simdb::App
 {
 public:
     static constexpr auto NAME = "mimo-pipeline-app";
 
-    MIMO(simdb::DatabaseManager* db_mgr)
+    MultiPortStages(simdb::DatabaseManager* db_mgr)
         : db_mgr_(db_mgr)
     {}
 
-    ~MIMO() noexcept = default;
+    ~MultiPortStages() noexcept = default;
 
     static void defineSchema(simdb::Schema& schema)
     {
@@ -202,11 +202,11 @@ private:
     /// Receive XY pairs and write the sum and product to the database. Also receive
     /// the number of unaligned X/Y values at the end of simulation and write that
     /// value to the database too.
-    class DatabaseStage : public simdb::pipeline::DatabaseStage<MIMO>
+    class DatabaseStage : public simdb::pipeline::DatabaseStage<MultiPortStages>
     {
     public:
         DatabaseStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
-            : simdb::pipeline::DatabaseStage<MIMO>(name, queue_repo)
+            : simdb::pipeline::DatabaseStage<MultiPortStages>(name, queue_repo)
         {
             addInPort_<std::pair<double, double>>("xy_input", xy_input_queue_);
             addInPort_<size_t>("num_unaligned_xy", num_unaligned_input_queue_);
@@ -256,7 +256,7 @@ private:
     simdb::ConcurrentQueue<double>* y_input_queue_ = nullptr;
 };
 
-REGISTER_SIMDB_APPLICATION(MIMO);
+REGISTER_SIMDB_APPLICATION(MultiPortStages);
 
 TEST_INIT;
 
@@ -266,7 +266,7 @@ int main()
 
     simdb::DatabaseManager db_mgr("test.db", true);
     simdb::AppManager app_mgr(&db_mgr);
-    app_mgr.enableApp(MIMO::NAME);
+    app_mgr.enableApp(MultiPortStages::NAME);
 
     // Setup...
     app_mgr.createEnabledApps();
@@ -274,7 +274,7 @@ int main()
     app_mgr.openPipelines();
 
     // Simulate...
-    auto app = app_mgr.getApp<MIMO>();
+    auto app = app_mgr.getApp<MultiPortStages>();
     std::vector<double> sent_x_vals;
     std::vector<double> sent_y_vals;
     for (int i = 0; i < 1000; ++i)
