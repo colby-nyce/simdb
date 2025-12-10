@@ -128,7 +128,7 @@ int main(int argc, char** argv)
 
     // Simulate...
     auto app = app_mgr.getApp<SimplePipeline>();
-    constexpr int NUM_VECS = 100;
+    constexpr int NUM_VECS = 1000;
     constexpr int VEC_SIZE = 1000;
     std::vector<std::vector<double>> test_data;
 

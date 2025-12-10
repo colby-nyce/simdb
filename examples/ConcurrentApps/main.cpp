@@ -8,9 +8,8 @@
 #include "SimDBTester.hpp"
 
 /// This example demonstrates the use of concurrently-running SimDB apps.
-/// We will create two instances of the same app writing to the same database
-/// from the same thread, and another app writing to a second database on its
-/// own DB thread.
+/// We will create four instances of the SimplePipeline app and one instance
+/// of the RecordReporter app. All five apps use the same database.
 
 class SimplePipeline : public simdb::App
 {
@@ -156,7 +155,86 @@ namespace simdb
     };
 }
 
+/// This app runs DB queries and prints to stdout notifications
+/// about what the SimplePipeline apps have written to the database.
+class RecordReporter : public simdb::App
+{
+public:
+    static constexpr auto NAME = "record-reporter";
+
+    RecordReporter(simdb::DatabaseManager*)
+    {}
+
+    ~RecordReporter() noexcept = default;
+
+    static void defineSchema(simdb::Schema&)
+    {
+        // No schema for this app
+    }
+
+    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
+    {
+        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        pipeline->addStage<ReporterStage>("reporter");
+        pipeline->noMoreStages();
+        pipeline->noMoreBindings();
+        pipeline_mgr->finalize(pipeline);
+    }
+
+private:
+    class ReporterStage : public simdb::pipeline::DatabaseStage<RecordReporter>
+    {
+    public:
+        ReporterStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
+            : DatabaseStage<RecordReporter>(name, queue_repo)
+        {
+            // No inputs, no outputs
+        }
+
+    private:
+        simdb::pipeline::RunnableOutcome run_(bool) override
+        {
+            auto db_mgr = getDatabaseManager_();
+            auto query = db_mgr->createQuery("CompressedData");
+
+            // SELECT AppInstance, COUNT(*) FROM CompressedData GROUP BY AppInstance ORDER BY AppInstance ASC
+            int app_instance;
+            query->select("AppInstance", app_instance);
+
+            int record_count;
+            query->select("COUNT(*)", record_count);
+
+            query->groupBy("AppInstance");
+            query->orderBy("AppInstance", simdb::QueryOrder::ASC);
+
+            bool print_header = true;
+            auto results = query->getResultSet();
+            while (results.getNextRecord())
+            {
+                if (print_header)
+                {
+                    std::cout << "SimplePipeline results written to the database so far:\n";
+                    print_header = false;
+                }
+                std::cout << "\tInstance " << app_instance << " has written " << record_count << " records\n";
+            }
+
+            // Even though we technically "did something" here, don't keep the
+            // DB thread polling for more work. The return value from the DB
+            // stage in the SimplePipeline will control whether the DB thread
+            // briefly goes to sleep or not (NO_OP / DID_WORK).
+            //
+            // More importantly than runtime performance, if we always returned
+            // DID_WORK, then the DB thread would not complete the BEGIN/COMMIT
+            // TRANSACTION block that we are implicitly inside right now, and
+            // the DB commits will just continue to pile up in the SQLite cache.
+            return simdb::pipeline::RunnableOutcome::NO_OP;
+        }
+    };
+};
+
 REGISTER_SIMDB_APPLICATION(SimplePipeline);
+REGISTER_SIMDB_APPLICATION(RecordReporter);
 
 TEST_INIT;
 
@@ -165,7 +243,7 @@ int main()
     simdb::DatabaseManager db_mgr("test.db", true);
     simdb::AppManager app_mgr(&db_mgr);
 
-    // Create 4 instances
+    // Create 4 instances of the SimplePipeline app
     app_mgr.enableApp(SimplePipeline::NAME, 4);
 
     auto factory = app_mgr.getAppFactory<SimplePipeline>();
@@ -173,6 +251,11 @@ int main()
     factory->shareThreads(2, true);
     factory->shareThreads(3, false);
     factory->shareThreads(4, false);
+
+    // Create 1 instance of the RecordReporter app
+    app_mgr.enableApp(RecordReporter::NAME);
+
+    // Create all 5 apps
     app_mgr.createEnabledApps();
 
     // Should not be able to get app with unspecified instance
@@ -189,7 +272,7 @@ int main()
 
     // Simulate...
     std::map<size_t, std::vector<std::vector<double>>> test_data;
-    for (size_t i = 0; i < 1000; ++i)
+    for (size_t i = 0; i < 10000; ++i)
     {
         auto data = std::vector<double>(1000);
         for (auto& val : data)
