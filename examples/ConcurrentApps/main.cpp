@@ -187,6 +187,7 @@ private:
     public:
         ReporterStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
             : DatabaseStage<RecordReporter>(name, queue_repo)
+            , tic_(std::chrono::steady_clock::now())
         {
             // No inputs, no outputs
         }
@@ -194,6 +195,15 @@ private:
     private:
         simdb::pipeline::RunnableOutcome run_(bool) override
         {
+            // Only report twice a second
+            auto toc = std::chrono::steady_clock::now();
+            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic_);
+            if (dur.count() < 500)
+            {
+                return simdb::pipeline::RunnableOutcome::NO_OP;
+            }
+            tic_ = std::chrono::steady_clock::now();
+
             auto db_mgr = getDatabaseManager_();
             auto query = db_mgr->createQuery("CompressedData");
 
@@ -230,6 +240,8 @@ private:
             // the DB commits will just continue to pile up in the SQLite cache.
             return simdb::pipeline::RunnableOutcome::NO_OP;
         }
+
+        std::chrono::time_point<std::chrono::steady_clock> tic_;
     };
 };
 
@@ -272,7 +284,7 @@ int main()
 
     // Simulate...
     std::map<size_t, std::vector<std::vector<double>>> test_data;
-    for (size_t i = 0; i < 10000; ++i)
+    for (size_t i = 0; i < 50000; ++i)
     {
         auto data = std::vector<double>(1000);
         for (auto& val : data)

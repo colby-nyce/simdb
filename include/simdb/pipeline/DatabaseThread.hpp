@@ -34,12 +34,6 @@ public:
         return &db_accessor_;
     }
 
-    void addRunnable(Runnable* runnable)
-    {
-        PollingThread::addRunnable(runnable);
-        polling_runnables_.emplace_back(runnable);
-    }
-
 private:
     /// Overridden from AsyncDatabaseAccessHandler
     DatabaseManager* getDatabaseManager() const override final
@@ -67,7 +61,7 @@ private:
                 do
                 {
                     continue_while = false;
-                    for (auto& runnable : polling_runnables_)
+                    for (auto runnable : getRunnables())
                     {
                         if (!runnable->enabled())
                         {
