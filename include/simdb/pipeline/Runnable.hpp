@@ -17,16 +17,19 @@ class PipelineManager;
 class PollingThread;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
-enum class RunnableOutcome
+enum RunnableOutcome
 {
     // Return if the runnable (task) pushed any data to its output queue,
     // or otherwise should leave the pipeline tasks greedily executing
     // as normal.
-    DID_WORK,
+    PROCEED,
 
     // Return if the runnable had no data to consume or otherwise should
-    // tell the pipeline thread to go back to sleep for a bit.
-    NO_OP
+    // tell the pipeline thread to go back to sleep for a bit. Note that
+    // ALL runnables on a PollingThread need to return SLEEP in order for
+    // the thread to go back to sleep. If any runnable returns PROCEED,
+    // the thread will continue processing as normal without sleeping.
+    SLEEP
 };
 
 /// Base class for all things that can be run on a pipeline thread.
@@ -67,9 +70,8 @@ public:
         return enabled_;
     }
 
-    /// Disable/re-enable this runnable. Subclasses that do not
-    /// allow this control override and throw.
-    virtual void enable(bool enable = true)
+    /// Disable/re-enable this runnable.
+    void enable(bool enable = true)
     {
         enabled_ = enable;
     }

@@ -78,10 +78,10 @@ private:
                 std::vector<char> compressed_data;
                 simdb::compressData(data, compressed_data);
                 output_queue_->emplace(std::move(compressed_data));
-                return simdb::pipeline::RunnableOutcome::DID_WORK;
+                return simdb::pipeline::PROCEED;
             }
 
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         const bool share_zlib_threads_;
@@ -109,10 +109,10 @@ private:
                 inserter->setColumnValue(0, (int)instance_num_);
                 inserter->setColumnValue(1, data);
                 inserter->createRecord();
-                return simdb::pipeline::RunnableOutcome::DID_WORK;
+                return simdb::pipeline::PROCEED;
             }
 
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         size_t instance_num_ = 0;
@@ -200,7 +200,7 @@ private:
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic_);
             if (dur.count() < 500)
             {
-                return simdb::pipeline::RunnableOutcome::NO_OP;
+                return simdb::pipeline::SLEEP;
             }
             tic_ = std::chrono::steady_clock::now();
 
@@ -232,13 +232,13 @@ private:
             // Even though we technically "did something" here, don't keep the
             // DB thread polling for more work. The return value from the DB
             // stage in the SimplePipeline will control whether the DB thread
-            // briefly goes to sleep or not (NO_OP / DID_WORK).
+            // briefly goes to sleep or not (SLEEP / PROCEED).
             //
             // More importantly than runtime performance, if we always returned
-            // DID_WORK, then the DB thread would not complete the BEGIN/COMMIT
+            // PROCEED, then the DB thread would not complete the BEGIN/COMMIT
             // TRANSACTION block that we are implicitly inside right now, and
             // the DB commits will just continue to pile up in the SQLite cache.
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         std::chrono::time_point<std::chrono::steady_clock> tic_;

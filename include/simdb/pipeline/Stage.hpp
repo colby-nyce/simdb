@@ -95,15 +95,15 @@ private:
 
     RunnableOutcome processAll(bool force) override final
     {
-        RunnableOutcome outcome = RunnableOutcome::NO_OP;
+        RunnableOutcome outcome = RunnableOutcome::SLEEP;
         while (true)
         {
             auto result = processOne(force);
-            if (result == RunnableOutcome::DID_WORK)
+            if (result == RunnableOutcome::PROCEED)
             {
-                outcome = RunnableOutcome::DID_WORK;
+                outcome = RunnableOutcome::PROCEED;
             }
-            else if (result == RunnableOutcome::NO_OP)
+            else if (result == RunnableOutcome::SLEEP)
             {
                 break;
             }

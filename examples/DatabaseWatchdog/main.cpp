@@ -119,10 +119,10 @@ private:
                 std::vector<char> compressed_data;
                 simdb::compressData(data, compressed_data);
                 output_queue_->emplace(std::move(compressed_data));
-                return simdb::pipeline::RunnableOutcome::DID_WORK;
+                return simdb::pipeline::PROCEED;
             }
 
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         simdb::ConcurrentQueue<std::vector<double>>* input_queue_ = nullptr;
@@ -152,10 +152,10 @@ private:
                 auto inserter = getTableInserter_("CompressedData");
                 inserter->setColumnValue(0, data);
                 inserter->createRecord();
-                return simdb::pipeline::RunnableOutcome::DID_WORK;
+                return simdb::pipeline::PROCEED;
             }
 
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         simdb::ConcurrentQueue<std::vector<char>>* input_queue_ = nullptr;
@@ -255,7 +255,7 @@ private:
         {
             if (finished_)
             {
-                return simdb::pipeline::RunnableOutcome::NO_OP;
+                return simdb::pipeline::SLEEP;
             }
 
             // Query the DB every 3 seconds
@@ -263,7 +263,7 @@ private:
             auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic_);
             if (dur.count() < 3000)
             {
-                return simdb::pipeline::RunnableOutcome::NO_OP;
+                return simdb::pipeline::SLEEP;
             }
             tic_ = std::chrono::steady_clock::now();
 
@@ -287,8 +287,8 @@ private:
             // Write total number of records created thus far
             std::cout << "Created " << num_records << " so far...\n";
 
-            // Return NO_OP so this thread goes back to sleep
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            // Return SLEEP so this thread goes back to sleep
+            return simdb::pipeline::SLEEP;
         }
 
         DatabaseWatchdog* app_ = nullptr;

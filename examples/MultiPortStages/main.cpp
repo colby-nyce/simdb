@@ -117,15 +117,15 @@ private:
     private:
         simdb::pipeline::RunnableOutcome run_(bool force) override
         {
-            auto outcome = simdb::pipeline::RunnableOutcome::NO_OP;
+            auto outcome = simdb::pipeline::SLEEP;
             while (sendXYPair_())
             {
-                outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
+                outcome = simdb::pipeline::PROCEED;
             }
 
             if (force && flushUnalignedXYPairs_())
             {
-                outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
+                outcome = simdb::pipeline::PROCEED;
             }
             return outcome;
         }
@@ -215,7 +215,7 @@ private:
     private:
         simdb::pipeline::RunnableOutcome run_(bool) override
         {
-            auto outcome = simdb::pipeline::RunnableOutcome::NO_OP;
+            auto outcome = simdb::pipeline::SLEEP;
 
             auto calc_inserter = getTableInserter_("CalcValues");
             auto meta_inserter = getTableInserter_("Metadata");
@@ -233,7 +233,7 @@ private:
                 calc_inserter->setColumnValue(1, prod);
                 calc_inserter->createRecord();
 
-                outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
+                outcome = simdb::pipeline::PROCEED;
             }
 
             size_t num_unaligned;
@@ -241,7 +241,7 @@ private:
             {
                 meta_inserter->setColumnValue(0, (int)num_unaligned);
                 meta_inserter->createRecord();
-                outcome = simdb::pipeline::RunnableOutcome::DID_WORK;
+                outcome = simdb::pipeline::PROCEED;
             }
 
             return outcome;

@@ -61,7 +61,7 @@ public:
                 continue;
             }
 
-            if (runnable->processAll(true) == RunnableOutcome::DID_WORK)
+            if (runnable->processAll(true) == RunnableOutcome::PROCEED)
             {
                 did_work = true;
             }
@@ -243,7 +243,7 @@ private:
                     continue;
                 }
 
-                if (runner->processOne(force) == RunnableOutcome::DID_WORK)
+                if (runner->processOne(force) == RunnableOutcome::PROCEED)
                 {
                     processed = true;
                 }

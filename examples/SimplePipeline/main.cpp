@@ -69,10 +69,10 @@ private:
                 std::vector<char> compressed_data;
                 simdb::compressData(data, compressed_data);
                 output_queue_->emplace(std::move(compressed_data));
-                return simdb::pipeline::RunnableOutcome::DID_WORK;
+                return simdb::pipeline::PROCEED;
             }
 
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         simdb::ConcurrentQueue<std::vector<double>>* input_queue_ = nullptr;
@@ -97,10 +97,10 @@ private:
                 auto inserter = getTableInserter_("CompressedData");
                 inserter->setColumnValue(0, data);
                 inserter->createRecord();
-                return simdb::pipeline::RunnableOutcome::DID_WORK;
+                return simdb::pipeline::PROCEED;
             }
 
-            return simdb::pipeline::RunnableOutcome::NO_OP;
+            return simdb::pipeline::SLEEP;
         }
 
         simdb::ConcurrentQueue<std::vector<char>>* input_queue_ = nullptr;

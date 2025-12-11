@@ -23,7 +23,7 @@ public:
 
     virtual RunnableOutcome flush()
     {
-        RunnableOutcome outcome = RunnableOutcome::NO_OP;
+        RunnableOutcome outcome = RunnableOutcome::SLEEP;
 
         bool continue_while = true;
         do
@@ -32,9 +32,9 @@ public:
             for (auto stage : stages_)
             {
                 constexpr auto force = true;
-                if (stage->processAll(force) == RunnableOutcome::DID_WORK)
+                if (stage->processAll(force) == RunnableOutcome::PROCEED)
                 {
-                    outcome = RunnableOutcome::DID_WORK;
+                    outcome = RunnableOutcome::PROCEED;
                     continue_while = true;
                 }
             }
@@ -71,7 +71,7 @@ public:
 
     RunnableOutcome flush() override
     {
-        auto outcome = RunnableOutcome::NO_OP;
+        auto outcome = RunnableOutcome::SLEEP;
         db_mgr_->safeTransaction([&]()
         {
             outcome = Flusher::flush();
