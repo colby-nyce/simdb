@@ -70,6 +70,9 @@ public:
 
         // Store a pipeline flusher (flush compressor first, then DB writer)
         pipeline_flusher_ = pipeline->createFlusher({"compressor", "db_writer"});
+
+        // Store the pipeline manager so we can test ScopedRunnableDisabler
+        pipeline_mgr_ = pipeline_mgr;
     }
 
     void process(const std::vector<double>& data)
@@ -92,6 +95,10 @@ public:
             auto query = db_mgr_->createQuery("CompressedData");
             record_count = query->count();
         });
+
+        std::cout << "After flushing the pipeline, there were ";
+        std::cout << record_count << " records in the database.";
+        std::cout << std::endl;
 
         return record_count;
     }
@@ -192,12 +199,28 @@ private:
         // Post the query on the database thread with a 5-second timeout
         async_db_accessor_->eval(async_query, 5);
 
+        // Test the use of ScopedRunnableDisabler which will disable all
+        // runnables/threads in the pipeline.
+        if (finished_)
+        {
+            // Disable everything while this object is in scope.
+            auto disabler = pipeline_mgr_->scopedDisableAll();
+
+            auto query = db_mgr_->createQuery("CompressedData");
+            auto num_records = query->count();
+
+            std::cout << "As soon as we hit the target record count of 10k records, ";
+            std::cout << "the database had " << num_records << " in it. More may be ";
+            std::cout << "coming when we flush the whole pipeline..." << std::endl;
+        }
+
         return finished_;
     }
 
     simdb::DatabaseManager* db_mgr_ = nullptr;
     simdb::ConcurrentQueue<std::vector<double>>* pipeline_head_ = nullptr;
     simdb::pipeline::AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
+    simdb::pipeline::PipelineManager* pipeline_mgr_ = nullptr;
     std::unique_ptr<simdb::pipeline::Flusher> pipeline_flusher_;
     std::chrono::time_point<std::chrono::steady_clock> tic_;
     bool finished_ = false;
