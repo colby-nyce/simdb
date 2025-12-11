@@ -95,20 +95,19 @@ public:
 
         queue_repo_.validateQueues();
 
-        AsyncDatabaseAccessor* db_accessor = nullptr;
         for (auto& [stage_name, stage] : stages_)
         {
-            stage->assignThread(db_mgr_, threads, db_accessor);
+            stage->assignThread(db_mgr_, threads, async_db_accessor_);
         }
 
-        if (db_accessor)
+        if (async_db_accessor_)
         {
             for (auto& [stage_name, stage] : stages_)
             {
                 // Only give the accessor to non-DB stages
                 if (!dynamic_cast<DatabaseStageBase*>(stage.get()))
                 {
-                    stage->setAsyncDatabaseAccessor_(db_accessor);
+                    stage->setAsyncDatabaseAccessor_(async_db_accessor_);
                 }
             }
         }
@@ -141,6 +140,11 @@ public:
         return has_db_stage ?
             std::make_unique<FlusherWithTransaction>(stages, db_mgr_) :
             std::make_unique<Flusher>(stages);
+    }
+
+    AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const
+    {
+        return async_db_accessor_;
     }
 
     TaskGroup* createTaskGroup(const std::string& description = "")
@@ -176,6 +180,7 @@ private:
     std::vector<std::unique_ptr<TaskGroup>> task_groups_;
     std::unordered_map<std::string, std::unique_ptr<Stage>> stages_;
     QueueRepo queue_repo_;
+    AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
 
     enum class State {
         ACCEPTING_STAGES,
