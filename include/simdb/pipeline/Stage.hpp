@@ -107,13 +107,6 @@ private:
             {
                 break;
             }
-            else if (result == RunnableOutcome::ABORT_FLUSH)
-            {
-                if (!force)
-                {
-                    throw DBException("ABORT_FLUSH returned during non-flush processing");
-                }
-            }
         }
         return outcome;
     }

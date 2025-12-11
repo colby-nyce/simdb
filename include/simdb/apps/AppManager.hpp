@@ -333,6 +333,8 @@ public:
         pipeline_mgr_->openPipelines();
 
         // Print final thread/task configuration.
+        // TODO cnyce
+#if 0
         msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
         for (const auto pipeline : pipeline_mgr_->getPipelines())
         {
@@ -348,34 +350,12 @@ public:
         }
 
         msg_log_ << "\n";
+#endif
     }
 
     /// This method is to be called after the main simulation loop ends.
-    /// It is assumed that there is no more data to be sent into your
-    /// app's pipelines when you call this method. The following will
-    /// be performed:
-    ///
-    ///   1. Call virtual App::preTeardown(). Needed for any apps which
-    ///      use their own data structure to buffer data prior to sending
-    ///      it down the pipeline, as they will have to push the remaining
-    ///      data if they want it processed.
-    ///
-    ///   2. Stop all pipeline threads. Some data is still in the pipeline.
-    ///
-    ///   3. Call virtual TaskBase::processAll(force=true) for every task.
-    ///      They will be called in the same order as they are organized
-    ///      in their respective TaskGroup. Do this for all except the
-    ///      DB writers.
-    ///
-    ///   4. Destroy all pipelines (and therefore task groups, tasks, and
-    ///      their respective ConcurrentQueues).
-    ///
-    ///   5. Destroy all threads.
-    ///
-    ///   6. Call virtual App::postTeardown() in a BEGIN/COMMIT transaction.
-    ///      This is the time to write your post-processing data, metadata,
-    ///      and so on if you need to.
-    ///
+    /// All running apps' pipelines will be flushed, and all threads
+    /// will be torn down.
     void postSimLoopTeardown(bool delete_apps = false)
     {
         PROFILE_APP_PHASE

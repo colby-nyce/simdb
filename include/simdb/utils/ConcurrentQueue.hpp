@@ -2,22 +2,10 @@
 
 #pragma once
 
-#include "simdb/utils/Snoopers.hpp"
-
 #include <mutex>
-#include <deque>
+#include <queue>
 
 namespace simdb {
-
-namespace pipeline {
-    class RunnableFlusher;
-    class QueuePrivateIterator
-    {
-    private:
-        QueuePrivateIterator() = default;
-        friend class RunnableFlusher;
-    };
-} // namespace simdb::pipeline
 
 /*! 
  * \class ConcurrentQueue<T>
@@ -32,14 +20,14 @@ public:
     void push(const T& item)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        queue_.push_back(item);
+        queue_.push(item);
     }
 
     /// \brief Push an item to the back of the queue (move version).
     void emplace(T&& item)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        queue_.emplace_back(std::move(item));
+        queue_.emplace(std::move(item));
     }
 
     /// \brief Construct an item on the back of the queue.
@@ -48,7 +36,7 @@ public:
     template <typename... Args> void emplace(Args&&... args)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        queue_.emplace_back(std::forward<Args>(args)...);
+        queue_.emplace(std::forward<Args>(args)...);
     }
 
     /// \brief Get the item at the front of the queue.
@@ -65,7 +53,7 @@ public:
             return false;
         }
         std::swap(item, queue_.front());
-        queue_.pop_front();
+        queue_.pop();
         return true;
     }
 
@@ -83,74 +71,12 @@ public:
         return queue_.empty();
     }
 
-    /// \brief Snoop all items in the queue without popping them (one item at a time).
-    SingleQueueSnooperOutcome snoop(const pipeline::QueuePrivateIterator&, const QueueItemSnooperCallback<T>& cb)
-    {
-        std::lock_guard<std::mutex> guard(mutex_);
-
-        SingleQueueSnooperOutcome outcome;
-        for (const auto& item : queue_)
-        {
-            outcome.num_items_peeked++;
-            auto cb_outcome = cb(item);
-            switch (cb_outcome)
-            {
-                case SnooperCallbackOutcome::FOUND_STOP:
-                    outcome.num_hits++;
-                    outcome.done = true;
-                    return outcome;
-
-                case SnooperCallbackOutcome::FOUND_CONTINUE:
-                    outcome.num_hits++;
-                    break;
-
-                case SnooperCallbackOutcome::NOT_FOUND_STOP:
-                    outcome.done = true;
-                    return outcome;
-
-                case SnooperCallbackOutcome::NOT_FOUND_CONTINUE:
-                    break;
-            }
-        }
-        return outcome;
-    }
-
-    /// \brief Snoop the whole queue at once.
-    SingleQueueSnooperOutcome snoop(const pipeline::QueuePrivateIterator&, const WholeQueueSnooperCallback<T>& cb)
-    {
-        std::lock_guard<std::mutex> guard(mutex_);
-
-        SingleQueueSnooperOutcome outcome;
-        outcome.num_items_peeked = queue_.size();
-
-        auto cb_outcome = cb(queue_);
-        switch (cb_outcome)
-        {
-            case SnooperCallbackOutcome::FOUND_STOP:
-                outcome.num_hits++;
-                outcome.done = true;
-                break;
-
-            case SnooperCallbackOutcome::FOUND_CONTINUE:
-                outcome.num_hits++;
-                break;
-
-            case SnooperCallbackOutcome::NOT_FOUND_STOP:
-                outcome.done = true;
-                break;
-
-            case SnooperCallbackOutcome::NOT_FOUND_CONTINUE:
-                break;
-        }
-        return outcome;
-    }
-
 private:
     /// Mutex for thread safety.
     mutable std::mutex mutex_;
 
-    /// FIFO queue. We use a deque to support snooping.
-    std::deque<T> queue_;
+    /// FIFO queue to hold the data.
+    std::queue<T> queue_;
 };
 
 } // namespace simdb

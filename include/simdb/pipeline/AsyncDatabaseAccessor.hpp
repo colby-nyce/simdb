@@ -3,7 +3,6 @@
 #pragma once
 
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/pipeline/Task.hpp"
 #include "simdb/pipeline/AsyncDatabaseTask.hpp"
 #include "simdb/utils/ConcurrentQueue.hpp"
 
@@ -31,10 +30,6 @@ public:
     /// if the task is not completed within the timeout.
     virtual void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0) = 0;
 };
-
-/// Forward declaration
-template <typename Input, typename Output>
-class DatabaseTask;
 
 /// This class is used by SimDB apps and pipeline elements to
 /// asynchronously access the database. It supports async data

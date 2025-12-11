@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "simdb/pipeline/TaskGroup.hpp"
 #include "simdb/pipeline/Stage.hpp"
 #include "simdb/pipeline/QueueRepo.hpp"
 #include "simdb/pipeline/Flusher.hpp"
@@ -147,37 +146,9 @@ public:
         return async_db_accessor_;
     }
 
-    TaskGroup* createTaskGroup(const std::string& description = "")
-    {
-        auto group = std::make_unique<TaskGroup>(pipeline_name_, description);
-        task_groups_.emplace_back(std::move(group));
-        return task_groups_.back().get();
-    }
-
-    std::vector<TaskGroup*> getTaskGroups()
-    {
-        std::vector<TaskGroup*> groups;
-        for (auto& group : task_groups_)
-        {
-            groups.push_back(group.get());
-        }
-        return groups;
-    }
-
-    std::vector<const TaskGroup*> getTaskGroups() const
-    {
-        std::vector<const TaskGroup*> groups;
-        for (auto& group : task_groups_)
-        {
-            groups.push_back(group.get());
-        }
-        return groups;
-    }
-
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
-    std::vector<std::unique_ptr<TaskGroup>> task_groups_;
     std::unordered_map<std::string, std::unique_ptr<Stage>> stages_;
     QueueRepo queue_repo_;
     AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
