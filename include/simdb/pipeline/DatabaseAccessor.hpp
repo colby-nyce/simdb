@@ -1,4 +1,4 @@
-// <DatabaseTask.hpp> -*- C++ -*-
+// <DatabaseAccessor.hpp> -*- C++ -*-
 
 #pragma once
 

@@ -6,7 +6,7 @@
 #include "simdb/pipeline/Runnable.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
 #include "simdb/pipeline/DatabaseThread.hpp"
-#include "simdb/pipeline/elements/DatabaseTask.hpp"
+#include "simdb/pipeline/DatabaseAccessor.hpp"
 #include "simdb/Exceptions.hpp"
 #include <memory>
 #include <unordered_map>

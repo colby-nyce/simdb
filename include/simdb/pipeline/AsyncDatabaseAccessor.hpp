@@ -2,16 +2,7 @@
 
 #pragma once
 
-#include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/pipeline/AsyncDatabaseTask.hpp"
-#include "simdb/utils/ConcurrentQueue.hpp"
-
-#include <functional>
-#include <future>
-
-namespace simdb {
-    class DatabaseManager;
-}
 
 namespace simdb::pipeline {
 
