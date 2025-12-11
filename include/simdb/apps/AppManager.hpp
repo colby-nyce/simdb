@@ -333,24 +333,17 @@ public:
         pipeline_mgr_->openPipelines();
 
         // Print final thread/task configuration.
-        // TODO cnyce
-#if 0
         msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
         for (const auto pipeline : pipeline_mgr_->getPipelines())
         {
-            msg_log_ << "---- Pipeline (app): " << pipeline->getName() << "\n";
-            for (auto group : pipeline->getTaskGroups())
+            msg_log_ << "---- Pipeline: " << pipeline->getName() << "\n";
+            for (const auto& [stage_name, stage] : pipeline->getOrderedStages())
             {
-                msg_log_ << "------ TaskGroup (thread): " << group->getDescription() << "\n";
-                for (auto task : group->getTasks())
-                {
-                    msg_log_ << "-------- Task: " << task->getDescription() << "\n";
-                }
+                msg_log_ << "------ Stage: " << stage_name << "\n";
             }
         }
 
-        msg_log_ << "\n";
-#endif
+        msg_log_ << std::endl;
     }
 
     /// This method is to be called after the main simulation loop ends.
@@ -523,6 +516,16 @@ private:
             if (out_ && enabled_)
             {
                 *out_ << msg;
+                out_->flush();
+            }
+            return *this;
+        }
+
+        Logger& operator<<(std::ostream& (*manip)(std::ostream&))
+        {
+            if (out_ && enabled_)
+            {
+                manip(*out_);
                 out_->flush();
             }
             return *this;

@@ -339,8 +339,9 @@ int main()
     simdb::DatabaseManager db_mgr("test.db", true);
     simdb::AppManager app_mgr(&db_mgr);
 
-    app_mgr.disableMessageLog();
-    app_mgr.disableErrorLog();
+    //TODO cnyce
+    //app_mgr.disableMessageLog();
+    //app_mgr.disableErrorLog();
 
     app_mgr.enableApp(SimplePipeline::NAME);
     app_mgr.enableApp(DatabaseWatchdog::NAME);

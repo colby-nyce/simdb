@@ -5,6 +5,7 @@
 #include "simdb/pipeline/Stage.hpp"
 #include "simdb/pipeline/QueueRepo.hpp"
 #include "simdb/pipeline/Flusher.hpp"
+#include <map>
 
 namespace simdb {
     class DatabaseManager;
@@ -49,6 +50,7 @@ public:
             throw DBException("Stage '" + name + "' already exists in pipeline '" + pipeline_name_ + "'.");
         }
         stage = std::make_unique<StageType>(name, queue_repo_, std::forward<Args>(args)...);
+        stages_in_order_.push_back(name);
     }
 
     void noMoreStages()
@@ -146,10 +148,33 @@ public:
         return async_db_accessor_;
     }
 
+    std::map<std::string, const Stage*> getStages() const
+    {
+        std::map<std::string, const Stage*> stages;
+        for (const auto& [name, stage] : stages_)
+        {
+            stages[name] = stage.get();
+        }
+        return stages;
+    }
+
+    std::vector<std::pair<std::string, const Stage*>> getOrderedStages() const
+    {
+        std::vector<std::pair<std::string, const Stage*>> ordered_stages;
+        auto unordered_stages = getStages();
+        for (const auto& name : stages_in_order_)
+        {
+            auto stage = unordered_stages.at(name);
+            ordered_stages.emplace_back(std::make_pair(name, stage));
+        }
+        return ordered_stages;
+    }
+
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
     std::unordered_map<std::string, std::unique_ptr<Stage>> stages_;
+    std::vector<std::string> stages_in_order_;
     QueueRepo queue_repo_;
     AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
 
