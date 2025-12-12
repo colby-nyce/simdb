@@ -31,7 +31,7 @@ public:
 
     void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
         pipeline->addStage<CompressionStage>("compressor");
         pipeline->addStage<DatabaseStage>("db_writer");
@@ -40,8 +40,8 @@ public:
         pipeline->bind("compressor.compressed_data", "db_writer.data_to_write");
         pipeline->noMoreBindings();
 
+        // As soon as we call noMoreBindings(), all input/output queues are available
         pipeline_head_ = pipeline->getInPortQueue<std::vector<double>>("compressor.input_data");
-        pipeline_mgr->finalize(pipeline);
     }
 
     void process(const std::vector<double>& data)
@@ -124,6 +124,7 @@ int main(int argc, char** argv)
     app_mgr.createEnabledApps();
     app_mgr.createSchemas();
     app_mgr.postInit(argc, argv);
+    app_mgr.initializePipelines();
     app_mgr.openPipelines();
 
     // Simulate...

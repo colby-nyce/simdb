@@ -21,10 +21,17 @@ namespace simdb::pipeline {
 class Pipeline
 {
 public:
-    Pipeline(DatabaseManager* db_mgr, const std::string& name)
+    Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app)
         : db_mgr_(db_mgr)
         , pipeline_name_(name)
+        , app_(app)
     {}
+    const App* app_ = nullptr;
+
+    const App* getOwningApp() const
+    {
+        return app_;
+    }
 
     DatabaseManager* getDatabaseManager() const
     {
@@ -87,7 +94,8 @@ public:
         return queue_repo_.getInPortQueue<T>(port_full_name);
     }
 
-    void assignStageThreads(std::vector<std::unique_ptr<PollingThread>>& threads)
+    void assignStageThreads(std::vector<std::unique_ptr<PollingThread>>& threads,
+                            std::unique_ptr<DatabaseThread>& database_thread)
     {
         if (state_ != State::BINDINGS_COMPLETE)
         {
@@ -98,19 +106,7 @@ public:
 
         for (auto& [stage_name, stage] : stages_)
         {
-            stage->assignThread(db_mgr_, threads, async_db_accessor_);
-        }
-
-        if (async_db_accessor_)
-        {
-            for (auto& [stage_name, stage] : stages_)
-            {
-                // Only give the accessor to non-DB stages
-                if (!dynamic_cast<DatabaseStageBase*>(stage.get()))
-                {
-                    stage->setAsyncDatabaseAccessor_(async_db_accessor_);
-                }
-            }
+            stage->assignThread_(db_mgr_, threads, database_thread);
         }
 
         state_ = State::FINALIZED;
@@ -148,21 +144,21 @@ public:
         return async_db_accessor_;
     }
 
-    std::map<std::string, const Stage*> getStages() const
+    std::map<std::string, Stage*> getStages()
     {
-        std::map<std::string, const Stage*> stages;
-        for (const auto& [name, stage] : stages_)
+        std::map<std::string, Stage*> stages;
+        for (auto& [name, stage] : stages_)
         {
             stages[name] = stage.get();
         }
         return stages;
     }
 
-    std::vector<std::pair<std::string, const Stage*>> getOrderedStages() const
+    std::vector<std::pair<std::string, Stage*>> getOrderedStages()
     {
-        std::vector<std::pair<std::string, const Stage*>> ordered_stages;
+        std::vector<std::pair<std::string, Stage*>> ordered_stages;
         auto unordered_stages = getStages();
-        for (const auto& name : stages_in_order_)
+        for (auto& name : stages_in_order_)
         {
             auto stage = unordered_stages.at(name);
             ordered_stages.emplace_back(std::make_pair(name, stage));

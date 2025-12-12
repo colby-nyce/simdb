@@ -33,7 +33,7 @@ public:
 
     void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
     {
-        auto pipeline = pipeline_mgr->createPipeline(NAME);
+        auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
         pipeline->addStage<SyncXYStage>("sync_xy");
         pipeline->addStage<DatabaseStage>("db_writer");
@@ -43,10 +43,9 @@ public:
         pipeline->bind("sync_xy.num_unaligned_xy", "db_writer.num_unaligned_xy");
         pipeline->noMoreBindings();
 
+        // As soon as we call noMoreBindings(), all input/output queues are available
         x_input_queue_ = pipeline->getInPortQueue<double>("sync_xy.x_input");
         y_input_queue_ = pipeline->getInPortQueue<double>("sync_xy.y_input");
-
-        pipeline_mgr->finalize(pipeline);
     }
 
     void sendX(double x)
@@ -271,6 +270,7 @@ int main()
     // Setup...
     app_mgr.createEnabledApps();
     app_mgr.createSchemas();
+    app_mgr.initializePipelines();
     app_mgr.openPipelines();
 
     // Simulate...

@@ -312,10 +312,9 @@ public:
             });
     }
 
-    /// Call this once after all postInit(). This will create all pipelines
-    /// for all enabled apps, and share resources between them to not create
-    /// too many threads in total.
-    void openPipelines(const std::string& pipeline_log_file = "")
+    /// Call this once after postInit(). This will create all pipelines
+    /// for all enabled apps, but it will not open the threads yet.
+    void initializePipelines()
     {
         PROFILE_APP_PHASE
 
@@ -324,26 +323,65 @@ public:
             throw DBException("Pipelines already open");
         }
 
-        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_, pipeline_log_file);
+        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
         for (const auto& [app_name, app] : apps_)
         {
             app->createPipeline(pipeline_mgr_.get());
         }
 
-        pipeline_mgr_->openPipelines();
-
-        // Print final thread/task configuration.
+        // Print final pipeline configurations.
         msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
-        for (const auto pipeline : pipeline_mgr_->getPipelines())
+        for (auto pipeline : pipeline_mgr_->getPipelines())
         {
             msg_log_ << "---- Pipeline: " << pipeline->getName() << "\n";
-            for (const auto& [stage_name, stage] : pipeline->getOrderedStages())
+            for (auto& [stage_name, stage] : pipeline->getOrderedStages())
             {
                 msg_log_ << "------ Stage: " << stage_name << "\n";
             }
         }
 
         msg_log_ << std::endl;
+    }
+
+    /// Optionally call this method after initializePipelines(), but before
+    /// openPipelines(). This will reduce the number of non-database threads
+    /// to the minimum across all app pipelines.
+    ///
+    /// Note that you can either call minimizeThreads() OR minimizeThreads(app1, app2, ...)
+    /// but you cannot call both.
+    void minimizeThreads()
+    {
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->minimizeThreads();
+    }
+
+    /// Optionally call this method after initializePipelines(), but before
+    /// openPipelines(). This will share the minimum number of non-database
+    /// threads across the given apps' pipelines.
+    template <typename... Apps>
+    void minimizeThreads(const App* app, Apps&&... rest)
+    {
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->minimizeThreads(app, std::forward<Apps>(rest)...);
+    }
+
+    /// Call this once after initializePipelines() (and after minimizeThreads()
+    /// if you called that too).
+    void openPipelines()
+    {
+        PROFILE_APP_PHASE
+
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->openPipelines();
     }
 
     /// This method is to be called after the main simulation loop ends.

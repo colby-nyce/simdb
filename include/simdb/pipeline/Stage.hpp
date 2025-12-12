@@ -16,9 +16,15 @@ namespace simdb::pipeline {
 class Stage : public Runnable
 {
 protected:
-    Stage(const std::string& name, QueueRepo& queue_repo)
+    /// Note that the interval_milliseconds will inform the associated PollingThread
+    /// to sleep for this amount of time when there is nothing to do on the thread.
+    /// Overriding the interval is only available for non-database stages. If you
+    /// intend to call AppManager::minimizeThreads(), then all non-database stages
+    /// must agree on the interval for their shared PollingThread.
+    Stage(const std::string& name, QueueRepo& queue_repo, size_t interval_milliseconds = 100)
         : name_(name)
         , queue_repo_(queue_repo)
+        , interval_milliseconds_(interval_milliseconds)
     {}
 
     template <typename T>
@@ -39,44 +45,12 @@ protected:
     }
 
 private:
-    virtual void assignThread(DatabaseManager*, std::vector<std::unique_ptr<PollingThread>>& threads, AsyncDatabaseAccessor*&)
+    virtual void assignThread_(DatabaseManager*,
+                               std::vector<std::unique_ptr<PollingThread>>& threads,
+                               std::unique_ptr<DatabaseThread>&)
     {
-        // Create a new thread if none exist or if we don't share threads
-        if (threads.empty() || !shareThreads_())
-        {
-            threads.emplace_back(std::make_unique<PollingThread>());
-            threads.back()->addRunnable(this);
-            return;
-        }
-
-        // Add this stage to the thread that has the fewest runnables
-        PollingThread* avail_thread = nullptr;
-        size_t min_runnables = SIZE_MAX;
-        for (auto& thread : threads)
-        {
-            if (dynamic_cast<DatabaseThread*>(thread.get()))
-            {
-                // Cannot add to the DB thread
-                continue;
-            }
-
-            auto num_runnables = thread->getNumRunnables();
-            if (num_runnables < min_runnables)
-            {
-                min_runnables = num_runnables;
-                avail_thread = thread.get();
-            }
-        }
-
-        if (!avail_thread)
-        {
-            // The only instantiated thread is the DatabaseThread so far.
-            // Create a non-DB thread.
-            threads.emplace_back(std::make_unique<PollingThread>());
-            avail_thread = threads.back().get();
-        }
-
-        avail_thread->addRunnable(this);
+        threads.emplace_back(std::make_unique<PollingThread>(interval_milliseconds_));
+        threads.back()->addRunnable(this);
     }
 
     void setAsyncDatabaseAccessor_(AsyncDatabaseAccessor* async_db_accessor)
@@ -113,16 +87,13 @@ private:
 
     virtual RunnableOutcome run_(bool force) = 0;
 
-    virtual bool shareThreads_() const
-    {
-        return true;
-    }
-
     std::string name_;
     QueueRepo& queue_repo_;
+    const size_t interval_milliseconds_;
     AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
 
     friend class Pipeline;
+    friend class PipelineManager;
     friend class Flusher;
 };
 
@@ -168,32 +139,20 @@ protected:
     }
 
 private:
-    void assignThread(DatabaseManager* db_mgr, std::vector<std::unique_ptr<PollingThread>>& threads, AsyncDatabaseAccessor*& async_db_accessor) override final
+    void assignThread_(DatabaseManager* db_mgr,
+                       std::vector<std::unique_ptr<PollingThread>>& threads,
+                       std::unique_ptr<DatabaseThread>& database_thread) override final
     {
         // Prepare the DatabaseAccessor
         db_accessor_ = std::make_unique<DatabaseAccessor>(db_mgr);
 
-        // Look for dedicated database thread
-        for (auto& thread : threads)
+        // Use dedicated database thread
+        if (!database_thread)
         {
-            if (auto db_thread = dynamic_cast<DatabaseThread*>(thread.get()))
-            {
-                db_thread->addRunnable(this);
-                async_db_accessor = db_thread->getAsyncDatabaseAccessor();
-                return;
-            }
+            database_thread = std::make_unique<DatabaseThread>(db_mgr);
         }
 
-        // No dedicated database thread found, create a new one
-        threads.emplace_back(std::make_unique<DatabaseThread>(db_mgr));
-        threads.back()->addRunnable(this);
-        async_db_accessor = dynamic_cast<DatabaseThread*>(threads.back().get())->getAsyncDatabaseAccessor();
-    }
-
-    bool shareThreads_() const override final
-    {
-        // Database stages never share threads
-        return false;
+        database_thread->addRunnable(this);
     }
 
     std::unique_ptr<DatabaseAccessor> db_accessor_;

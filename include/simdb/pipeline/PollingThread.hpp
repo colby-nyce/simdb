@@ -32,6 +32,11 @@ public:
 
     virtual ~PollingThread() noexcept = default;
 
+    size_t getIntervalMilliseconds() const
+    {
+        return interval_ms_;
+    }
+
     void addRunnable(Runnable* runnable)
     {
         if (is_running_)
@@ -49,6 +54,20 @@ public:
     size_t getNumRunnables() const
     {
         return runnables_.size();
+    }
+
+    void ensureRelativeOrder(const std::vector<Runnable*>& runnables)
+    {
+        const std::set<Runnable*> my_runnables(runnables_.begin(), runnables_.end());
+        std::vector<Runnable*> ordered_runnables;
+        for (auto runnable : runnables)
+        {
+            if (my_runnables.count(runnable))
+            {
+                ordered_runnables.push_back(runnable);
+            }
+        }
+        std::swap(ordered_runnables, runnables_);
     }
 
     virtual bool flushRunnables()
