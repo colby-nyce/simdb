@@ -26,7 +26,6 @@ public:
         , pipeline_name_(name)
         , app_(app)
     {}
-    const App* app_ = nullptr;
 
     const App* getOwningApp() const
     {
@@ -91,7 +90,21 @@ public:
     template <typename T>
     simdb::ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
+        if (state_ != State::BINDINGS_COMPLETE && state_ != State::FINALIZED)
+        {
+            throw DBException("Cannot access port queues until noMoreBindings() is called.");
+        }
         return queue_repo_.getInPortQueue<T>(port_full_name);
+    }
+
+    template <typename T>
+    simdb::ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
+    {
+        if (state_ != State::BINDINGS_COMPLETE && state_ != State::FINALIZED)
+        {
+            throw DBException("Cannot access port queues until noMoreBindings() is called.");
+        }
+        return queue_repo_.getOutPortQueue<T>(port_full_name);
     }
 
     void assignStageThreads(std::vector<std::unique_ptr<PollingThread>>& threads,
@@ -135,8 +148,8 @@ public:
         }
 
         return has_db_stage ?
-            std::make_unique<FlusherWithTransaction>(stages, db_mgr_) :
-            std::make_unique<Flusher>(stages);
+            std::unique_ptr<FlusherWithTransaction>(new FlusherWithTransaction(stages, db_mgr_)) :
+            std::unique_ptr<Flusher>(new Flusher(stages));
     }
 
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const
@@ -169,6 +182,7 @@ public:
 private:
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
+    const App* app_ = nullptr;
     std::unordered_map<std::string, std::unique_ptr<Stage>> stages_;
     std::vector<std::string> stages_in_order_;
     QueueRepo queue_repo_;

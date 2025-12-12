@@ -62,22 +62,22 @@ private:
         return name_;
     }
 
-    RunnableOutcome processOne(bool force) override final
+    PipelineAction processOne(bool force) override final
     {
         return run_(force);
     }
 
-    RunnableOutcome processAll(bool force) override final
+    PipelineAction processAll(bool force) override final
     {
-        RunnableOutcome outcome = RunnableOutcome::SLEEP;
+        PipelineAction outcome = PipelineAction::SLEEP;
         while (true)
         {
             auto result = processOne(force);
-            if (result == RunnableOutcome::PROCEED)
+            if (result == PipelineAction::PROCEED)
             {
-                outcome = RunnableOutcome::PROCEED;
+                outcome = PipelineAction::PROCEED;
             }
-            else if (result == RunnableOutcome::SLEEP)
+            else if (result == PipelineAction::SLEEP)
             {
                 break;
             }
@@ -85,7 +85,7 @@ private:
         return outcome;
     }
 
-    virtual RunnableOutcome run_(bool force) = 0;
+    virtual PipelineAction run_(bool force) = 0;
 
     std::string name_;
     QueueRepo& queue_repo_;

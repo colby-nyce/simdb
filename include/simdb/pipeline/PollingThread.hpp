@@ -80,7 +80,7 @@ public:
                 continue;
             }
 
-            if (runnable->processAll(true) == RunnableOutcome::PROCEED)
+            if (runnable->processAll(true) == PipelineAction::PROCEED)
             {
                 did_work = true;
             }
@@ -262,7 +262,7 @@ private:
                     continue;
                 }
 
-                if (runner->processOne(force) == RunnableOutcome::PROCEED)
+                if (runner->processOne(force) == PipelineAction::PROCEED)
                 {
                     processed = true;
                 }

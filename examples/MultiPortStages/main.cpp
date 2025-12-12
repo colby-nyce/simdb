@@ -114,7 +114,7 @@ private:
         }
 
     private:
-        simdb::pipeline::RunnableOutcome run_(bool force) override
+        simdb::pipeline::PipelineAction run_(bool force) override
         {
             auto outcome = simdb::pipeline::SLEEP;
             while (sendXYPair_())
@@ -212,7 +212,7 @@ private:
         }
 
     private:
-        simdb::pipeline::RunnableOutcome run_(bool) override
+        simdb::pipeline::PipelineAction run_(bool) override
         {
             auto outcome = simdb::pipeline::SLEEP;
 

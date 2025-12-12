@@ -36,9 +36,6 @@ public:
         return async_db_accessor_;
     }
 
-    bool threads_opened_ = false;
-    AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
-
     utils::MTLogger* getPipelineLogger()
     {
         return &pipeline_logger_;
@@ -63,8 +60,6 @@ public:
         }
         return pipelines;
     }
-
-    std::unique_ptr<ThreadMerger> thread_merger_;
 
     void minimizeThreads()
     {
@@ -235,6 +230,17 @@ private:
 
     /// Multi-threaded pipeline logger.
     utils::MTLogger pipeline_logger_;
+
+    /// Flag used to prevent AsyncDatabaseAccessor from being
+    /// accessed until threads are opened/finalized.
+    bool threads_opened_ = false;
+
+    /// Cached AsyncDatabaseAccessor for async DB queries.
+    AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
+
+    /// Used to perform minimizeThread() to share threads
+    /// between concurrently running apps.
+    std::unique_ptr<ThreadMerger> thread_merger_;
 
     void getDisablerThreads_()
     {

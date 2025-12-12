@@ -9,21 +9,18 @@
 /// database thread.
 ///
 /// The example also shows how to create a pipeline flusher with
-/// an API that will flush each stage in a specific order. Flushes
-/// occur in a round-robin fashion until all stages are flushed.
+/// an API that will flush each stage in a specific order.
 ///
 /// We will create two apps that run at the same time. The first
-/// app will write blobs of compressed data to the database, and
-/// the app will periodically query the database from the main
-/// thread until at least 10k records have been created. When
-/// it sees that 10k have been reached, it will stop sending
-/// new data down the pipeline.
+/// app will write blobs of compressed data to the database with
+/// no upper limit to the amount of processed data.
 ///
 /// The second app will run a single non-database thread (not
 /// to be shared with the non-DB threads from the other app).
 /// It will periodically print out the total number of records
-/// created thus far, and will stop doing any work when it too
-/// sees that at least 10k records have been created.
+/// created thus far, and will tell the first app (SimplePipeline)
+/// to stop accepting new data when it sees that at least 10k
+/// records have been created.
 
 constexpr size_t TARGET_NUM_RECORDS = 10000;
 
@@ -43,7 +40,10 @@ public:
 
     size_t flush()
     {
+        // Disable the pipeline while the "disabler" is in scope.
         auto disabler = pipeline_mgr_->scopedDisableAll();
+
+        // Flush the compressor stage, the flush the database stage.
         pipeline_flusher_->flush();
 
         size_t record_count = 0;
@@ -112,7 +112,7 @@ private:
         }
 
     private:
-        simdb::pipeline::RunnableOutcome run_(bool) override
+        simdb::pipeline::PipelineAction run_(bool) override
         {
             if (finished_)
             {
@@ -131,7 +131,12 @@ private:
                 }
             };
 
-            // Post the query on the database thread with a 5-second timeout
+            // Post the query on the database thread with a 5-second timeout.
+            // Note that the timeout is used to prevent "runaway" tests in
+            // the event of a bug. The only thing we will actually end up
+            // waiting on is for the database thread to COMMIT TRANSACTION
+            // for whatever it was in the middle of doing, so in reality
+            // we only wait for a fraction of a second in typical uses.
             auto async_db_accessor = getAsyncDatabaseAccessor_();
             async_db_accessor->eval(async_query, 5);
 
@@ -223,7 +228,7 @@ int main()
         }
     }
 
-    // Flush any leftover pipeline and print out the final number
+    // Flush any leftover pipeline data and print out the final number
     // of records in the database.
     auto num_records = pipe->flush();
     EXPECT_EQUAL(num_records, num_sent);

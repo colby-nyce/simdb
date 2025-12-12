@@ -65,7 +65,7 @@ private:
                         // We call processOne() here instead of processAll() to use a smaller
                         // granularity of tasks to "inject" break statements more frequently
                         // in the event of pending async DB access requests.
-                        if (runnable->processOne(force) == RunnableOutcome::PROCEED)
+                        if (runnable->processOne(force) == PipelineAction::PROCEED)
                         {
                             continue_while = true;
                         }

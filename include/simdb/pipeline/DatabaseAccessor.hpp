@@ -6,9 +6,8 @@
 
 namespace simdb::pipeline {
 
-/// Base class for database tasks. Provides access to the
-/// DatabaseManager as well as prepared INSERT objects that
-/// are specific to a particular App's schema.
+/// This class provides access to the DatabaseManager as well as prepared
+/// INSERT objects that are specific to a particular App's schema.
 class DatabaseAccessor
 {
 public:

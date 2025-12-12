@@ -83,7 +83,7 @@ private:
         }
 
     private:
-        simdb::pipeline::RunnableOutcome run_(bool) override
+        simdb::pipeline::PipelineAction run_(bool) override
         {
             std::vector<double> data;
             if (input_queue_->try_pop(data)) {
@@ -112,7 +112,7 @@ private:
         }
 
     private:
-        simdb::pipeline::RunnableOutcome run_(bool) override
+        simdb::pipeline::PipelineAction run_(bool) override
         {
             // Ensure we cannot get the AsyncDatabaseAccessor - we are already
             // going to be on the database thread, and should just use the

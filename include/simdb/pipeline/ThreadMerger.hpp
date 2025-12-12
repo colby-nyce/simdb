@@ -13,6 +13,10 @@
 
 namespace simdb::pipeline {
 
+/// This class is used when finalizing all apps' pipeline stages,
+/// merging non-database threads appropriately when a call was made
+/// to AppManager::minimizeThreads() before openPipelines().
+
 class ThreadMerger
 {
 public:

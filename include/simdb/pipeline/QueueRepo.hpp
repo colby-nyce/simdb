@@ -4,6 +4,9 @@
 
 #include "simdb/pipeline/Queue.hpp"
 
+/// The classes in this file are used to create all the required
+/// simdb::ConcurrentQueue(s) needed for all apps' pipeline stages.
+
 namespace simdb::pipeline {
 
 class QueuePlaceholder
@@ -19,6 +22,8 @@ template <typename T>
 class InputQueuePlaceholder : public QueuePlaceholder
 {
 public:
+    /// Create placeholder with a backpointer to the stage's queue member variable.
+    /// We will assign the queue to the stage variable when the queue is created.
     InputQueuePlaceholder(ConcurrentQueue<T>*& queue)
         : queue_(queue)
     {
@@ -63,6 +68,8 @@ template <typename T>
 class OutputQueuePlaceholder : public QueuePlaceholder
 {
 public:
+    /// Create placeholder with a backpointer to the stage's queue member variable.
+    /// We will assign the queue to the stage variable when the queue is created.
     OutputQueuePlaceholder(ConcurrentQueue<T>*& queue)
         : queue_(queue)
     {
@@ -195,35 +202,6 @@ public:
         finalized_ = true;
     }
 
-    void validateQueues()
-    {
-        std::ostringstream oss;
-
-        if (!unbound_input_queues_.empty())
-        {
-            oss << "The following input queues are not attached to anything:\n";
-            for (const auto& name : unbound_input_queues_)
-            {
-                oss << "    " << name << "\n";
-            }
-        }
-
-        if (!unbound_output_queues_.empty())
-        {
-            oss << "The following output queues are not attached to anything:\n";
-            for (const auto& name : unbound_output_queues_)
-            {
-                oss << "    " << name << "\n";
-            }
-        }
-
-        auto err = oss.str();
-        if (!err.empty())
-        {
-            throw DBException(err);
-        }
-    }
-
     template <typename T>
     ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
@@ -256,6 +234,35 @@ public:
         }
         unbound_output_queues_.erase(port_full_name);
         return typed_placeholder->getQueue();
+    }
+
+    void validateQueues()
+    {
+        std::ostringstream oss;
+
+        if (!unbound_input_queues_.empty())
+        {
+            oss << "The following input queues are not attached to anything:\n";
+            for (const auto& name : unbound_input_queues_)
+            {
+                oss << "    " << name << "\n";
+            }
+        }
+
+        if (!unbound_output_queues_.empty())
+        {
+            oss << "The following output queues are not attached to anything:\n";
+            for (const auto& name : unbound_output_queues_)
+            {
+                oss << "    " << name << "\n";
+            }
+        }
+
+        auto err = oss.str();
+        if (!err.empty())
+        {
+            throw DBException(err);
+        }
     }
 
 private:

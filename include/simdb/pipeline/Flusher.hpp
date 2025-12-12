@@ -1,4 +1,4 @@
-// <Pipeline.hpp> -*- C++ -*-
+// <Flusher.hpp> -*- C++ -*-
 
 #pragma once
 
@@ -7,9 +7,11 @@
 
 namespace simdb::pipeline {
 
+/// This class serves as a utility to flush pipeline stages
+/// in a specific order. Create with Pipeline::createFlusher().
 class Flusher
 {
-public:
+protected:
     Flusher(const std::vector<Stage*>& stages)
         : stages_(stages)
     {
@@ -19,11 +21,14 @@ public:
         }
     }
 
+    friend class Pipeline;
+
+public:
     virtual ~Flusher() = default;
 
-    virtual RunnableOutcome flush()
+    virtual PipelineAction flush()
     {
-        RunnableOutcome outcome = RunnableOutcome::SLEEP;
+        PipelineAction outcome = PipelineAction::SLEEP;
 
         bool continue_while = true;
         do
@@ -32,9 +37,9 @@ public:
             for (auto stage : stages_)
             {
                 constexpr auto force = true;
-                if (stage->processAll(force) == RunnableOutcome::PROCEED)
+                if (stage->processAll(force) == PipelineAction::PROCEED)
                 {
-                    outcome = RunnableOutcome::PROCEED;
+                    outcome = PipelineAction::PROCEED;
                     continue_while = true;
                 }
             }
@@ -47,9 +52,13 @@ private:
     std::vector<Stage*> stages_;
 };
 
+/// This subclass is instantiated by Pipeline::createFlusher() when
+/// any of the stages that need flushing are database stages. It only
+/// serves to put the flush() inside a BEGIN/COMMIT TRANSACTION block
+/// for performance (avoid many small transactions).
 class FlusherWithTransaction : public Flusher
 {
-public:
+private:
     FlusherWithTransaction(const std::vector<Stage*>& stages, DatabaseManager* db_mgr)
         : Flusher(stages)
         , db_mgr_(db_mgr)
@@ -69,9 +78,12 @@ public:
         }
     }
 
-    RunnableOutcome flush() override
+    friend class Pipeline;
+
+public:
+    PipelineAction flush() override
     {
-        auto outcome = RunnableOutcome::SLEEP;
+        auto outcome = PipelineAction::SLEEP;
         db_mgr_->safeTransaction([&]()
         {
             outcome = Flusher::flush();

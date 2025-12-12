@@ -17,7 +17,7 @@ class PipelineManager;
 class PollingThread;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
-enum RunnableOutcome
+enum PipelineAction
 {
     // Return if the runnable (task) pushed any data to its output queue,
     // or otherwise should leave the pipeline tasks greedily executing
@@ -52,11 +52,11 @@ public:
 
     /// Process one item from the input queue, returning true
     /// if this runnable did anything.
-    virtual RunnableOutcome processOne(bool force) = 0;
+    virtual PipelineAction processOne(bool force) = 0;
 
     /// Flush and process everything from the input queue,
     /// returning true if this runnable did anything.
-    virtual RunnableOutcome processAll(bool force) = 0;
+    virtual PipelineAction processAll(bool force) = 0;
 
     /// Print info about this runnable for reporting purposes.
     virtual void print(std::ostream& os, int indent) const
