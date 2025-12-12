@@ -32,6 +32,11 @@ public:
 
     virtual ~PollingThread() noexcept = default;
 
+    size_t getIntervalMilliseconds() const
+    {
+        return interval_ms_;
+    }
+
     void addRunnable(Runnable* runnable)
     {
         if (is_running_)
@@ -46,6 +51,25 @@ public:
         return runnables_;
     }
 
+    size_t getNumRunnables() const
+    {
+        return runnables_.size();
+    }
+
+    void ensureRelativeOrder(const std::vector<Runnable*>& runnables)
+    {
+        const std::set<Runnable*> my_runnables(runnables_.begin(), runnables_.end());
+        std::vector<Runnable*> ordered_runnables;
+        for (auto runnable : runnables)
+        {
+            if (my_runnables.count(runnable))
+            {
+                ordered_runnables.push_back(runnable);
+            }
+        }
+        std::swap(ordered_runnables, runnables_);
+    }
+
     virtual bool flushRunnables()
     {
         bool did_work = false;
@@ -56,7 +80,7 @@ public:
                 continue;
             }
 
-            if (runnable->processAll(true) == RunnableOutcome::DID_WORK)
+            if (runnable->processAll(true) == PipelineAction::PROCEED)
             {
                 did_work = true;
             }
@@ -238,7 +262,7 @@ private:
                     continue;
                 }
 
-                if (runner->processOne(force) == RunnableOutcome::DID_WORK)
+                if (runner->processOne(force) == PipelineAction::PROCEED)
                 {
                     processed = true;
                 }

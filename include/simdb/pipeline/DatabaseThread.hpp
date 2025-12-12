@@ -36,19 +36,6 @@ public:
 
 private:
     /// Overridden from AsyncDatabaseAccessHandler
-    DatabaseManager* getDatabaseManager() const override final
-    {
-        return db_mgr_;
-    }
-
-    /// Overridden from AsyncDatabaseAccessHandler
-    void addRunnable(std::unique_ptr<Runnable> runnable) override final
-    {
-        PollingThread::addRunnable(runnable.get());
-        polling_runnables_.emplace_back(std::move(runnable));
-    }
-
-    /// Overridden from AsyncDatabaseAccessHandler
     void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0) override final
     {
         dormant_thread_.eval(std::move(task), timeout_seconds);
@@ -68,7 +55,7 @@ private:
                 do
                 {
                     continue_while = false;
-                    for (auto& runnable : polling_runnables_)
+                    for (auto runnable : getRunnables())
                     {
                         if (!runnable->enabled())
                         {
@@ -78,7 +65,7 @@ private:
                         // We call processOne() here instead of processAll() to use a smaller
                         // granularity of tasks to "inject" break statements more frequently
                         // in the event of pending async DB access requests.
-                        if (runnable->processOne(force) == RunnableOutcome::DID_WORK)
+                        if (runnable->processOne(force) == PipelineAction::PROCEED)
                         {
                             continue_while = true;
                         }
@@ -248,7 +235,7 @@ private:
 
     DatabaseManager* db_mgr_ = nullptr;
     AsyncDatabaseAccessor db_accessor_{this};
-    std::vector<std::unique_ptr<Runnable>> polling_runnables_;
+    std::vector<Runnable*> polling_runnables_;
     DormantThread dormant_thread_;
 };
 

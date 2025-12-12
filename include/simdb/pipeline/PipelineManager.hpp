@@ -5,9 +5,14 @@
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
 #include "simdb/pipeline/DatabaseThread.hpp"
+#include "simdb/pipeline/ThreadMerger.hpp"
 #include "simdb/utils/MTLogger.hpp"
 
 #include <iostream>
+
+namespace simdb {
+    class App;
+}
 
 namespace simdb::pipeline {
 
@@ -19,20 +24,16 @@ public:
         : db_mgr_(db_mgr)
         , pipeline_logger_(pipeline_log_file)
     {
-        polling_threads_.emplace_back(std::make_unique<DatabaseThread>(db_mgr));
     }
 
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor()
     {
         checkOpen_();
-        for (auto& thread : polling_threads_)
+        if (!threads_opened_)
         {
-            if (auto db_thread = dynamic_cast<DatabaseThread*>(thread.get()))
-            {
-                return db_thread->getAsyncDatabaseAccessor();
-            }
+            throw DBException("Cannot access the AsyncDatabaseAccessor before calling openPipelines()");
         }
-        return nullptr;
+        return async_db_accessor_;
     }
 
     utils::MTLogger* getPipelineLogger()
@@ -40,71 +41,101 @@ public:
         return &pipeline_logger_;
     }
 
-    Pipeline* createPipeline(const std::string& name)
+    Pipeline* createPipeline(const std::string& name, const App* app)
     {
         checkOpen_();
-        auto pipeline = std::make_unique<Pipeline>(db_mgr_, name);
+        auto pipeline = std::make_unique<Pipeline>(db_mgr_, name, app);
         pipelines_.emplace_back(std::move(pipeline));
         return pipelines_.back().get();
     }
 
-    void addPipeline(std::unique_ptr<Pipeline> pipeline)
-    {
-        checkOpen_();
-        pipelines_.emplace_back(std::move(pipeline));
-    }
-
-    std::vector<const Pipeline*> getPipelines() const
+    std::vector<Pipeline*> getPipelines()
     {
         checkOpen_();
 
-        std::vector<const Pipeline*> pipelines;
-        for (const auto& pipeline : pipelines_)
+        std::vector<Pipeline*> pipelines;
+        for (auto& pipeline : pipelines_)
         {
             pipelines.push_back(pipeline.get());
         }
         return pipelines;
     }
 
+    void minimizeThreads()
+    {
+        if (thread_merger_)
+        {
+            throw DBException("You can only call minimizeThreads() method once.");
+        }
+
+        thread_merger_ = std::make_unique<ThreadMerger>(pipelines_);
+        thread_merger_->mergeAllAppThreads();
+    }
+
+    void minimizeThreads(const App* app)
+    {
+        if (!thread_merger_)
+        {
+            throw DBException("Cannot merge a single app's pipeline threads");
+        }
+        thread_merger_->addAppForMerging(app);
+    }
+
+    template <typename... Apps>
+    void minimizeThreads(const App* app, Apps&&... rest)
+    {
+        if (!thread_merger_)
+        {
+            thread_merger_ = std::make_unique<ThreadMerger>(pipelines_);
+        }
+        thread_merger_->addAppForMerging(app);
+        minimizeThreads(std::forward<Apps>(rest)...);
+    }
+
     void openPipelines()
     {
         checkOpen_();
 
-        // The number of non-database processing threads we need is equal to
-        // the max number of TaskGroups across all our pipelines.
-        size_t num_proc_threads = 0;
-        for (auto& pipeline : pipelines_)
+        if (!thread_merger_)
         {
-            num_proc_threads = std::max(num_proc_threads, pipeline->getTaskGroups().size());
+            thread_merger_ = std::make_unique<ThreadMerger>(pipelines_);
         }
+        thread_merger_->performMerge(polling_threads_);
 
-        for (size_t i = 0; i < num_proc_threads; ++i)
+        // Now that all threads are created, give the async DB accessor to all non-DB
+        // stages in all pipelines.
+        for (auto& thread : polling_threads_)
         {
-            polling_threads_.emplace_back(std::make_unique<PollingThread>());
-        }
-
-        // Move the DB thread from the front to the back
-        std::rotate(polling_threads_.begin(), polling_threads_.begin() + 1, polling_threads_.end());
-
-        for (auto& pipeline : pipelines_)
-        {
-            auto it = polling_threads_.begin();
-            for (auto group : pipeline->getTaskGroups())
+            if (auto db_thread = dynamic_cast<DatabaseThread*>(thread.get()))
             {
-                if (it == polling_threads_.end() - 1)
-                {
-                    throw DBException("Internal logic error while connecting threads and runnables");
-                }
-
-                (*it)->addRunnable(group);
-                ++it;
+                async_db_accessor_ = db_thread->getAsyncDatabaseAccessor();
+                break;
             }
         }
 
+        if (async_db_accessor_)
+        {
+            for (auto& thread : polling_threads_)
+            {
+                if (!dynamic_cast<DatabaseThread*>(thread.get()))
+                {
+                    for (auto runnable : thread->getRunnables())
+                    {
+                        if (auto stage = dynamic_cast<Stage*>(runnable))
+                        {
+                            stage->setAsyncDatabaseAccessor_(async_db_accessor_);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Now open all threads for simulation
         for (auto& thread : polling_threads_)
         {
             thread->open();
         }
+        threads_opened_ = true;
     }
 
     /// Use this API to temporarily disable all pipeline tasks.
@@ -199,6 +230,17 @@ private:
 
     /// Multi-threaded pipeline logger.
     utils::MTLogger pipeline_logger_;
+
+    /// Flag used to prevent AsyncDatabaseAccessor from being
+    /// accessed until threads are opened/finalized.
+    bool threads_opened_ = false;
+
+    /// Cached AsyncDatabaseAccessor for async DB queries.
+    AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
+
+    /// Used to perform minimizeThread() to share threads
+    /// between concurrently running apps.
+    std::unique_ptr<ThreadMerger> thread_merger_;
 
     void getDisablerThreads_()
     {

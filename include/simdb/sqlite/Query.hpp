@@ -81,6 +81,22 @@ public:
         order_clauses_.clear();
     }
 
+    /// Add a GROUP BY clause. Only one allowed.
+    void groupBy(const char* col_name)
+    {
+        if (!group_by_column_.empty())
+        {
+            throw DBException("Only one GROUP BY clause allowed");
+        }
+        group_by_column_ = col_name;
+    }
+
+    /// Remove the GROUP BY clause.
+    void resetGroupBy()
+    {
+        group_by_column_.clear();
+    }
+
     /// Add a constraint to this query specific to integer types and
     /// scalar target values.
     template <typename T> void addConstraintForInt(const char* col_name, const Constraints constraint, const T target)
@@ -521,6 +537,7 @@ public:
         oss << " FROM " << table_name_ << " ";
 
         appendConstraintClauses_(oss);
+        appendGroupByClause_(oss);
         appendOrderByClauses_(oss);
         appendLimitClause_(oss);
 
@@ -552,6 +569,15 @@ private:
                 }
             }
             oss << " ";
+        }
+    }
+
+    /// Append GROUP BY clause.
+    void appendGroupByClause_(std::ostringstream& oss) const
+    {
+        if (!group_by_column_.empty())
+        {
+            oss << " GROUP BY " << group_by_column_ << " ";
         }
     }
 
@@ -607,6 +633,9 @@ private:
 
     /// SELECT ColA,ColB FROM Table WHERE ... ORDER BY <order_clauses_>
     std::vector<QueryOrderClause> order_clauses_;
+
+    /// SELECT ColA,ColB FROM Table WHERE ... GROUP BY <group_by_column_>
+    std::string group_by_column_;
 
     /// SELECT ColA,ColB FROM Table WHERE <constraint_clauses_>
     std::vector<std::string> constraint_clauses_;

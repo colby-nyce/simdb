@@ -72,6 +72,18 @@ public:
         }
     }
 
+    /// Disable all messages to stdout.
+    void disableMessageLog()
+    {
+        msg_log_.disable();
+    }
+
+    /// Disable all messages to stderr.
+    void disableErrorLog()
+    {
+        err_log_.disable();
+    }
+
     /// After parsing command line arguments or configuration files,
     /// enable an app by its name. This will allow the app to be instantiated
     /// and run during the simulation lifecycle.
@@ -300,10 +312,9 @@ public:
             });
     }
 
-    /// Call this once after all postInit(). This will create all pipelines
-    /// for all enabled apps, and share resources between them to not create
-    /// too many threads in total.
-    void openPipelines(const std::string& pipeline_log_file = "")
+    /// Call this once after postInit(). This will create all pipelines
+    /// for all enabled apps, but it will not open the threads yet.
+    void initializePipelines()
     {
         PROFILE_APP_PHASE
 
@@ -312,58 +323,70 @@ public:
             throw DBException("Pipelines already open");
         }
 
-        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_, pipeline_log_file);
+        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
         for (const auto& [app_name, app] : apps_)
         {
             app->createPipeline(pipeline_mgr_.get());
         }
 
-        pipeline_mgr_->openPipelines();
-
-        // Print final thread/task configuration.
+        // Print final pipeline configurations.
         msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
-        for (const auto pipeline : pipeline_mgr_->getPipelines())
+        for (auto pipeline : pipeline_mgr_->getPipelines())
         {
-            msg_log_ << "---- Pipeline (app): " << pipeline->getName() << "\n";
-            for (auto group : pipeline->getTaskGroups())
+            msg_log_ << "---- Pipeline: " << pipeline->getName() << "\n";
+            for (auto& [stage_name, stage] : pipeline->getOrderedStages())
             {
-                msg_log_ << "------ TaskGroup (thread): " << group->getDescription() << "\n";
-                for (auto task : group->getTasks())
-                {
-                    msg_log_ << "-------- Task: " << task->getDescription() << "\n";
-                }
+                msg_log_ << "------ Stage: " << stage_name << "\n";
             }
         }
 
-        msg_log_ << "\n";
+        msg_log_ << std::endl;
+    }
+
+    /// Optionally call this method after initializePipelines(), but before
+    /// openPipelines(). This will reduce the number of non-database threads
+    /// to the minimum across all app pipelines.
+    ///
+    /// Note that you can either call minimizeThreads() OR minimizeThreads(app1, app2, ...)
+    /// but you cannot call both.
+    void minimizeThreads()
+    {
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->minimizeThreads();
+    }
+
+    /// Optionally call this method after initializePipelines(), but before
+    /// openPipelines(). This will share the minimum number of non-database
+    /// threads across the given apps' pipelines.
+    template <typename... Apps>
+    void minimizeThreads(const App* app, Apps&&... rest)
+    {
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->minimizeThreads(app, std::forward<Apps>(rest)...);
+    }
+
+    /// Call this once after initializePipelines() (and after minimizeThreads()
+    /// if you called that too).
+    void openPipelines()
+    {
+        PROFILE_APP_PHASE
+
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->openPipelines();
     }
 
     /// This method is to be called after the main simulation loop ends.
-    /// It is assumed that there is no more data to be sent into your
-    /// app's pipelines when you call this method. The following will
-    /// be performed:
-    ///
-    ///   1. Call virtual App::preTeardown(). Needed for any apps which
-    ///      use their own data structure to buffer data prior to sending
-    ///      it down the pipeline, as they will have to push the remaining
-    ///      data if they want it processed.
-    ///
-    ///   2. Stop all pipeline threads. Some data is still in the pipeline.
-    ///
-    ///   3. Call virtual TaskBase::processAll(force=true) for every task.
-    ///      They will be called in the same order as they are organized
-    ///      in their respective TaskGroup. Do this for all except the
-    ///      DB writers.
-    ///
-    ///   4. Destroy all pipelines (and therefore task groups, tasks, and
-    ///      their respective ConcurrentQueues).
-    ///
-    ///   5. Destroy all threads.
-    ///
-    ///   6. Call virtual App::postTeardown() in a BEGIN/COMMIT transaction.
-    ///      This is the time to write your post-processing data, metadata,
-    ///      and so on if you need to.
-    ///
+    /// All running apps' pipelines will be flushed, and all threads
+    /// will be torn down.
     void postSimLoopTeardown(bool delete_apps = false)
     {
         PROFILE_APP_PHASE
@@ -467,11 +490,19 @@ private:
             , block_name_(block_name)
             , msg_out_(msg_out)
         {
-            *msg_out_ << "SimDB: Entering " << block_name << "\n";
+            if (msg_out_)
+            {
+                *msg_out_ << "SimDB: Entering " << block_name << "\n";
+            }
         }
 
         ~ScopedTimer()
         {
+            if (!msg_out_)
+            {
+                return;
+            }
+
             auto end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> dur = end - start_;
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(dur).count();
@@ -510,7 +541,7 @@ private:
         template <typename T>
         Logger& operator<<(const T& msg)
         {
-            if (out_)
+            if (out_ && enabled_)
             {
                 *out_ << msg;
                 out_->flush();
@@ -520,7 +551,7 @@ private:
 
         Logger& operator<<(const char* msg)
         {
-            if (out_)
+            if (out_ && enabled_)
             {
                 *out_ << msg;
                 out_->flush();
@@ -528,13 +559,34 @@ private:
             return *this;
         }
 
+        Logger& operator<<(std::ostream& (*manip)(std::ostream&))
+        {
+            if (out_ && enabled_)
+            {
+                manip(*out_);
+                out_->flush();
+            }
+            return *this;
+        }
+
         operator std::ostream*()
         {
-            return out_;
+            return enabled_ ? out_ : nullptr;
+        }
+
+        void disable()
+        {
+            enabled_ = false;
+        }
+
+        void enable()
+        {
+            enabled_ = true;
         }
 
     private:
         std::ostream* out_ = nullptr;
+        bool enabled_ = true;
     };
 
     Logger msg_log_;
