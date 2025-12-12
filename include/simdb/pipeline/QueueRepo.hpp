@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/pipeline/Queue.hpp"
+#include "simdb/Exceptions.hpp"
 
 /// The classes in this file are used to create all the required
 /// simdb::ConcurrentQueue(s) needed for all apps' pipeline stages.
