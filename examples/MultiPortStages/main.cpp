@@ -133,7 +133,7 @@ private:
         {
             if (!ready_x_.isValid())
             {
-                double x;
+                double x = 0;
                 if (x_input_queue_->try_pop(x))
                 {
                     ready_x_ = x;
@@ -142,7 +142,7 @@ private:
 
             if (!ready_y_.isValid())
             {
-                double y;
+                double y = 0;
                 if (y_input_queue_->try_pop(y))
                 {
                     ready_y_ = y;
@@ -182,7 +182,7 @@ private:
             num_unaligned_output_queue_->push(num_unaligned + 1);
 
             // Flush the input queues now that simulation is over.
-            double dummy;
+            double dummy = 0;
             while (x_input_queue_->try_pop(dummy)) { ; }
             while (y_input_queue_->try_pop(dummy)) { ; }
 
@@ -235,7 +235,7 @@ private:
                 outcome = simdb::pipeline::PROCEED;
             }
 
-            size_t num_unaligned;
+            size_t num_unaligned = 0;
             if (num_unaligned_input_queue_->try_pop(num_unaligned))
             {
                 meta_inserter->setColumnValue(0, (int)num_unaligned);
