@@ -1,11 +1,7 @@
 // clang-format off
 
-#include "simdb/apps/App.hpp"
 #include "simdb/apps/AppRegistration.hpp"
-#include "simdb/pipeline/Pipeline.hpp"
-#include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/utils/Compress.hpp"
-#include "SimDBTester.hpp"
+#include "SimplePipeline.hpp"
 
 /// This example demonstrates how to post database queries from
 /// the main thread, or from any non-database stage. These queries
@@ -31,52 +27,14 @@
 
 constexpr size_t TARGET_NUM_RECORDS = 10000;
 
-class SimplePipeline : public simdb::App
+class WatchedPipeline : public SimplePipeline
 {
 public:
-    static constexpr auto NAME = "simple-pipeline";
-
-    SimplePipeline(simdb::DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
-        , tic_(std::chrono::steady_clock::now())
+    WatchedPipeline(simdb::DatabaseManager* db_mgr)
+        : SimplePipeline(db_mgr)
     {}
 
-    ~SimplePipeline() noexcept = default;
-
-    static void defineSchema(simdb::Schema& schema)
-    {
-        using dt = simdb::SqlDataType;
-
-        auto& tbl = schema.addTable("CompressedData");
-        tbl.addColumn("DataBlob", dt::blob_t);
-    }
-
-    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
-    {
-        auto pipeline = pipeline_mgr->createPipeline(NAME, this);
-
-        pipeline->addStage<CompressionStage>("compressor");
-        pipeline->addStage<DatabaseStage>("db_writer");
-        pipeline->noMoreStages();
-
-        pipeline->bind("compressor.compressed_data", "db_writer.data_to_write");
-        pipeline->noMoreBindings();
-
-        // As soon as we call noMoreBindings(), all input/output queues are available
-        pipeline_head_ = pipeline->getInPortQueue<std::vector<double>>("compressor.input_data");
-
-        // Store a pipeline flusher (flush compressor first, then DB writer)
-        pipeline_flusher_ = pipeline->createFlusher({"compressor", "db_writer"});
-
-        // Store the pipeline manager so we can test ScopedRunnableDisabler as
-        // we as access the AsyncDatabaseAccessor later.
-        pipeline_mgr_ = pipeline_mgr;
-    }
-
-    void process(const std::vector<double>& data)
-    {
-        pipeline_head_->push(data);
-    }
+    ~WatchedPipeline() noexcept = default;
 
     bool done()
     {
@@ -103,80 +61,11 @@ public:
     }
 
 private:
-    /// Compress on pipeline thread 1
-    class CompressionStage : public simdb::pipeline::Stage
-    {
-    public:
-        CompressionStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
-            : Stage(name, queue_repo)
-        {
-            addInPort_<std::vector<double>>("input_data", input_queue_);
-            addOutPort_<std::vector<char>>("compressed_data", output_queue_);
-
-            // Ensure that the AsyncDatabaseAccessor is null - no threads have been created yet
-            EXPECT_EQUAL(getAsyncDatabaseAccessor_(), nullptr);
-        }
-
-    private:
-        simdb::pipeline::RunnableOutcome run_(bool) override
-        {
-            std::vector<double> data;
-            if (input_queue_->try_pop(data)) {
-                std::vector<char> compressed_data;
-                simdb::compressData(data, compressed_data);
-                output_queue_->emplace(std::move(compressed_data));
-                return simdb::pipeline::PROCEED;
-            }
-
-            return simdb::pipeline::SLEEP;
-        }
-
-        simdb::ConcurrentQueue<std::vector<double>>* input_queue_ = nullptr;
-        simdb::ConcurrentQueue<std::vector<char>>* output_queue_ = nullptr;
-    };
-
-    /// Write to SQLite on dedicated database thread
-    class DatabaseStage : public simdb::pipeline::DatabaseStage<SimplePipeline>
-    {
-    public:
-        DatabaseStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
-            : simdb::pipeline::DatabaseStage<SimplePipeline>(name, queue_repo)
-        {
-            addInPort_<std::vector<char>>("data_to_write", input_queue_);
-        }
-
-    private:
-        simdb::pipeline::RunnableOutcome run_(bool) override
-        {
-            // Ensure we cannot get the AsyncDatabaseAccessor - we are already
-            // going to be on the database thread, and should just use the
-            // DatabaseManager directly (getDatabaseManager_).
-            EXPECT_THROW(getAsyncDatabaseAccessor_());
-
-            std::vector<char> data;
-            if (input_queue_->try_pop(data)) {
-                auto inserter = getTableInserter_("CompressedData");
-                inserter->setColumnValue(0, data);
-                inserter->createRecord();
-                return simdb::pipeline::PROCEED;
-            }
-
-            return simdb::pipeline::SLEEP;
-        }
-
-        simdb::ConcurrentQueue<std::vector<char>>* input_queue_ = nullptr;
-    };
-
     void thresholdReached_()
     {
         finished_ = true;
     }
 
-    simdb::DatabaseManager* db_mgr_ = nullptr;
-    simdb::ConcurrentQueue<std::vector<double>>* pipeline_head_ = nullptr;
-    simdb::pipeline::PipelineManager* pipeline_mgr_ = nullptr;
-    std::unique_ptr<simdb::pipeline::Flusher> pipeline_flusher_;
-    std::chrono::time_point<std::chrono::steady_clock> tic_;
     bool finished_ = false;
     friend class DatabaseWatchdog;
 };
@@ -206,7 +95,7 @@ public:
         pipeline->noMoreBindings();
     }
 
-    void watch(SimplePipeline* pipeline)
+    void watch(WatchedPipeline* pipeline)
     {
         pipeline_app_ = pipeline;
     }
@@ -218,7 +107,6 @@ private:
         Watchdog(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, DatabaseWatchdog* app)
             : Stage(name, queue_repo, 500) /* Run async query every 500ms */
             , watchdog_app_(app)
-            , tic_(std::chrono::steady_clock::now())
         {
             // No inputs, no outputs
         }
@@ -230,15 +118,6 @@ private:
             {
                 return simdb::pipeline::SLEEP;
             }
-
-            // Query the DB once a second
-            auto toc = std::chrono::steady_clock::now();
-            auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(toc - tic_);
-            if (dur < std::chrono::milliseconds(1000))
-            {
-                return simdb::pipeline::SLEEP;
-            }
-            tic_ = std::chrono::steady_clock::now();
 
             // Query to run asynchronously
             size_t num_records = 0;
@@ -275,7 +154,6 @@ private:
         }
 
         DatabaseWatchdog* watchdog_app_ = nullptr;
-        std::chrono::time_point<std::chrono::steady_clock> tic_;
         bool finished_ = false;
     };
 
@@ -285,11 +163,11 @@ private:
     }
 
     simdb::DatabaseManager* db_mgr_ = nullptr;
-    SimplePipeline* pipeline_app_ = nullptr;
+    WatchedPipeline* pipeline_app_ = nullptr;
     friend class Watchdog;
 };
 
-REGISTER_SIMDB_APPLICATION(SimplePipeline);
+REGISTER_SIMDB_APPLICATION(WatchedPipeline);
 REGISTER_SIMDB_APPLICATION(DatabaseWatchdog);
 
 TEST_INIT;
@@ -302,7 +180,7 @@ int main()
     app_mgr.disableMessageLog();
     app_mgr.disableErrorLog();
 
-    app_mgr.enableApp(SimplePipeline::NAME);
+    app_mgr.enableApp(WatchedPipeline::NAME);
     app_mgr.enableApp(DatabaseWatchdog::NAME);
 
     // Setup...
@@ -312,7 +190,7 @@ int main()
     app_mgr.openPipelines();
 
     // Simulate...
-    auto pipe = app_mgr.getApp<SimplePipeline>();
+    auto pipe = app_mgr.getApp<WatchedPipeline>();
     auto watchdog = app_mgr.getApp<DatabaseWatchdog>();
     watchdog->watch(pipe);
 
