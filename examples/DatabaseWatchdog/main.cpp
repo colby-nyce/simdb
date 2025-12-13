@@ -46,12 +46,8 @@ public:
         // Flush the compressor stage, the flush the database stage.
         pipeline_flusher_->flush();
 
-        size_t record_count = 0;
-        db_mgr_->safeTransaction([&]()
-        {
-            auto query = db_mgr_->createQuery("CompressedData");
-            record_count = query->count();
-        });
+        auto query = db_mgr_->createQuery("CompressedData");
+        size_t record_count = query->count();
 
         std::cout << "After flushing the pipeline, there were ";
         std::cout << record_count << " records in the database.";
