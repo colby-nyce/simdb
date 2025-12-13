@@ -35,3 +35,8 @@ Shows how to:
 - Temporarily disable pipelines using RAII utility
 - Run DB queries on the dedicated DB thread from any non-DB thread
 
+## [AppFactory](AppFactory/)
+
+Shows how to:
+
+- Create apps that have non-default constructors
