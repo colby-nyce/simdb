@@ -2,8 +2,9 @@
 
 #pragma once
 
+#include <deque>
+#include <functional>
 #include <mutex>
-#include <queue>
 
 namespace simdb {
 
@@ -20,14 +21,14 @@ public:
     void push(const T& item)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        queue_.push(item);
+        queue_.push_back(item);
     }
 
     /// \brief Push an item to the back of the queue (move version).
     void emplace(T&& item)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        queue_.emplace(std::move(item));
+        queue_.emplace_back(std::move(item));
     }
 
     /// \brief Construct an item on the back of the queue.
@@ -36,7 +37,7 @@ public:
     template <typename... Args> void emplace(Args&&... args)
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        queue_.emplace(std::forward<Args>(args)...);
+        queue_.emplace_back(std::forward<Args>(args)...);
     }
 
     /// \brief Get the item at the front of the queue.
@@ -53,7 +54,7 @@ public:
             return false;
         }
         std::swap(item, queue_.front());
-        queue_.pop();
+        queue_.pop_front();
         return true;
     }
 
@@ -71,12 +72,27 @@ public:
         return queue_.empty();
     }
 
+    /// \brief Invoke a callback function to peek into this queue's
+    /// items. This will be invoked until the callback returns TRUE
+    /// or until we have iterated over all queue items.
+    void snoop(const std::function<bool(const T& queue_item)>& cb) const
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        for (const auto& item : queue_)
+        {
+            if (cb(item))
+            {
+                break;
+            }
+        }
+    }
+
 private:
     /// Mutex for thread safety.
     mutable std::mutex mutex_;
 
-    /// FIFO queue to hold the data.
-    std::queue<T> queue_;
+    /// FIFO queue to hold the data. A deque is used to support snooping.
+    std::deque<T> queue_;
 };
 
 } // namespace simdb

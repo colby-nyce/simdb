@@ -35,6 +35,12 @@ Shows how to:
 - Temporarily disable pipelines using RAII utility
 - Run DB queries on the dedicated DB thread from any non-DB thread
 
+## [PipelineSnoopers](PipelineSnoopers/)
+
+Shows how to:
+
+- Quickly scan a pipeline looking for specific data before it gets too far down the pipeline
+
 ## [AppFactory](AppFactory/)
 
 Shows how to:
