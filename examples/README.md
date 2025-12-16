@@ -39,7 +39,7 @@ Shows how to:
 
 Shows how to:
 
-- Quickly scan a pipeline looking for specific data before it gets too far down the pipeline.
+- Quickly scan a pipeline looking for specific data before it gets too far down the pipeline
 
 ## [AppFactory](AppFactory/)
 
