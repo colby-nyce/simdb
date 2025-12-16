@@ -43,7 +43,7 @@ public:
     }
 
     template <typename StageType, typename... Args>
-    void addStage(const std::string& name, Args&&... args)
+    StageType* addStage(const std::string& name, Args&&... args)
     {
         if (state_ != State::ACCEPTING_STAGES)
         {
@@ -57,6 +57,7 @@ public:
         }
         stage = std::make_unique<StageType>(name, queue_repo_, std::forward<Args>(args)...);
         stages_in_order_.push_back(name);
+        return static_cast<StageType*>(stage.get());
     }
 
     void noMoreStages()
@@ -125,10 +126,11 @@ public:
         state_ = State::FINALIZED;
     }
 
-    std::unique_ptr<Flusher> createFlusher(const std::vector<std::string>& stage_names)
+    std::unique_ptr<Flusher> createFlusher(const std::vector<std::string>& stage_names = {})
     {
         std::vector<Stage*> stages;
-        for (const auto & name : stage_names)
+        const auto & ordered_stage_names = !stage_names.empty() ? stage_names : stages_in_order_;
+        for (const auto & name : ordered_stage_names)
         {
             auto it = stages_.find(name);
             if (it == stages_.end())
