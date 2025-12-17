@@ -1,1 +1,1 @@
-sqlite_test(SQLiteUInt64 UInt64.cpp)
+sqlite_test(SQLiteUInt64 main.cpp)

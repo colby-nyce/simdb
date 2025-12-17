@@ -1,1 +1,1 @@
-sqlite_test(SQLiteDelete Delete.cpp)
+sqlite_test(SQLiteDelete main.cpp)
