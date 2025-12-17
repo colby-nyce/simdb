@@ -170,9 +170,8 @@ private:
     class BufferStage : public simdb::pipeline::Stage
     {
     public:
-        BufferStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, uint32_t& snooped_queue_counter, uint32_t& snooped_internal_counter)
-            : simdb::pipeline::Stage(name, queue_repo)
-            , snooped_queue_counter_(snooped_queue_counter)
+        BufferStage(uint32_t& snooped_queue_counter, uint32_t& snooped_internal_counter)
+            : snooped_queue_counter_(snooped_queue_counter)
             , snooped_internal_counter_(snooped_internal_counter)
         {
             addInPort_<DummyData>("input_data", input_queue_);
@@ -266,9 +265,8 @@ private:
     class BoostStage : public simdb::pipeline::Stage
     {
     public:
-        BoostStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, uint32_t& snooped_counter)
-            : simdb::pipeline::Stage(name, queue_repo)
-            , snooped_counter_(snooped_counter)
+        BoostStage(uint32_t& snooped_counter)
+            : snooped_counter_(snooped_counter)
         {
             addInPort_<std::vector<DummyData>>("input_buffer", input_queue_);
             addOutPort_<DummyDataWindowBytes>("output_bytes", output_queue_);
@@ -344,9 +342,8 @@ private:
     class ZlibStage : public simdb::pipeline::Stage
     {
     public:
-        ZlibStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, uint32_t& snooped_counter)
-            : simdb::pipeline::Stage(name, queue_repo)
-            , snooped_counter_(snooped_counter)
+        ZlibStage(uint32_t& snooped_counter)
+            : snooped_counter_(snooped_counter)
         {
             addInPort_<DummyDataWindowBytes>("input_bytes", input_queue_);
             addOutPort_<DummyDataWindowBytes>("output_bytes", output_queue_);
@@ -429,9 +426,8 @@ private:
     class DatabaseStage : public simdb::pipeline::DatabaseStage<PipelineSnooper>
     {
     public:
-        DatabaseStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, uint32_t& snooped_queue_counter, uint32_t& snooped_db_counter)
-            : simdb::pipeline::DatabaseStage<PipelineSnooper>(name, queue_repo)
-            , snooped_queue_counter_(snooped_queue_counter)
+        DatabaseStage(uint32_t& snooped_queue_counter, uint32_t& snooped_db_counter)
+            : snooped_queue_counter_(snooped_queue_counter)
             , snooped_database_counter_(snooped_db_counter)
         {
             addInPort_<DummyDataWindowBytes>("input_bytes", input_queue_);

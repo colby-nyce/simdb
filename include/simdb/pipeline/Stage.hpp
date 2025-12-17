@@ -21,22 +21,20 @@ protected:
     /// Overriding the interval is only available for non-database stages. If you
     /// intend to call AppManager::minimizeThreads(), then all non-database stages
     /// must agree on the interval for their shared PollingThread.
-    Stage(const std::string& name, QueueRepo& queue_repo, size_t interval_milliseconds = 100)
-        : name_(name)
-        , queue_repo_(queue_repo)
-        , interval_milliseconds_(interval_milliseconds)
+    Stage(size_t interval_milliseconds = 100)
+        : interval_milliseconds_(interval_milliseconds)
     {}
 
     template <typename T>
     void addInPort_(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {
-        queue_repo_.addInPortPlaceholder<T>(name_, port_name, queue);
+        queue_repo_.addInPortPlaceholder<T>(port_name, queue);
     }
 
     template <typename T>
     void addOutPort_(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {
-        queue_repo_.addOutPortPlaceholder<T>(name_, port_name, queue);
+        queue_repo_.addOutPortPlaceholder<T>(port_name, queue);
     }
 
     virtual AsyncDatabaseAccessor* getAsyncDatabaseAccessor_() const
@@ -45,6 +43,17 @@ protected:
     }
 
 private:
+    void setName_(const std::string& name)
+    {
+        name_ = name;
+        queue_repo_.setStageName(name);
+    }
+
+    void mergeQueueRepo_(PipelineQueueRepo& master_repo)
+    {
+        master_repo.merge(queue_repo_);
+    }
+
     virtual void assignThread_(DatabaseManager*,
                                std::vector<std::unique_ptr<PollingThread>>& threads,
                                std::unique_ptr<DatabaseThread>&)
@@ -88,7 +97,7 @@ private:
     virtual PipelineAction run_(bool force) = 0;
 
     std::string name_;
-    QueueRepo& queue_repo_;
+    StageQueueRepo queue_repo_;
     const size_t interval_milliseconds_;
     AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
 
@@ -99,11 +108,6 @@ private:
 
 class DatabaseStageBase : public Stage
 {
-public:
-    DatabaseStageBase(const std::string& name, QueueRepo& queue_repo)
-        : Stage(name, queue_repo)
-    {}
-
 protected:
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor_() const override final
     {
@@ -114,11 +118,6 @@ protected:
 template <typename AppT>
 class DatabaseStage : public DatabaseStageBase
 {
-public:
-    DatabaseStage(const std::string& name, QueueRepo& queue_repo)
-        : DatabaseStageBase(name, queue_repo)
-    {}
-
 protected:
     DatabaseManager* getDatabaseManager_()
     {

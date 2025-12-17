@@ -100,8 +100,8 @@ private:
     class Watchdog : public simdb::pipeline::Stage
     {
     public:
-        Watchdog(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, DatabaseWatchdog* app)
-            : Stage(name, queue_repo, 500) /* Run async query every 500ms */
+        Watchdog(DatabaseWatchdog* app)
+            : Stage(500) /* Run async query every 500ms */
             , watchdog_app_(app)
         {
             // No inputs, no outputs

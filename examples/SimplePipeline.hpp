@@ -72,8 +72,7 @@ private:
     class CompressionStage : public simdb::pipeline::Stage
     {
     public:
-        CompressionStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
-            : Stage(name, queue_repo)
+        CompressionStage()
         {
             addInPort_<std::vector<double>>("input_data", input_queue_);
             addOutPort_<std::vector<char>>("compressed_data", output_queue_);
@@ -104,9 +103,8 @@ private:
     class DatabaseStage : public simdb::pipeline::DatabaseStage<SimplePipeline>
     {
     public:
-        DatabaseStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo, size_t instance_num)
-            : simdb::pipeline::DatabaseStage<SimplePipeline>(name, queue_repo)
-            , instance_num_(instance_num)
+        DatabaseStage(size_t instance_num)
+            : instance_num_(instance_num)
         {
             addInPort_<std::vector<char>>("data_to_write", input_queue_);
         }
