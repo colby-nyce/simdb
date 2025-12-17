@@ -70,6 +70,7 @@ public:
         {
             stage->mergeQueueRepo_(queue_repo_);
         }
+        queue_repo_.noMoreStages();
         state_ = State::ACCEPTING_BINDINGS;
     }
 

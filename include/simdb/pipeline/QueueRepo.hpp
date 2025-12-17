@@ -196,6 +196,11 @@ class PipelineQueueRepo
 public:
     void merge(StageQueueRepo& other)
     {
+        if (state_ != RepoState::ACCEPTING_STAGES)
+        {
+            throw DBException("Cannot merge StageQueueRepo; PipelineQueueRepo not accepting stages.");
+        }
+
         for (auto& [key, placeholder] : other.input_placeholders_)
         {
             if (input_placeholders_.find(key) != input_placeholders_.end())
@@ -218,18 +223,32 @@ public:
         other.output_placeholders_.clear();
     }
 
+    void noMoreStages()
+    {
+        if (state_ != RepoState::ACCEPTING_STAGES)
+        {
+            throw DBException("Cannot finalize stages; PipelineQueueRepo not accepting stages.");
+        }
+        state_ = RepoState::ACCEPTING_BINDINGS;
+    }
+
     void bind(const std::string& output_port_full_name,
               const std::string& input_port_full_name)
     {
-        if (finalized_)
+        if (state_ != RepoState::ACCEPTING_BINDINGS)
         {
-            throw DBException("Cannot bind ports; QueueRepo already finalized.");
+            throw DBException("Cannot bind ports; PipelineQueueRepo not accepting bindings.");
         }
         port_bindings_[output_port_full_name] = input_port_full_name;
     }
 
     void finalizeBindings()
     {
+        if (state_ != RepoState::ACCEPTING_BINDINGS)
+        {
+            throw DBException("Cannot finalize bindings; PipelineQueueRepo not accepting bindings.");
+        }
+
         for (const auto& [out_port, in_port] : port_bindings_)
         {
             auto out_it = output_placeholders_.find(out_port);
@@ -268,16 +287,21 @@ public:
             }
         }
 
-        finalized_ = true;
+        state_ = RepoState::BINDINGS_COMPLETE;
     }
 
     template <typename T>
     ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
+        if (state_ != RepoState::BINDINGS_COMPLETE)
+        {
+            throw DBException("Cannot access port queues until finalizeBindings() is called.");
+        }
+
         auto it = input_placeholders_.find(port_full_name);
         if (it == input_placeholders_.end())
         {
-            throw DBException("Input port placeholder '" + port_full_name + "' not found in QueueRepo");
+            throw DBException("Input port placeholder '" + port_full_name + "' not found in PipelineQueueRepo");
         }
         auto typed_placeholder = dynamic_cast<InputQueuePlaceholder<T>*>(it->second.get());
         if (!typed_placeholder)
@@ -291,10 +315,15 @@ public:
     template <typename T>
     ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
     {
+        if (state_ != RepoState::BINDINGS_COMPLETE)
+        {
+            throw DBException("Cannot access port queues until finalizeBindings() is called.");
+        }
+
         auto it = output_placeholders_.find(port_full_name);
         if (it == output_placeholders_.end())
         {
-            throw DBException("Output port placeholder '" + port_full_name + "' not found in QueueRepo");
+            throw DBException("Output port placeholder '" + port_full_name + "' not found in PipelineQueueRepo");
         }
         auto typed_placeholder = dynamic_cast<OutputQueuePlaceholder<T>*>(it->second.get());
         if (!typed_placeholder)
@@ -341,7 +370,15 @@ private:
     std::set<std::string> unbound_input_queues_;
     std::set<std::string> unbound_output_queues_;
     std::vector<std::unique_ptr<QueueBase>> queues_;
-    bool finalized_ = false;
+
+    enum class RepoState
+    {
+        ACCEPTING_STAGES,
+        ACCEPTING_BINDINGS,
+        BINDINGS_COMPLETE
+    };
+
+    RepoState state_ = RepoState::ACCEPTING_STAGES;
 };
 
 } // namespace simdb::pipeline
