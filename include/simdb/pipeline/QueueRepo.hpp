@@ -111,43 +111,111 @@ private:
     ConcurrentQueue<T>*& queue_;
 };
 
-class QueueRepo
+class StageQueueRepo
 {
 public:
     template <typename T>
-    void addInPortPlaceholder(const std::string& stage_name,
-                              const std::string& port_name,
+    void addInPortPlaceholder(const std::string& port_name,
                               ConcurrentQueue<T>*& queue)
     {
-        if (finalized_)
+        if (!stage_name_.empty())
         {
-            throw DBException("Cannot add input port placeholder; QueueRepo already finalized.");
+            throw DBException("You may only add in/out ports in Stage subclass constructors");
         }
 
-        std::string key = stage_name + "." + port_name;
-        auto& placeholder = input_placeholders_[key];
-        if (placeholder) {
-            throw DBException("Input port placeholder '" + key + "' already exists in QueueRepo");
+        auto& placeholder = input_placeholders_[port_name];
+        if (placeholder)
+        {
+            throw DBException("Input port placeholder '" + port_name + "' already exists in QueueRepo");
         }
         placeholder = std::make_unique<InputQueuePlaceholder<T>>(queue);
     }
 
     template <typename T>
-    void addOutPortPlaceholder(const std::string& stage_name,
-                               const std::string& port_name,
+    void addOutPortPlaceholder(const std::string& port_name,
                                ConcurrentQueue<T>*& queue)
     {
-        if (finalized_)
+        if (!stage_name_.empty())
         {
-            throw DBException("Cannot add output port placeholder; QueueRepo already finalized.");
+            throw DBException("You may only add in/out ports in Stage subclass constructors");
         }
 
-        std::string key = stage_name + "." + port_name;
-        auto& placeholder = output_placeholders_[key];
-        if (placeholder) {
-            throw DBException("Output port placeholder '" + key + "' already exists in QueueRepo");
+        auto& placeholder = output_placeholders_[port_name];
+        if (placeholder)
+        {
+            throw DBException("Output port placeholder '" + port_name + "' already exists in QueueRepo");
         }
         placeholder = std::make_unique<OutputQueuePlaceholder<T>>(queue);
+    }
+
+    void setStageName(const std::string& stage_name)
+    {
+        if (stage_name_ != stage_name && !stage_name_.empty())
+        {
+            throw DBException("Cannot rename StageQueueRepo stage name from '" + stage_name_ +
+                              "' to '" + stage_name + "'. Can only set the stage name once.");
+        }
+        stage_name_ = stage_name;
+
+        std::vector<std::string> keys_to_delete;
+        for (auto& [key, placeholder] : input_placeholders_)
+        {
+            auto new_key = stage_name_ + "." + key;
+            keys_to_delete.push_back(key);
+            input_placeholders_[new_key] = std::move(placeholder);
+        }
+
+        for (const auto& key : keys_to_delete)
+        {
+            input_placeholders_.erase(key);
+        }
+
+        keys_to_delete.clear();
+        for (auto& [key, placeholder] : output_placeholders_)
+        {
+            auto new_key = stage_name_ + "." + key;
+            keys_to_delete.push_back(key);
+            output_placeholders_[new_key] = std::move(placeholder);
+        }
+
+        for (const auto& key : keys_to_delete)
+        {
+            output_placeholders_.erase(key);
+        }
+    }
+
+private:
+    std::unordered_map<std::string, std::unique_ptr<QueuePlaceholder>> input_placeholders_;
+    std::unordered_map<std::string, std::unique_ptr<QueuePlaceholder>> output_placeholders_;
+    std::string stage_name_;
+    friend class PipelineQueueRepo;
+};
+
+class PipelineQueueRepo
+{
+public:
+    void merge(StageQueueRepo& other)
+    {
+        for (auto& [key, placeholder] : other.input_placeholders_)
+        {
+            if (input_placeholders_.find(key) != input_placeholders_.end())
+            {
+                throw DBException("Input port placeholder '" + key + "' already exists in QueueRepo");
+            }
+            input_placeholders_[key] = std::move(placeholder);
+        }
+
+        for (auto& [key, placeholder] : other.output_placeholders_)
+        {
+            if (output_placeholders_.find(key) != output_placeholders_.end())
+            {
+                throw DBException("Output port placeholder '" + key + "' already exists in QueueRepo");
+            }
+            output_placeholders_[key] = std::move(placeholder);
+        }
+
+        other.input_placeholders_.clear();
+        other.output_placeholders_.clear();
     }
 
     void bind(const std::string& output_port_full_name,

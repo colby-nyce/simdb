@@ -99,8 +99,7 @@ private:
     class SyncXYStage : public simdb::pipeline::Stage
     {
     public:
-        SyncXYStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
-            : Stage(name, queue_repo)
+        SyncXYStage()
         {
             // Receive X and Y values independently
             addInPort_<double>("x_input", x_input_queue_);
@@ -204,8 +203,7 @@ private:
     class DatabaseStage : public simdb::pipeline::DatabaseStage<MultiPortStages>
     {
     public:
-        DatabaseStage(const std::string& name, simdb::pipeline::QueueRepo& queue_repo)
-            : simdb::pipeline::DatabaseStage<MultiPortStages>(name, queue_repo)
+        DatabaseStage()
         {
             addInPort_<std::pair<double, double>>("xy_input", xy_input_queue_);
             addInPort_<size_t>("num_unaligned_xy", num_unaligned_input_queue_);

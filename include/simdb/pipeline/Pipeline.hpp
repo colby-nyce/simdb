@@ -3,7 +3,6 @@
 #pragma once
 
 #include "simdb/pipeline/Stage.hpp"
-#include "simdb/pipeline/QueueRepo.hpp"
 #include "simdb/pipeline/Flusher.hpp"
 #include <map>
 
@@ -42,8 +41,8 @@ public:
         return pipeline_name_;
     }
 
-    template <typename StageType, typename... Args>
-    StageType* addStage(const std::string& name, Args&&... args)
+    template <typename StageType, typename... StageCtorArgs>
+    StageType* addStage(const std::string& name, StageCtorArgs&&... args)
     {
         if (state_ != State::ACCEPTING_STAGES)
         {
@@ -55,7 +54,8 @@ public:
         {
             throw DBException("Stage '" + name + "' already exists in pipeline '" + pipeline_name_ + "'.");
         }
-        stage = std::make_unique<StageType>(name, queue_repo_, std::forward<Args>(args)...);
+        stage = std::make_unique<StageType>(std::forward<StageCtorArgs>(args)...);
+        stage->setName_(name);
         stages_in_order_.push_back(name);
         return static_cast<StageType*>(stage.get());
     }
@@ -65,6 +65,10 @@ public:
         if (state_ != State::ACCEPTING_STAGES)
         {
             throw DBException("Cannot finalize stages for pipeline '" + pipeline_name_ + "'; stage changes already finalized.");
+        }
+        for (auto& [stage_name, stage] : stages_)
+        {
+            stage->mergeQueueRepo_(queue_repo_);
         }
         state_ = State::ACCEPTING_BINDINGS;
     }
@@ -187,7 +191,7 @@ private:
     const App* app_ = nullptr;
     std::unordered_map<std::string, std::unique_ptr<Stage>> stages_;
     std::vector<std::string> stages_in_order_;
-    QueueRepo queue_repo_;
+    PipelineQueueRepo queue_repo_;
     AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
 
     enum class State {
