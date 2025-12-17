@@ -216,6 +216,8 @@ db_mgr.appendSchema(schema);
 // SQLite connection is now open.
 ```
 
+See test/sqlite/Schema/main.cpp
+
 ### Record INSERT
 
 ```
@@ -242,6 +244,8 @@ data_insert_stmt->setColumnValue(1, blob2);
 data_insert_stmt->createRecord();
 ```
 
+See test/sqlite/Insert/main.cpp
+
 ### Explicit BEGIN / COMMIT TRANSACTION
 
 Put multiple database operations in a single transaction. This will keep retrying in the event of locked schema tables or other access issues until successful.
@@ -252,8 +256,6 @@ db_mgr.safeTransaction([&]()
     // Do all transaction work here.
 });
 ```
-
-See test/sqlite/Insert/Insert.cpp
 
 ### Record SELECT
 
@@ -275,7 +277,7 @@ while (results.getNextRecord()) {
 }
 ```
 
-See test/sqlite/Query/Query.cpp
+See test/sqlite/Query/main.cpp
 
 ---
 

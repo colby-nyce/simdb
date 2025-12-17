@@ -1,1 +1,1 @@
-sqlite_test(SQLiteQuery Query.cpp)
+sqlite_test(SQLiteQuery main.cpp)

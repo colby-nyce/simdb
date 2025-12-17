@@ -1,1 +1,1 @@
-sqlite_test(SQLiteSchema Schema.cpp)
+sqlite_test(SQLiteSchema main.cpp)
