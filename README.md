@@ -59,132 +59,155 @@ SimDB enables a wide range of high-performance simulation and analysis workflows
 
 ## Code Snippets: Pipeline Creation
 
-SimDB pipelines are created by defining a series of stages (pipeline elements) with specific I/O data types, connecting them together, and assigning these stages to one or more threads.
-
-### Pipeline Elements
-
-The following elements are provided by SimDB (other modules might call these "tasks", "filters", "stages", or "transforms"):
-
-- Simple I/O function
-- Buffers, circular buffers
-- Database tasks for read/write operations on the dedicated DB thread
-
-The Function/DatabaseTask objects allow void-input and/or void-output.
-
-Users can also define their own pipeline elements, for instance:
-
-- Muxers
-- Routers/switches
-- Reorder buffers
-
-### Example
-
-Here is a code snippet for a simple pipeline:
+SimDB pipelines are created by defining a series of stages with specific I/O data types, and binding stage input/output queues together. Here is an example of a simple one-way pipeline with a single input. Pipeline stages can have multiple inputs/outputs, though a one-way pipeline is used here for brevity.
 
 ```
-namespace pipe = simdb::pipeline;
+// Stage 1: Accept a timestamp and a vector of stats and compress them
+class CompressionStage : public simdb::pipeline::Stage
+{
+public:
+    using ZlibIn  = std::pair<uint64_t, std::vector<double>>;
+    using ZlibOut = std::pair<uint64_t, std::vector<char>>;
 
-// Task 1: Accept a timestamp and a vector of stats and compress them
-using ZlibIn  = std::pair<uint64_t, std::vector<double>>;
-using ZlibOut = std::pair<uint64_t, std::vector<char>>;
-
-auto compress = pipe::createTask<pipe::Function<ZlibIn, ZlibOut>>(
-    [](ZlibIn&& uncompressed,
-       simdb::ConcurrentQueue<ZlibOut>& out,
-       bool /*force*/)
+    CompressionStage()
     {
-        ZlibOut compressed;
-
-        // Carry forward timestamp
-        compressed.first = uncompressed.first;
-
-        // Perform zlib compression
-        simdb::compressData(uncompressed.second, compressed.second);
-
-        // Send to task 2
-        out.emplace(std::move(compressed));
-
-        // Tell SimDB we did something. Pipelines are greedy and only
-        // go to sleep for a bit when all stages had nothing to do.
-        return pipe::RunnableOutcome::DID_WORK;
+        addInPort_<ZlibIn>("input_data", input_queue_);
+        addOutPort_<ZlibOut>("output_bytes", output_queue_);
     }
-);
 
-// Task 2: Write compressed data to SQLite
+private:
+    simdb::pipeline::PipelineAction run_(bool force) override
+    {
+        auto action = simdb::pipeline::PipelineAction::SLEEP;
+
+        // Process input if we have any.
+        ZlibIn input;
+        if (input_queue_->try_pop(input))
+        {
+            ZlibOut output;
+
+            // Carry over the timestamp (uint64_t, e.g. simulation tick/cycle).
+            output.first = input.first;
+
+            // Compress and send.
+            simdb::compressData(input.second, output.second);
+            output_queue_->emplace(std::move(output));
+
+            // Inform SimDB that we should keep running this stage without sleeping.
+            action = simdb::pipeline::PipelineAction::PROCEED;
+        }
+
+        return action;
+    }
+
+    // Stage I/O queues are created and assigned by SimDB automatically.
+    simdb::ConcurrentQueue<ZlibIn>* input_queue_ = nullptr;
+    simdb::ConcurrentQueue<ZlibOut>* output_queue_ = nullptr;
+};
+
+// Stage 2: Write compressed data to SQLite
+// NOTE: It is assumed here that your simdb::App subclass is called "SimStatsCollector".
 using DatabaseIn  = ZlibOut;
-using DatabaseOut = void;
-auto write = pipe::createTask<pipe::DatabaseTask<DatabaseIn, DatabaseOut>>(
-    db_mgr_, // - - - - - - - - - - SimDB apps all have the database manager
-    [](DatabaseIn&& compressed,
-       pipe::DatabaseAccessor& accessor,
-       bool /*force*/)
+
+class DatabaseStage : public simdb::pipeline::DatabaseStage<SimStatsCollector>
+{
+public:
+    DatabaseStage()
     {
-        const auto timestamp = compressed.first;
-        const auto & bytes = compressed.second;
-
-        // Schema is defined by the app elsewhere. Note that this code
-        // is implicitly on the dedicated DB thread, and we are already
-        // inside a batched BEGIN/COMMIT TRANSACTION block.
-        accessor.getDatabaseManager()->INSERT(
-            SQL_TABLE("CompressedStats"),
-            SQL_COLUMNS("Timestamp", "RawBytes"),
-            SQL_VALUES(timestamp, bytes)
-        );
-
-        // Keep greedily consuming.
-        return pipe::RunnableOutcome::DID_WORK;
+        addInPort_<DatabaseIn>("input_bytes", input_queue_);
     }
-);
 
-// Connect tasks.
-*compress >> *write;
+private:
+    simdb::pipeline::PipelineAction run_(bool force) override
+    {
+        // NOTE: DatabaseStages are always implicitly run inside batch
+        // BEGIN TRANSACTION / COMMIT TRANSACTION blocks on a single DB
+        // thread.
+        auto action = simdb::pipeline::PipelineAction::SLEEP;
 
-// Save the input queue to the first task.
-pipeline_head_ = compress->getTypedInputQueue<ZlibIn>();
+        // Process input if we have any.
+        DatabaseIn input;
+        if (input_queue_->try_pop(input))
+        {
+            // Get prepared statement for the INSERT.
+            // NOTE: Your simdb::App subclass defines the schema in another method.
+            auto inserter = getTableInserter_("SimStats");
 
-// Later on, this app can send stats down the pipeline:
-//
-//   void StatsCollectorApp::send(std::vector<double>&& stats)
-//   {
-//       // Assumed that your simulation has some API to get the sim time:
-//       uint64_t timestamp = sim_->getCurrentTime();
-//
-//       // Package it up and send:
-//       ZlibIn payload = std::make_pair(timestamp, std::move(stats));
-//       pipeline_head_->emplace(std::move(payload));
-//   }
+            // INSERT INTO SimStats COLUMNS(Timestamp, StatsBlob) VALUES(123, bytes...)
+            inserter->setColumnValue(0, input.first);
+            inserter->setColumnValue(1, input.second);
+            inserter->createRecord();
+
+            // Inform SimDB that we should keep running this stage without sleeping.
+            action = simdb::pipeline::PipelineAction::PROCEED;
+        }
+
+        return action;
+    }
+
+    // Stage I/O queues are created and assigned by SimDB automatically.
+    simdb::ConcurrentQueue<DatabaseIn>* input_queue_ = nullptr;
+};
+
+// Example schema for the SimStatsCollector.
+void SimStatsCollector::defineSchema(simdb::Schema& schema)
+{
+    using dt = simdb::SqlDataType;
+
+    auto& tbl = schema.addTable("SimStats");
+    tbl.addColumn("Timestamp", dt::uint64_t);
+    tbl.addColumn("StatsBlob", dt::blob_t);
+}
+
+// Pipeline creation: create stages, create I/O ports, bind ports.
+void SimStatsCollector::createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr)
+{
+    auto pipeline = pipeline_mgr->createPipeline("sim-stats-collector", this);
+
+    pipeline->addStage<CompressionStage>("compressor");
+    pipeline->addStage<DatabaseStage>("db_writer");
+    pipeline->noMoreStages();
+
+    pipeline->bind("compressor.output_bytes", "db_writer.input_bytes");
+    pipeline->noMoreBindings();
+
+    // Save the input queue to the first stage. Pipeline head is of type:
+    // simdb::ConcurrentQueue<ZlibIn>* pipeline_head_;
+    pipeline_head_ = pipeline->getInPortQueue<ZlibIn>("compressor.input_data");
+}
+
+// Main entry point for new data.
+void SimStatsCollector::send(std::vector<double>&& stats)
+{
+    // Assumed that your simulation has some API to get the sim time:
+    uint64_t timestamp = sim_->getCurrentTime();
+
+    // Package it up and send:
+    ZlibIn payload = std::make_pair(timestamp, std::move(stats));
+    pipeline_head_->emplace(std::move(payload));
+}
 ```
-
-This is a simple one-way pipeline with a single input, but pipelines can have multiple inputs and graphs/feedback loops. A one-way pipeline is used here for brevity.
-
-See examples/PipelineCache/main.cpp for a complete pipeline app.
-
-See examples/CompressionPool/main.cpp for a user-defined element (ReorderBuffer).
-
----
 
 ## Code Snippets: SQLite Interface
 
-### Schema Creation
+Even though SimDB's main advantage is its implicit integration of pipelines with SQLite, you can still use SimDB just for its SQLite interface without using any pipelines.
+
+### Database Creation
 
 ```
 using dt = simdb::SqlDataType;
+
 simdb::Schema schema;
-auto& tbl = schema.addTable("CompressedStats")
+
+auto& tbl = schema.addTable("SimStats");
 tbl.addColumn("Timestamp", dt::uint64_t);
-tbl.addColumn("RawBytes", dt::blob_t);
+tbl.addColumn("StatsBlob", dt::blob_t);
 
 // Optionally:
 //   Create table indexes...
 //   Assign column default values...
 //   Disable auto-incrementing Id column...
-```
 
-See test/sqlite/Schema/Schema.cpp
-
-### Database Creation
-
-```
 simdb::DatabaseManager db_mgr("stats.db");
 
 // You can call this method more than once if additional tables are needed later.
@@ -196,27 +219,38 @@ db_mgr.appendSchema(schema);
 ### Record INSERT
 
 ```
-// From the above pipeline example:
+// Without prepared statements:
 db_mgr.INSERT(
-    SQL_TABLE("CompressedStats"),
-    SQL_COLUMNS("Timestamp", "RawBytes"),
-    SQL_VALUES(timestamp, bytes)
+    SQL_TABLE("SimStats"),
+    SQL_COLUMNS("Timestamp", "StatsBlob"),
+    SQL_VALUES(timestamp, blob)
 );
 
-// Or use prepared statements:
-auto data_insert_stmt = db_mgr.prepareINSERT(
-    SQL_TABLE("CompressedStats"),
-    SQL_COLUMNS("Timestamp", "RawBytes")
+// With prepared statements:
+auto inserter = db_mgr.prepareINSERT(
+    SQL_TABLE("SimStats"),
+    SQL_COLUMNS("Timestamp", "StatsBlob")
 );
 
 // Reuse over and over:
 data_insert_stmt->setColumnValue(0, time1);
-data_insert_stmt->setColumnValue(1, bytes1);
+data_insert_stmt->setColumnValue(1, blob2);
 data_insert_stmt->createRecord();
 
 data_insert_stmt->setColumnValue(0, time2);
-data_insert_stmt->setColumnValue(1, bytes2);
+data_insert_stmt->setColumnValue(1, blob2);
 data_insert_stmt->createRecord();
+```
+
+### Explicit BEGIN / COMMIT TRANSACTION
+
+Put multiple database operations in a single transaction. This will keep retrying in the event of locked schema tables or other access issues until successful.
+
+```
+db_mgr.safeTransaction([&]()
+{
+    // Do all transaction work here.
+});
 ```
 
 See test/sqlite/Insert/Insert.cpp
@@ -224,19 +258,19 @@ See test/sqlite/Insert/Insert.cpp
 ### Record SELECT
 
 ```
-// SELECT RawBytes FROM CompressedStats
+// SELECT StatsBlob FROM SimStats
 // WHERE Timestamp >= 100 AND Timestamp <= 200
-auto query = db_mgr.createQuery("CompressedStats");
+auto query = db_mgr.createQuery("SimStats");
 query->addConstraintForUInt64("Timestamp", simdb::Constraints::GREATER_EQUAL, 100);
 query->addConstraintForUInt64("Timestamp", simdb::Constraints::LESS_EQUAL, 200);
 
-std::vector<char> bytes;
-query->select("RawBytes", bytes);
+std::vector<char> compressed;
+query->select("StatsBlob", compressed);
 
 auto results = query->getResultSet();
 while (results.getNextRecord()) {
     std::vector<double> stats;
-    simdb::decompressData(bytes, stats);
+    simdb::decompressData(compressed, stats);
     // Process stats...
 }
 ```
@@ -253,9 +287,3 @@ cd build
 cmake ..
 make -j simdb_regress
 ```
-
----
-
-## Performance Benchmarks
-
-_Coming soon._
