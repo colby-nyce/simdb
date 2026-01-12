@@ -2,7 +2,6 @@
 
 #include "simdb/apps/AppRegistration.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
-#include "simdb/pipeline/PipelineSnooper.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
 
@@ -124,7 +123,7 @@ public:
         //
         //     // Returns true if DummyData is valid (found/snooped successfully).
         //     bool snoop(const std::string& uuid, DummyData& snooped);
-        pipeline_snooper_ = std::make_unique<simdb::pipeline::PipelineSnooper<std::string, DummyData>>();
+        pipeline_snooper_ = pipeline->createSnooper<std::string, DummyData>();
         pipeline_snooper_->addStage(buffer);
         pipeline_snooper_->addStage(boost_serializer);
         pipeline_snooper_->addStage(zlib_compressor);
@@ -138,13 +137,6 @@ public:
 
     bool snoopPipeline(const std::string& uuid, DummyData& snooped_data)
     {
-        // It is typically a very good idea to disable the pipeline while
-        // we snoop it looking for the DummyData with this uuid. This will
-        // increase the chances that we find the DummyData at an earlier
-        // stage, where we have fewer things to "undo" to get back the
-        // original DummyData (like undoing zlib and/or boost serialization).
-        auto disabler = pipeline_mgr_->scopedDisableAll();
-
         return pipeline_snooper_->snoopAllStages(uuid, snooped_data);
     }
 

@@ -44,7 +44,7 @@ public:
     Pipeline* createPipeline(const std::string& name, const App* app)
     {
         checkOpen_();
-        auto pipeline = std::make_unique<Pipeline>(db_mgr_, name, app);
+        auto pipeline = std::make_unique<Pipeline>(this, db_mgr_, name, app);
         pipelines_.emplace_back(std::move(pipeline));
         return pipelines_.back().get();
     }
