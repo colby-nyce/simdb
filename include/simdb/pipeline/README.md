@@ -414,14 +414,22 @@ bool StatsCollector::snoopPipeline(const uuid_t& uuid, values_t& values)
     //   2) We could implement the stages' run_() methods to store a copy of the data
     //      that is currently being processed, then the snoop() methods could look at
     //      the data copy's UUID and compare it to the requested UUID, and immediately
-    //      return it. If the UUID's don't match, then snoop the ConcurrentQueue(s).
-    //      This will result in a faster snoopPipeline() implementation, but a slower
-    //      pipeline due to the copies.
+    //      return it if it matches. If the UUID's don't match, then snoop the stage's
+    //      queues. This will result in a faster snoopPipeline() implementation, but a
+    //      slower pipeline.
+    //
+    //      IMPORTANT: You should add a mutex to any stages that use this option to
+    //                 protect the copied data member variable.
     //
     //   * It is recommended that the first option is used, since the pipeline speed
     //     is typically more important than the snooping speed. However, if the data
     //     types are small, it may not affect the pipeline speed too much, and you
     //     could use the second option and get the best of both worlds.
+    //
+    // Use option 1 (flusher):
+    pipeline_flusher_->flush();
+
+    // Everything is in the database now. Run a query for the requested UUID:
     auto query = db_mgr_->createQuery("CompressedStats");
     
     std::vector<char> bytes;
