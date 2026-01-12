@@ -56,7 +56,7 @@ private:
         // flushing.
         //
         // Flush events occur when using pipeline flushers (discussed below) and
-        // when simulation is over (just prior to tearing down pipeline threads).
+        // when simulation is over (right after tearing down pipeline threads).
         //
         // This zlib compressor has no internal buffer/storage, so we don't need
         // to consider this flag for this example stage.
@@ -128,9 +128,9 @@ private:
         // output queue(s) from database stages if you need them. An example pipeline
         // with DB stage outputs might be something like this:
         //
-        //   Sim -> Cache -> Process -> Database ----|
-        //            ^                              |
-        //            |------------ evict -----------|
+        //   Sim sends data -> Cache a copy of data -> Process data -> Database ----|
+        //                             ^                                            |
+        //                             |------------------- Evict ------------------|
         //
         // Where the cache holds onto copies of the original data for fast access,
         // and then evicts from the cache when the data has been written to the
@@ -231,7 +231,7 @@ public:
 
         // As soon as we call noMoreBindings(), all simdb::ConcurrentQueue's are assigned to
         // all stages. As of now, the "compressor.uncompressed_input" queue is not bound to
-        // anything. Store the pipeline input queue now.
+        // anything. Store the pipeline input queue:
         pipeline_head_ = pipeline->getInPortQueue<StatsValues>("compressor.uncompressed_input");
 
         // Note: There is no reason you cannot use multiple input ports for the pipeline's
@@ -240,6 +240,18 @@ public:
         // than one input queue, and will forward along / process the whole tuple when it
         // becomes available. In other words, such a pipeline would start out with a mux.
         // See examples/MultiPortStages/main.cpp
+    }
+
+    void process(StatsValues&& stats)
+    {
+        // Send the incoming stats values to the pipeline (move):
+        pipeline_head_->emplace(std::move(stats));
+    }
+
+    void process(const StatsValues& stats)
+    {
+        // Send the incoming stats values to the pipeline (copy):
+        pipeline_head_->push(stats);
     }
 
 private:
@@ -270,7 +282,7 @@ void StatsCollector::createPipeline(simdb::pipeline::PipelineManager* pipeline_m
 }
 ```
 
-You can then use the flusher inside APIs which require forced synchronization:
+You can then use the flusher inside APIs which require a synchronization point:
 
 ```
 // Return the total number of stats records created
@@ -294,8 +306,8 @@ SimDB provides the ability to "snoop" a running pipeline to look for data packet
 Pipeline snoopers require a key/UUID data type as well as a return type. The general idea is that while each stage may internally represent data differently, they all must be able to return the same snooped data type that matches the given key/UUID.
 
 Recall the pipeline above which performs the following:
-- Stage 1: take vector\<double> and zlib compress into vector\<char>
-- Stage 2: write compressed vector\<char> to the database
+- Stage 1: take `std::vector<double>` and compress into `std::vector<char>`
+- Stage 2: write compressed `std::vector<char>` to the database
 
 We will write `snoop()` methods for these two stages that can take any `std::string` UUID and return a copy of the original `std::vector<double>` of associated stats values. Note that if the UUID is found in Stage 1, we can perform a direct copy (faster). If found in Stage 2, we have to decompress the `char` buffer back into the `std::vector<double>` first (slower).
 
@@ -320,7 +332,9 @@ void StatsCollector::createPipeline(simdb::pipeline::PipelineManager* pipeline_m
 }
 ```
 
-Now write the `snoop()` methods for the two stages. Note the API signature using `uuid_t` and `values_t` from above:
+Now write the `snoop()` methods for the two stages. The signature has to be:
+
+`bool snoop(const uuid_t& uuid, values_t& values);`
 
 ```
 class ZlibStage : public simdb::pipeline::Stage
@@ -329,7 +343,7 @@ public:
     ...
 
     // Return true if found (values assigned)
-    bool snoop(const std::string& uuid, std::vector<double>& values)
+    bool snoop(const uuid_t& uuid, values_t& values)
     {
         // Apply a callback to every incoming uncompressed std::vector<double> into this stage:
         return input_queue_->snoop([&](const StatsValues& uncompressed)
@@ -354,7 +368,7 @@ public:
     ...
 
     // Return true if found (values assigned)
-    bool snoop(const std::string& uuid, std::vector<double>& values)
+    bool snoop(const uuid_t& uuid, values_t& values)
     {
         // Apply a callback to every compressed std::vector<char> into this stage:
         return input_queue_->snoop([&](const ZlibStatsValues& compressed)
@@ -378,7 +392,7 @@ public:
 Now we can add a method to the StatsCollector app which can retrieve any stats values, whether found in-flight to Stage 1, in-flight to Stage 2, or in the database (not successfully snooped):
 
 ```
-bool StatsCollector::snoopPipeline(const std::string& uuid, std::vector<double>& values)
+bool StatsCollector::snoopPipeline(const uuid_t& uuid, values_t& values)
 {
     if (pipeline_snooper_->snoopAllStages(uuid, values))
     {
@@ -386,7 +400,28 @@ bool StatsCollector::snoopPipeline(const std::string& uuid, std::vector<double>&
         return true;
     }
 
-    // Not found in any stage - check the database (slowest).
+    // Not found in any stage - check the database (slowest). It is important to
+    // note that we may have missed the UUID if it was currently inside any of the
+    // stages being processed, i.e. NOT in any ConcurrentQueue's which sit between
+    // stages. In other words, it can still be in the pipeline but was not snooped
+    // successfully.
+    //
+    // There are two solutions here:
+    //   1) We can use the pipeline_flusher_ flush() method, then query the database.
+    //      This will result in a slower snoopPipeline() implementation, but a faster
+    //      pipeline.
+    //
+    //   2) We could implement the stages' run_() methods to store a copy of the data
+    //      that is currently being processed, then the snoop() methods could look at
+    //      the data copy's UUID and compare it to the requested UUID, and immediately
+    //      return it. If the UUID's don't match, then snoop the ConcurrentQueue(s).
+    //      This will result in a faster snoopPipeline() implementation, but a slower
+    //      pipeline due to the copies.
+    //
+    //   * It is recommended that the first option is used, since the pipeline speed
+    //     is typically more important than the snooping speed. However, if the data
+    //     types are small, it may not affect the pipeline speed too much, and you
+    //     could use the second option and get the best of both worlds.
     auto query = db_mgr_->createQuery("CompressedStats");
     
     std::vector<char> bytes;
@@ -461,27 +496,6 @@ public:
 
 ...
 };
-```
-
-## Flushing Pipelines
-
-In your `createPipeline()` method, you can create flushers which will flush the pipeline stage-by-stage in a round-robin fashion until all stages' say they have nothing left to do.
-
-```
-void StatsCollector::createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr)
-{
-    auto pipeline = pipeline_mgr->createPipeline("stats-collector-pipeline", this);
-    ... add "compressor" stage ...
-    ... add "db_writer" stage ....
-
-    // std::unique_ptr<simdb::pipeline::Flusher> pipeline_flusher_;
-    // Create a flusher with explicit stages to flush in-order:
-    pipeline_flusher_ = pipeline->createFlusher({"compressor", "db_writer"});
-
-    // If you want to flush all stages in-order according to the addStage() calls,
-    // you can just do this:
-    // pipeline_flusher_ = pipeline->createFlusher();
-}
 ```
 
 ## Async Database Access
