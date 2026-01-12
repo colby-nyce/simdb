@@ -4,10 +4,12 @@
 
 #include "simdb/pipeline/Stage.hpp"
 #include "simdb/pipeline/Flusher.hpp"
+#include "simdb/pipeline/PipelineSnooper.hpp"
 #include <map>
 
 namespace simdb {
     class DatabaseManager;
+    class PipelineManager;
 }
 
 namespace simdb::pipeline {
@@ -20,8 +22,9 @@ namespace simdb::pipeline {
 class Pipeline
 {
 public:
-    Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app)
-        : db_mgr_(db_mgr)
+    Pipeline(PipelineManager* pipeline_mgr, DatabaseManager* db_mgr, const std::string& name, const App* app)
+        : pipeline_mgr_(pipeline_mgr)
+        , db_mgr_(db_mgr)
         , pipeline_name_(name)
         , app_(app)
     {}
@@ -159,6 +162,12 @@ public:
             std::unique_ptr<Flusher>(new Flusher(stages));
     }
 
+    template <typename KeyType, typename SnoopedType>
+    std::unique_ptr<PipelineSnooper<KeyType, SnoopedType>> createSnooper()
+    {
+        return std::make_unique<PipelineSnooper<KeyType, SnoopedType>>(pipeline_mgr_);
+    }
+
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const
     {
         return async_db_accessor_;
@@ -187,6 +196,7 @@ public:
     }
 
 private:
+    PipelineManager* pipeline_mgr_ = nullptr;
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
     const App* app_ = nullptr;

@@ -75,16 +75,17 @@ public:
     /// \brief Invoke a callback function to peek into this queue's
     /// items. This will be invoked until the callback returns TRUE
     /// or until we have iterated over all queue items.
-    void snoop(const std::function<bool(const T& queue_item)>& cb) const
+    bool snoop(const std::function<bool(const T& queue_item)>& cb) const
     {
         std::lock_guard<std::mutex> guard(mutex_);
         for (const auto& item : queue_)
         {
             if (cb(item))
             {
-                break;
+                return true;
             }
         }
+        return false;
     }
 
 private:
