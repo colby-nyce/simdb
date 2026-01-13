@@ -61,6 +61,8 @@ SimDB enables a wide range of high-performance simulation and analysis workflows
 
 SimDB pipelines are created by defining a series of stages with specific I/O data types, and binding stage input/output queues together. Here is an example of a simple one-way pipeline with a single input. Pipeline stages can have multiple inputs/outputs, though a one-way pipeline is used here for brevity.
 
+For full pipeline documentation, see `include/simdb/pipeline/README.md`
+
 ```
 // Stage 1: Accept a timestamp and a vector of stats and compress them
 class CompressionStage : public simdb::pipeline::Stage
