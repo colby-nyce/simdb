@@ -8,7 +8,6 @@
 
 namespace simdb {
     class DatabaseManager;
-    class PipelineManager;
 }
 
 namespace simdb::pipeline {
@@ -21,9 +20,8 @@ namespace simdb::pipeline {
 class Pipeline
 {
 public:
-    Pipeline(PipelineManager* pipeline_mgr, DatabaseManager* db_mgr, const std::string& name, const App* app)
-        : pipeline_mgr_(pipeline_mgr)
-        , db_mgr_(db_mgr)
+    Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app)
+        : db_mgr_(db_mgr)
         , pipeline_name_(name)
         , app_(app)
     {}
@@ -189,7 +187,6 @@ public:
     }
 
 private:
-    PipelineManager* pipeline_mgr_ = nullptr;
     DatabaseManager* db_mgr_ = nullptr;
     std::string pipeline_name_;
     const App* app_ = nullptr;
