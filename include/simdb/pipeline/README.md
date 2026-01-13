@@ -508,8 +508,114 @@ public:
 
 ## Async Database Access
 
-TBD
+A core design requirement for SimDB is that there is only ever one dedicated database thread (or none).
+Assuming you have both DB and non-DB stages in your pipeline, you may need to access the database from
+a non-DB stage and get access to it as quickly as possible.
 
-## Thread Sharing
+There is an easy way to do this, but it is only available for non-DB stages since DB stages already have
+access to it at all times. We'll walk through how to do this using the DatabaseWatchdog app. It was written
+as a good example of when you might need this ability.
 
-TBD
+In examples/DatabaseWatchdog/main.cpp, we have two separate apps that run concurrently:
+
+### App1: WatchedPipeline
+
+This app is really the same as the SimplePipeline, which just processes double vectors by compressing them
+on one thread and writing to SQLite on the DB thread. WatchedPipeline runs forever and just waits for the
+watchdog to tell it to stop.
+
+### App2: DatabaseWatchdog
+
+This app has one non-DB stage with no I/O ports. While the WatchedPipeline runs on 100ms thread timers, the
+DatabaseWatchdog runs at 500ms, and all it does is look to see if the minimum desired SQLite records have
+been created yet, at which point it tells the other app to stop.
+
+If you have a non-DB stage:
+
+```
+class Watchdog : public simdb::pipeline::Stage
+```
+
+You have an API called `getAsyncDatabaseAccessor_()` available to you. This object takes a callback you
+give it, and sends the callback to the database thread. Even if the current transaction would normally
+take another 5 seconds to complete, when async DB access requests come in, the current ongoing transaction
+is immediately committed. Then your callback is evaluated on the DB thread.
+
+Say we have this callback which we create on the watchdog thread every half second:
+
+```
+auto callback = [&](simdb::DatabaseManager* db_mgr) { ... };
+```
+
+That is the required signature. We use the `AsyncDatabaseAccessor` to "post" this to the DB thread:
+
+```
+// We are inside the Watchdog stage (a non-DB stage)
+auto async_db_accessor = getAsyncDatabaseAccessor_();
+async_db_accessor->eval(callback);
+```
+
+The `eval()` method uses `std::future / std::promise` under the hood, and will block until the callback is
+finished running. Any exceptions thrown from the callback will be rethrown from the `eval()` method.
+
+The watchdog implements its functionality as follows:
+
+```
+simdb::pipeline::PipelineAction run_(bool) override
+{
+    if (finished_)
+    {
+        return simdb::pipeline::SLEEP;
+    }
+
+    // Query to run asynchronously
+    size_t num_records = 0;
+    auto async_query = [&](simdb::DatabaseManager* db_mgr)
+    {
+        auto query = db_mgr->createQuery("CompressedData");
+        num_records = query->count();
+        if (num_records > TARGET_NUM_RECORDS)
+        {
+            finished_ = true;
+        }
+    };
+
+    // Post the query on the database thread with a 5-second timeout. Note
+    // that the timeout is used to prevent "runaway" WatchedPipeline's from
+    // running forever in the event of a bug. The only thing we will actually
+    // end up waiting on is for the database thread to COMMIT TRANSACTION
+    // for whatever it was in the middle of doing, so in reality we only wait
+    // for a fraction of a second in typical uses.
+    auto async_db_accessor = getAsyncDatabaseAccessor_();
+    async_db_accessor->eval(async_query, 5);
+
+    // Write total number of records created thus far
+    if (num_records > 0)
+    {
+        std::cout << "Created " << num_records << " so far...\n";
+    }
+
+    if (finished_)
+    {
+        std::cout << "As soon as we hit the target record count of 10k records, ";
+        std::cout << "the database had " << num_records << " records in it. More may ";
+        std::cout << "be coming when we flush the whole pipeline..." << std::endl;
+        watchdog_app_->thresholdReached_();
+    }
+
+    // Return SLEEP so this thread goes back to sleep
+    return simdb::pipeline::SLEEP;
+}
+```
+
+Your simdb::App can also post DB callbacks from the main thread too. Just cache the
+AsyncDatabaseAccessor from the PipelineManager:
+
+```
+void MyApp::createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
+{
+    // Build your pipeline...
+    // Store the accessor...
+    async_db_accessor_ = pipeline_mgr->getAsyncDatabaseAccessor();
+}
+```
