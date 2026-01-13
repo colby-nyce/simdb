@@ -123,7 +123,7 @@ public:
         //
         //     // Returns true if DummyData is valid (found/snooped successfully).
         //     bool snoop(const std::string& uuid, DummyData& snooped);
-        pipeline_snooper_ = pipeline->createSnooper<std::string, DummyData>();
+        pipeline_snooper_ = pipeline_mgr->createSnooper<std::string, DummyData>();
         pipeline_snooper_->addStage(buffer);
         pipeline_snooper_->addStage(boost_serializer);
         pipeline_snooper_->addStage(zlib_compressor);

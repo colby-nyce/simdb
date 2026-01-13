@@ -7,7 +7,6 @@
 #include <set>
 
 #include "simdb/Exceptions.hpp"
-#include "simdb/pipeline/PipelineSnooper.hpp"
 
 namespace simdb::pipeline {
 
@@ -35,20 +34,8 @@ public:
         callbacks_.push_back(cb);
     }
 
-    bool snoopAllStages(const KeyType& key, SnoopedType& snooped_obj, bool disable_pipeline = true)
-    {
-        std::unique_ptr<ScopedRunnableDisabler> disabler = disable_pipeline ?
-            pipeline_mgr_->scopedDisableAll() : nullptr;
-
-        for (auto& cb : callbacks_)
-        {
-            if (cb(key, snooped_obj))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    /// Implemented in PipelineManager.hpp to avoid circular includes
+    bool snoopAllStages(const KeyType& key, SnoopedType& snooped_obj, bool disable_pipeline = true);
 
 private:
     using Callback = std::function<bool(const KeyType&, SnoopedType&)>;
