@@ -19,22 +19,32 @@ int main()
     EXPECT_TRUE(db_mgr.appendSchema(schema));
 
     // To get ready for testing the SqlQuery class, first create some new records.
+    // Note that we don't test uint64_t here since there is already an exhaustive
+    // test for that in test/sqlite/UInt64/main.cpp
     //
-    // IntegerTypes
+    // AllIntegerTypes
     // ---------------------------------------------------------------------------------
-    // SomeInt32    SomeInt64
-    // 111          555
-    // 222          555
-    // 333          555
-    // 111          777
-    // 222          777
-    // 333          101
-    db_mgr.INSERT(SQL_TABLE("IntegerTypes"), SQL_COLUMNS("SomeInt32", "SomeInt64"), SQL_VALUES(111, 555));
-    db_mgr.INSERT(SQL_TABLE("IntegerTypes"), SQL_COLUMNS("SomeInt32", "SomeInt64"), SQL_VALUES(222, 555));
-    db_mgr.INSERT(SQL_TABLE("IntegerTypes"), SQL_COLUMNS("SomeInt32", "SomeInt64"), SQL_VALUES(333, 555));
-    db_mgr.INSERT(SQL_TABLE("IntegerTypes"), SQL_COLUMNS("SomeInt32", "SomeInt64"), SQL_VALUES(111, 777));
-    db_mgr.INSERT(SQL_TABLE("IntegerTypes"), SQL_COLUMNS("SomeInt32", "SomeInt64"), SQL_VALUES(222, 777));
-    db_mgr.INSERT(SQL_TABLE("IntegerTypes"), SQL_COLUMNS("SomeInt32", "SomeInt64"), SQL_VALUES(333, 101));
+    // SomeInt32    SomeInt64    SomeUInt32
+    // 111          555          404
+    // 222          555          505
+    // 333          555          606
+    // 111          777          707
+    // 222          777          808
+    // 333          101          909
+    auto insert_ints = [&](const int32_t i32, const int64_t i64, const uint32_t u32)
+    {
+        db_mgr.INSERT(
+            SQL_TABLE("AllIntegerTypes"),
+            SQL_COLUMNS("SomeInt32", "SomeInt64", "SomeUInt32"),
+            SQL_VALUES(i32, i64, u32));
+    };
+
+    insert_ints((int32_t)111, (int64_t)555, (uint32_t)404);
+    insert_ints((int32_t)222, (int64_t)555, (uint32_t)505);
+    insert_ints((int32_t)333, (int64_t)555, (uint32_t)606);
+    insert_ints((int32_t)111, (int64_t)777, (uint32_t)707);
+    insert_ints((int32_t)222, (int64_t)777, (uint32_t)808);
+    insert_ints((int32_t)333, (int64_t)101, (uint32_t)909);
 
     // FloatingPointTypes
     // ---------------------------------------------------------------------------------
@@ -51,10 +61,18 @@ int main()
     // 1.0
     // 0.3
     // 0.3
+    auto insert_floats = [&](const double val)
+    {
+        db_mgr.INSERT(
+            SQL_TABLE("FloatingPointTypes"),
+            SQL_COLUMNS("SomeDouble"),
+            SQL_VALUES(val));
+    };
+
     for (auto val : {TEST_EPSILON, TEST_DOUBLE_MIN, TEST_DOUBLE_MAX, TEST_DOUBLE_PI, TEST_DOUBLE_EXACT, TEST_DOUBLE_INEXACT})
     {
-        db_mgr.INSERT(SQL_TABLE("FloatingPointTypes"), SQL_COLUMNS("SomeDouble"), SQL_VALUES(val));
-        db_mgr.INSERT(SQL_TABLE("FloatingPointTypes"), SQL_COLUMNS("SomeDouble"), SQL_VALUES(val));
+        insert_floats(val);
+        insert_floats(val);
     }
 
     // StringTypes
@@ -64,10 +82,18 @@ int main()
     // foo
     // bar
     // baz
-    db_mgr.INSERT(SQL_TABLE("StringTypes"), SQL_COLUMNS("SomeString"), SQL_VALUES("foo"));
-    db_mgr.INSERT(SQL_TABLE("StringTypes"), SQL_COLUMNS("SomeString"), SQL_VALUES("foo"));
-    db_mgr.INSERT(SQL_TABLE("StringTypes"), SQL_COLUMNS("SomeString"), SQL_VALUES("bar"));
-    db_mgr.INSERT(SQL_TABLE("StringTypes"), SQL_COLUMNS("SomeString"), SQL_VALUES("baz"));
+    auto insert_strings = [&](const std::string& val)
+    {
+        db_mgr.INSERT(
+            SQL_TABLE("StringTypes"),
+            SQL_COLUMNS("SomeString"),
+            SQL_VALUES(val));
+    };
+
+    insert_strings("foo");
+    insert_strings("foo");
+    insert_strings("bar");
+    insert_strings("baz");
 
     // MixAndMatch
     // ---------------------------------------------------------------------------------
@@ -76,21 +102,18 @@ int main()
     // 10           bar           TEST_VECTOR
     // 20           foo           TEST_VECTOR2
     // 20           bar           TEST_VECTOR2
-    db_mgr.INSERT(SQL_TABLE("MixAndMatch"),
-                  SQL_COLUMNS("SomeInt32", "SomeString", "SomeBlob"),
-                  SQL_VALUES(10, "foo", TEST_VECTOR));
+    auto insert_mix_and_match = [&](const int32_t i32, const std::string& str, const std::vector<int>& blob)
+    {
+        db_mgr.INSERT(
+            SQL_TABLE("MixAndMatch"),
+            SQL_COLUMNS("SomeInt32", "SomeString", "SomeBlob"),
+            SQL_VALUES(i32, str, blob));
+    };
 
-    db_mgr.INSERT(SQL_TABLE("MixAndMatch"),
-                  SQL_COLUMNS("SomeInt32", "SomeString", "SomeBlob"),
-                  SQL_VALUES(10, "bar", TEST_VECTOR));
-
-    db_mgr.INSERT(SQL_TABLE("MixAndMatch"),
-                  SQL_COLUMNS("SomeInt32", "SomeString", "SomeBlob"),
-                  SQL_VALUES(20, "foo", TEST_VECTOR2));
-
-    db_mgr.INSERT(SQL_TABLE("MixAndMatch"),
-                  SQL_COLUMNS("SomeInt32", "SomeString", "SomeBlob"),
-                  SQL_VALUES(20, "bar", TEST_VECTOR2));
+    insert_mix_and_match(10, "foo", TEST_VECTOR);
+    insert_mix_and_match(10, "bar", TEST_VECTOR);
+    insert_mix_and_match(20, "foo", TEST_VECTOR2);
+    insert_mix_and_match(20, "bar", TEST_VECTOR2);
 
     // DefaultDoubles
     // ------------------------------------------------------------------------------------------------------
@@ -148,12 +171,14 @@ int main()
     // Test SQL queries for integer types.
     int32_t i32;
     int64_t i64;
+    uint32_t u32;
 
-    auto query1 = db_mgr.createQuery("IntegerTypes");
+    auto query1 = db_mgr.createQuery("AllIntegerTypes");
 
     // Each successful call to result_set.getNextRecord() populates these variables.
     query1->select("SomeInt32", i32);
     query1->select("SomeInt64", i64);
+    query1->select("SomeUInt32", u32);
 
     // SELECT COUNT(Id) should return 6 records.
     EXPECT_EQUAL(query1->count(), 6);
@@ -164,26 +189,32 @@ int main()
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 111);
         EXPECT_EQUAL(i64, 555);
+        EXPECT_EQUAL(u32, 404);
 
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 222);
         EXPECT_EQUAL(i64, 555);
+        EXPECT_EQUAL(u32, 505);
 
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 333);
         EXPECT_EQUAL(i64, 555);
+        EXPECT_EQUAL(u32, 606);
 
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 111);
         EXPECT_EQUAL(i64, 777);
+        EXPECT_EQUAL(u32, 707);
 
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 222);
         EXPECT_EQUAL(i64, 777);
+        EXPECT_EQUAL(u32, 808);
 
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 333);
         EXPECT_EQUAL(i64, 101);
+        EXPECT_EQUAL(u32, 909);
 
         // We should have read all the records.
         EXPECT_FALSE(result_set.getNextRecord());
@@ -225,14 +256,50 @@ int main()
         // We should have read all the records.
         EXPECT_FALSE(result_set.getNextRecord());
     }
+    query1->resetConstraints();
 
     query1->addConstraintForInt("SomeInt64", simdb::Constraints::EQUAL, 777);
     {
         auto result_set = query1->getResultSet();
 
         EXPECT_TRUE(result_set.getNextRecord());
+        EXPECT_EQUAL(i32, 111);
+        EXPECT_EQUAL(i64, 777);
+        EXPECT_EQUAL(u32, 707);
+
+        EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 222);
         EXPECT_EQUAL(i64, 777);
+        EXPECT_EQUAL(u32, 808);
+
+        // We should have read all the records.
+        EXPECT_FALSE(result_set.getNextRecord());
+    }
+    query1->resetConstraints();
+
+    query1->addConstraintForUInt32("SomeUInt32", simdb::Constraints::GREATER, 600);
+    {
+        auto result_set = query1->getResultSet();
+
+        EXPECT_TRUE(result_set.getNextRecord());
+        EXPECT_EQUAL(i32, 333);
+        EXPECT_EQUAL(i64, 555);
+        EXPECT_EQUAL(u32, 606);
+
+        EXPECT_TRUE(result_set.getNextRecord());
+        EXPECT_EQUAL(i32, 111);
+        EXPECT_EQUAL(i64, 777);
+        EXPECT_EQUAL(u32, 707);
+
+        EXPECT_TRUE(result_set.getNextRecord());
+        EXPECT_EQUAL(i32, 222);
+        EXPECT_EQUAL(i64, 777);
+        EXPECT_EQUAL(u32, 808);
+
+        EXPECT_TRUE(result_set.getNextRecord());
+        EXPECT_EQUAL(i32, 333);
+        EXPECT_EQUAL(i64, 101);
+        EXPECT_EQUAL(u32, 909);
 
         // We should have read all the records.
         EXPECT_FALSE(result_set.getNextRecord());
@@ -247,10 +314,12 @@ int main()
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 111);
         EXPECT_EQUAL(i64, 555);
+        EXPECT_EQUAL(u32, 404);
 
         EXPECT_TRUE(result_set.getNextRecord());
         EXPECT_EQUAL(i32, 222);
         EXPECT_EQUAL(i64, 555);
+        EXPECT_EQUAL(u32, 505);
 
         // We should have read all the records.
         EXPECT_FALSE(result_set.getNextRecord());
