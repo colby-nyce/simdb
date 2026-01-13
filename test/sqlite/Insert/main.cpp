@@ -98,6 +98,16 @@ int main()
         SQL_COLUMNS("SomeInt32", "SomeBlob", "SomeString"),
         SQL_VALUES(10, TEST_BLOB, "foo"));
 
+    // Verify that we can INSERT vector blobs with move semantics
+    std::vector<int> vec_to_move = TEST_VECTOR2;
+    auto record7 = db_mgr.INSERT(
+        SQL_TABLE("BlobTypes"),
+        SQL_COLUMNS("SomeBlob"),
+        SQL_VALUES(std::move(vec_to_move)));
+
+    EXPECT_EQUAL(record7->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR2);
+    EXPECT_TRUE(vec_to_move.empty());
+
     // Verify setDefaultValue()
     auto record6 = db_mgr.INSERT(SQL_TABLE("DefaultValues"));
     EXPECT_EQUAL(record6->getPropertyInt32("DefaultInt32"), TEST_INT32);

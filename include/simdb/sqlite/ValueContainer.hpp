@@ -160,6 +160,11 @@ public:
     {
     }
 
+    VectorValueContainer(std::vector<T>&& val)
+        : val_(std::move(val))
+    {
+    }
+
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
         return sqlite3_bind_blob(stmt, col_idx, val_.data(), (int)val_.size() * sizeof(T), 0);
@@ -227,6 +232,11 @@ typename std::enable_if<std::is_same<T, SqlBlob>::value, ValueContainerBasePtr>:
 template <typename T> inline ValueContainerBasePtr createValueContainer(const std::vector<T>& val)
 {
     return ValueContainerBasePtr(new VectorValueContainer<T>(val));
+}
+
+template <typename T> inline ValueContainerBasePtr createValueContainer(std::vector<T>&& val)
+{
+    return ValueContainerBasePtr(new VectorValueContainer<T>(std::move(val)));
 }
 
 template <typename T> inline

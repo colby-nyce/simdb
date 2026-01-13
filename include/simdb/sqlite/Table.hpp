@@ -117,6 +117,13 @@ public:
         col_vals_.emplace_front(createValueContainer(val));
     }
 
+    template <typename T, typename... Rest>
+    SqlValues(std::vector<T>&& val, Rest... rest)
+        : SqlValues(std::forward<Rest>(rest)...)
+    {
+        col_vals_.emplace_front(createValueContainer(std::move(val)));
+    }
+
     template <typename T> SqlValues(T val)
     {
         col_vals_.emplace_front(createValueContainer<T>(val));
@@ -127,7 +134,10 @@ public:
         col_vals_.emplace_front(createValueContainer(val));
     }
 
-    // TODO cnyce: Add support for moving a std::vector
+    template <typename T> SqlValues(std::vector<T>&& val)
+    {
+        col_vals_.emplace_front(createValueContainer(std::move(val)));
+    }
 
     void writeValsForINSERT(std::ostringstream& oss) const
     {
