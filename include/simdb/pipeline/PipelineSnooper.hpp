@@ -7,7 +7,6 @@
 #include <set>
 
 #include "simdb/Exceptions.hpp"
-#include "simdb/pipeline/PipelineManager.hpp"
 
 namespace simdb::pipeline {
 
