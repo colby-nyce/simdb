@@ -97,18 +97,36 @@ public:
         group_by_column_.clear();
     }
 
-    /// Add a constraint to this query specific to integer types and
-    /// scalar target values.
-    template <typename T> void addConstraintForInt(const char* col_name, const Constraints constraint, const T target)
+    /// Add a constraint to this query specific to integer types.
+    template <typename T>
+    void addConstraintForInt(const char* col_name, const Constraints constraint, const T target)
     {
-        static_assert(!std::is_same<T, uint64_t>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
+        static_assert(!std::is_same<T, uint64_t>::value, "Wrong addConstraint*() API");
 
         std::ostringstream oss;
         oss << col_name << stringify(constraint) << target;
         constraint_clauses_.emplace_back(oss.str());
     }
 
-    /// Add a uint64_t constraint to this query for scalar target values.
+    /// Same as addConstraintForInt() but for users who want explicit APIs.
+    void addConstraintForInt32(const char* col_name, const Constraints constraint, const int32_t target)
+    {
+        addConstraintForInt<int32_t>(col_name, constraint, target);
+    }
+
+    /// Same as addConstraintForInt() but for users who want explicit APIs.
+    void addConstraintForUInt32(const char* col_name, const Constraints constraint, const uint32_t target)
+    {
+        addConstraintForInt<uint32_t>(col_name, constraint, target);
+    }
+
+    /// Same as addConstraintForInt() but for users who want explicit APIs.
+    void addConstraintForInt64(const char* col_name, const Constraints constraint, const int64_t target)
+    {
+        addConstraintForInt<int64_t>(col_name, constraint, target);
+    }
+
+    /// Add a uint64_t constraint to this query.
     void addConstraintForUInt64(const char* col_name, const Constraints constraint, uint64_t target)
     {
         char digits[21];
@@ -134,16 +152,13 @@ public:
         constraint_clauses_.emplace_back(std::move(clause));
     }
 
-    /// Add a constraint to this query specific to floating-point types
-    /// and scalar target values.
-    ///
+    /// Add a constraint to this query specific to floating-point types.
     /// Pass in fuzzy=TRUE to tell SQLite to look for matches that are
     /// within EPS of the target value.
     template <typename T>
-    void addConstraintForDouble(const char* col_name, const Constraints constraint, const T target, const bool fuzzy = false)
+    void addConstraintForDouble(const char* col_name, const Constraints constraint, const T target, bool fuzzy = false)
     {
-        static_assert((std::is_floating_point<T>::value || std::is_integral<T>::value) && std::is_scalar<T>::value,
-                      "Wrong addConstraint*() API");
+        static_assert(std::is_floating_point<T>::value, "Wrong addConstraint*() API");
 
         std::ostringstream oss;
         if (fuzzy)
@@ -162,15 +177,13 @@ public:
         constraint_clauses_.emplace_back(oss.str());
     }
 
-    /// Add a constraint to this query specific to string types and
-    /// scalar target values.
+    /// Add a constraint to this query specific to string types.
     void addConstraintForString(const char* col_name, const Constraints constraint, const std::string& target)
     {
         addConstraintForString(col_name, constraint, target.c_str());
     }
 
-    /// Add a constraint to this query specific to string types and
-    /// scalar target values.
+    /// Add a constraint to this query specific to string types.
     void addConstraintForString(const char* col_name, const Constraints constraint, const char* target)
     {
         std::ostringstream oss;
@@ -178,7 +191,7 @@ public:
         constraint_clauses_.emplace_back(oss.str());
     }
 
-    /// Add a constraint to this query specific to integer types and
+    /// Add a constraint to this query specific to integer types (except uint64_t) and
     /// multiple target values.
     template <typename T>
     void addConstraintForInt(const char* col_name, const SetConstraints constraint, const std::initializer_list<T>& targets)
@@ -186,11 +199,12 @@ public:
         addConstraintForInt(col_name, constraint, std::vector<T>{targets.begin(), targets.end()});
     }
 
-    /// Add a constraint to this query specific to integer types and
+    /// Add a constraint to this query specific to integer types (except uint64_t) and
     /// multiple target values.
-    template <typename T> void addConstraintForInt(const char* col_name, const SetConstraints constraint, const std::vector<T>& targets)
+    template <typename T>
+    void addConstraintForInt(const char* col_name, const SetConstraints constraint, const std::vector<T>& targets)
     {
-        static_assert(!std::is_same<T, uint64_t>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
+        static_assert(!std::is_same<T, uint64_t>::value, "Wrong addConstraint*() API");
 
         std::ostringstream oss;
         oss << col_name << stringify(constraint) << "(";
@@ -259,7 +273,7 @@ public:
     void addConstraintForDouble(const char* col_name,
                                 const SetConstraints constraint,
                                 const std::initializer_list<T>& targets,
-                                const bool fuzzy = false)
+                                bool fuzzy = false)
     {
         addConstraintForDouble(col_name, constraint, std::vector<T>{targets.begin(), targets.end()}, fuzzy);
     }
@@ -270,10 +284,12 @@ public:
     /// Pass in fuzzy=TRUE to tell SQLite to look for matches that are
     /// within EPS of the target values.
     template <typename T>
-    void
-    addConstraintForDouble(const char* col_name, const SetConstraints constraint, const std::vector<T>& targets, const bool fuzzy = false)
+    void addConstraintForDouble(const char* col_name,
+                                const SetConstraints constraint,
+                                const std::vector<T>& targets,
+                                bool fuzzy = false)
     {
-        static_assert(std::is_floating_point<T>::value && std::is_scalar<T>::value, "Wrong addConstraint*() API");
+        static_assert(std::is_floating_point<T>::value, "Wrong addConstraint*() API");
 
         std::ostringstream oss;
         if (fuzzy)
@@ -419,7 +435,7 @@ public:
         constraint_clauses_.clear();
     }
 
-    /// SELECT column values and write to the local variable on each iteration (int32).
+    /// SELECT column values and write to the local variable on each iteration (int32_t).
     ///
     ///     int32_t val;
     ///     query->select("Col", val);
@@ -428,7 +444,13 @@ public:
         result_writers_.emplace_back(new ResultWriterInt32(col_name, &user_var));
     }
 
-    /// SELECT column values and write to the local variable on each iteration (int64).
+    /// SELECT column values and write to the local variable on each iteration (uint32_t).
+    void select(const char* col_name, uint32_t& user_var)
+    {
+        result_writers_.emplace_back(new ResultWriterUInt32(col_name, &user_var));
+    }
+
+    /// SELECT column values and write to the local variable on each iteration (int64_t).
     ///
     ///     int64_t val;
     ///     query->select("Col", val);
@@ -437,7 +459,7 @@ public:
         result_writers_.emplace_back(new ResultWriterInt64(col_name, &user_var));
     }
 
-    /// SELECT column values and write to the local variable on each iteration (uint64).
+    /// SELECT column values and write to the local variable on each iteration (uint64_t).
     ///
     ///     uint64_t val;
     ///     query->select("Col", val);
@@ -468,7 +490,8 @@ public:
     ///
     ///     std::vector<int> val;
     ///     query->select("Col", val);
-    template <typename T> void select(const char* col_name, std::vector<T>& user_var)
+    template <typename T>
+    void select(const char* col_name, std::vector<T>& user_var)
     {
         result_writers_.emplace_back(new ResultWriterBlob<T>(col_name, &user_var));
     }
@@ -479,14 +502,13 @@ public:
         result_writers_.clear();
     }
 
-    /// Count the number of records matching this query's constraints (WHERE)
-    /// and limit (LIMIT).
+    /// Count the number of records matching this query's search constraints.
+    /// If no constraints were added, counts all records in the table.
     uint64_t count()
     {
         std::ostringstream oss;
         oss << "SELECT COUNT(*) FROM " << table_name_ << " ";
         appendConstraintClauses_(oss);
-        appendLimitClause_(oss);
 
         const auto cmd = oss.str();
         auto stmt = SQLitePreparedStatement(db_conn_, cmd);
@@ -505,7 +527,7 @@ public:
         throw DBException(sqlite3_errmsg(db_conn_));
     }
 
-    /// DELETE all records that match the query's current WHERE constraints.
+    /// DELETE all records that match the query's current search constraints.
     void deleteResultSet()
     {
         std::ostringstream oss;
@@ -520,7 +542,9 @@ public:
         }
     }
 
-    /// Execute the query.
+    /// Execute the query. Returns an iterator to walk the result set
+    /// row-by-row and populate the user's local variables given to
+    /// the select() calls.
     SqlResultIterator getResultSet()
     {
         std::ostringstream oss;

@@ -43,6 +43,24 @@ private:
     int32_t val_;
 };
 
+/// Bind a uint32_t to an INSERT prepared statement.
+class IntegralU32ValueContainer : public ValueContainerBase
+{
+public:
+    IntegralU32ValueContainer(uint32_t val)
+        : val_(val)
+    {
+    }
+
+    int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
+    {
+        return sqlite3_bind_int64(stmt, col_idx, static_cast<sqlite3_int64>(val_));
+    }
+
+private:
+    uint32_t val_;
+};
+
 /// Bind an int64_t to an INSERT prepared statement.
 class Integral64ValueContainer : public ValueContainerBase
 {
@@ -133,7 +151,7 @@ private:
     SqlBlob val_;
 };
 
-/// Bind a std::vector to an INSERT prepared statement.
+/// Bind a blob to an INSERT prepared statement.
 template <typename T> class VectorValueContainer : public ValueContainerBase
 {
 public:
@@ -154,10 +172,17 @@ private:
 using ValueContainerBasePtr = std::shared_ptr<ValueContainerBase>;
 
 template <typename T> inline
-typename std::enable_if<std::is_integral<T>::value && sizeof(T) <= sizeof(int32_t), ValueContainerBasePtr>::type
+typename std::enable_if<std::is_same_v<T, int32_t>, ValueContainerBasePtr>::type
 createValueContainer(T val)
 {
     return ValueContainerBasePtr(new Integral32ValueContainer(val));
+}
+
+template <typename T> inline
+typename std::enable_if<std::is_same_v<T, uint32_t>, ValueContainerBasePtr>::type
+createValueContainer(T val)
+{
+    return ValueContainerBasePtr(new IntegralU32ValueContainer(val));
 }
 
 template <typename T> inline

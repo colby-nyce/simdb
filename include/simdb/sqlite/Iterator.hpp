@@ -88,6 +88,47 @@ private:
 };
 
 /*!
+ * \class ResultWriterUInt32
+ *
+ * \brief Responsible for writing uint32 record values to the user's local
+ *        variables whenever a query's result set iterator is advanced.
+ */
+class ResultWriterUInt32 : public ResultWriterBase
+{
+public:
+    /// \brief Construction
+    /// \param col_name Name of the selected column
+    /// \param user_var Pointer to the local variable where result values are written to
+    ResultWriterUInt32(const char* col_name, uint32_t* user_var)
+        : ResultWriterBase(col_name)
+        , user_var_(user_var)
+    {
+    }
+
+    /// Read the value for the prepared statement at the given column index
+    /// and copy it to the user's local variable.
+    void writeToUserVar(sqlite3_stmt* stmt, const int idx) const override
+    {
+        sqlite3_int64 tmp = sqlite3_column_int64(stmt, idx);
+
+        if (tmp < 0 || tmp > UINT32_MAX) {
+            throw DBException("Value out of range for uint32_t");
+        }
+
+        *user_var_ = static_cast<uint32_t>(tmp);
+    }
+
+    /// Return a new copy of this writer.
+    ResultWriterBase* clone() const override
+    {
+        return new ResultWriterUInt32(getColName().c_str(), user_var_);
+    }
+
+private:
+    uint32_t* user_var_;
+};
+
+/*!
  * \class ResultWriterInt64
  *
  * \brief Responsible for writing int64 record values to the user's local 

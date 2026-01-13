@@ -127,6 +127,8 @@ public:
         col_vals_.emplace_front(createValueContainer(val));
     }
 
+    // TODO cnyce: Add support for moving a std::vector
+
     void writeValsForINSERT(std::ostringstream& oss) const
     {
         oss << " VALUES(";
@@ -181,13 +183,16 @@ public:
         return db_id_;
     }
 
-    /// SELECT the given column value (int32)
+    /// SELECT the given column value (int32_t)
     int32_t getPropertyInt32(const char* col_name) const;
 
-    /// SELECT the given column value (int64)
+    /// SELECT the given column value (uint32_t)
+    uint32_t getPropertyUInt32(const char* col_name) const;
+
+    /// SELECT the given column value (int64_t)
     int64_t getPropertyInt64(const char* col_name) const;
 
-    /// SELECT the given column value (uint64)
+    /// SELECT the given column value (uint64_t)
     uint64_t getPropertyUInt64(const char* col_name) const;
 
     /// SELECT the given column value (double)
@@ -199,13 +204,16 @@ public:
     /// SELECT the given column value (blob)
     template <typename T> std::vector<T> getPropertyBlob(const char* col_name) const;
 
-    /// UPDATE the given column value (int32)
+    /// UPDATE the given column value (int32_t)
     void setPropertyInt32(const char* col_name, const int32_t val) const;
 
-    /// UPDATE the given column value (int64)
+    /// UPDATE the given column value (uint32_t)
+    void setPropertyUInt32(const char* col_name, const uint32_t val) const;
+
+    /// UPDATE the given column value (int64_t)
     void setPropertyInt64(const char* col_name, const int64_t val) const;
 
-    /// UPDATE the given column value (uint64)
+    /// UPDATE the given column value (uint64_t)
     void setPropertyUInt64(const char* col_name, const uint64_t val) const;
 
     /// UPDATE the given column value (double)
@@ -245,7 +253,7 @@ private:
         auto rc = SQLiteReturnCode(sqlite3_step(stmt));
         if (std::find(ret_codes.begin(), ret_codes.end(), rc) == ret_codes.end())
         {
-            auto stringifyRetCodes = [&]()
+            auto stringify_ret_codes = [&]()
             {
                 std::ostringstream oss;
                 auto iter = ret_codes.begin();
@@ -262,7 +270,9 @@ private:
             };
 
             throw DBException("Unexpected sqlite3_step() return code:\n")
-                << "\tActual: " << rc << "\tExpected: " << stringifyRetCodes() << "\tError: " << sqlite3_errmsg(db_conn_);
+                << "\tActual: " << rc
+                << "\tExpected: " << stringify_ret_codes()
+                << "\tError: " << sqlite3_errmsg(db_conn_);
         }
     }
 
@@ -281,10 +291,12 @@ private:
 
 /// Run a query on the given table, column, and database ID, and return the property value.
 /// SELECT <col_name> FROM <table_name> WHERE Id=<db_id>
-template <typename T> inline T queryPropertyValue(const char* table_name, const char* col_name, const int db_id, sqlite3* db_conn)
+template <typename T>
+inline T queryPropertyValue(const char* table_name, const char* col_name, const int db_id, sqlite3* db_conn)
 {
     SqlQuery query(table_name, db_conn);
 
+    // SELECT <col_name> FROM <table_name> WHERE Id=<db_id>
     T val;
     query.select(col_name, val);
     query.addConstraintForInt("Id", Constraints::EQUAL, db_id);
@@ -301,6 +313,11 @@ template <typename T> inline T queryPropertyValue(const char* table_name, const 
 inline int32_t SqlRecord::getPropertyInt32(const char* col_name) const
 {
     return queryPropertyValue<int32_t>(table_name_.c_str(), col_name, db_id_, db_conn_);
+}
+
+inline uint32_t SqlRecord::getPropertyUInt32(const char* col_name) const
+{
+    return queryPropertyValue<uint32_t>(table_name_.c_str(), col_name, db_id_, db_conn_);
 }
 
 inline int64_t SqlRecord::getPropertyInt64(const char* col_name) const
@@ -335,6 +352,20 @@ inline void SqlRecord::setPropertyInt32(const char* col_name, const int32_t val)
         {
             auto stmt = createSetPropertyStmt_(col_name);
             if (SQLiteReturnCode(sqlite3_bind_int(stmt, 1, val)))
+            {
+                throw DBException(sqlite3_errmsg(db_conn_));
+            }
+            stepStatement_(stmt, {SQLITE_DONE});
+        });
+}
+
+inline void SqlRecord::setPropertyUInt32(const char* col_name, const uint32_t val) const
+{
+    transaction_->safeTransaction(
+        [&]()
+        {
+            auto stmt = createSetPropertyStmt_(col_name);
+            if (SQLiteReturnCode(sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(val))))
             {
                 throw DBException(sqlite3_errmsg(db_conn_));
             }

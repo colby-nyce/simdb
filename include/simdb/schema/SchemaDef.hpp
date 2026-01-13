@@ -18,6 +18,7 @@ namespace simdb {
 enum class SqlDataType
 {
     int32_t,
+    uint32_t,
     int64_t,
     uint64_t,
     double_t,
@@ -33,6 +34,7 @@ inline std::ostream& operator<<(std::ostream& os, const SqlDataType dtype)
     switch (dtype)
     {
         case dt::int32_t:
+        case dt::uint32_t:
         case dt::int64_t:
         {
             os << "INT";
