@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/pipeline/Pipeline.hpp"
+#include "simdb/pipeline/PipelineSnooper.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
 #include "simdb/pipeline/DatabaseThread.hpp"
 #include "simdb/pipeline/ThreadMerger.hpp"
@@ -59,6 +60,12 @@ public:
             pipelines.push_back(pipeline.get());
         }
         return pipelines;
+    }
+
+    template <typename KeyType, typename SnoopedType>
+    std::unique_ptr<PipelineSnooper<KeyType, SnoopedType>> createSnooper()
+    {
+        return std::make_unique<PipelineSnooper<KeyType, SnoopedType>>(this);
     }
 
     void minimizeThreads()
@@ -312,6 +319,24 @@ private:
 inline void ScopedRunnableDisabler::notifyPipelineMgrReenabled_()
 {
     pipeline_mgr_->onDisablerDestruction_();
+}
+
+/// Defined here so we can avoid circular includes
+template <typename KeyType, typename SnoopedType>
+bool PipelineSnooper<KeyType, SnoopedType>::snoopAllStages(
+    const KeyType& key, SnoopedType& snooped_obj, bool disable_pipeline)
+{
+    std::unique_ptr<ScopedRunnableDisabler> disabler = disable_pipeline ?
+        pipeline_mgr_->scopedDisableAll() : nullptr;
+
+    for (auto& cb : callbacks_)
+    {
+        if (cb(key, snooped_obj))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace simdb::pipeline

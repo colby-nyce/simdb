@@ -4,7 +4,6 @@
 
 #include "simdb/pipeline/Stage.hpp"
 #include "simdb/pipeline/Flusher.hpp"
-#include "simdb/pipeline/PipelineSnooper.hpp"
 #include <map>
 
 namespace simdb {
@@ -160,12 +159,6 @@ public:
         return has_db_stage ?
             std::unique_ptr<FlusherWithTransaction>(new FlusherWithTransaction(stages, db_mgr_)) :
             std::unique_ptr<Flusher>(new Flusher(stages));
-    }
-
-    template <typename KeyType, typename SnoopedType>
-    std::unique_ptr<PipelineSnooper<KeyType, SnoopedType>> createSnooper()
-    {
-        return std::make_unique<PipelineSnooper<KeyType, SnoopedType>>(pipeline_mgr_);
     }
 
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const
