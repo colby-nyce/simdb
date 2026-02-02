@@ -14,6 +14,14 @@
 
 namespace simdb {
 
+namespace utils {
+    template <typename, typename = void>
+    struct has_nested_factory : std::false_type{};
+
+    template <typename T>
+    struct has_nested_factory<T, std::void_t<typename T::AppFactory>> : std::true_type{};
+}
+
 /// This class is responsible for registering, enabling, instantiating,
 /// and managing the lifecycle of all SimDB applications running in a
 /// simulation.
@@ -34,32 +42,102 @@ public:
         {
             throw DBException("App already registered: ") << AppT::NAME;
         }
-        factory = std::make_shared<AppFactory<AppT>>();
+
+        if constexpr (utils::has_nested_factory<AppT>::value)
+        {
+            factory = std::make_shared<typename AppT::AppFactory>();
+        }
+        else
+        {
+            factory = std::make_shared<AppFactory<AppT>>();
+        }
     }
 
-    /// Access an app factory.
-    template <typename AppT>
-    AppFactory<AppT>* getAppFactory(bool must_exist = true)
+    /// Parameterize an app factory. Call this before createEnabledApps().
+    /// Your app subclass must have a public nested class called "AppFactory",
+    /// inheriting publicly from simdb::AppFactoryBase. Your nested AppFactory
+    /// needs to have a method with this signature:
+    ///
+    ///   void parameterize(size_t instance_num, /*rest, of, args, ...*/)
+    ///   {
+    ///       ...
+    ///   }
+    ///
+    /// For example:
+    ///
+    ///   class MyApp : public simdb::App
+    ///   {
+    ///   public:
+    ///       MyApp(simdb::DatabaseManager* db_mgr, int x, float y);
+    ///
+    ///       class AppFactory : public simdb::AppFactoryBase
+    ///       {
+    ///       public:
+    ///           void parameterize(size_t instance_num, int x, float y)
+    ///           {
+    ///               ctor_args_[instance_num] = std::make_pair(x, y);
+    ///           }
+    ///
+    ///           simdb::App* createApp(simdb::DatabaseManager* db_mgr, size_t instance_num) override
+    ///           {
+    ///               const auto & [x, y] = ctor_args_.at(instance_num);
+    ///               return new MyApp(db_mgr, x, y);
+    ///           }
+    ///
+    ///           void defineSchema(simdb::Schema& schema) const override
+    ///           {
+    ///               ...
+    ///           }
+    ///
+    ///       private:
+    ///           std::map<size_t, std::pair<int,float>> ctor_args_;
+    ///       };
+    ///   };
+    ///
+    /// Then do this:
+    ///
+    ///   // Assume have the AppManager
+    ///   app_mgr.enableApp(MyApp::NAME);
+    ///   app_mgr.enableApp(MyApp::NAME, 2 /*inst count*/);
+    ///
+    ///   // Parameterize before createEnabledApps()
+    ///   AppManager::parameterizeAppFactory<MyApp>(1, 2.2);
+    ///   AppManager::parameterizeAppFactoryInstance<MyApp>(1 /*inst num*/, 1, 2.2);
+    ///   AppManager::parameterizeAppFactoryInstance<MyApp>(2 /*inst num*/, 3, 4.4);
+    ///
+    ///   // Then continue and create the apps:
+    ///   app_mgr.createEnabledApps();
+    template <typename AppT, typename... Args>
+    static void parameterizeAppFactory([[maybe_unused]] Args&&... args)
     {
-        auto& app_factories = getAppFactories_();
-
-        auto it = app_factories.find(AppT::NAME);
-        if (it == app_factories.end())
+        if constexpr (utils::has_nested_factory<AppT>::value)
         {
-            if (must_exist)
-            {
-                throw DBException("No factory named ") << AppT::NAME << " exists.";
-            }
-            return nullptr;
+            auto factory = getAppFactory_<AppT>();
+            factory->parameterize(0, std::forward<Args>(args)...);
         }
-
-        auto factory = dynamic_cast<AppFactory<AppT>*>(it->second.get());
-        if (!factory && must_exist)
+        else
         {
-            throw DBException("Factory is not the expected subclass type");
+            throw DBException("No nested class 'AppFactory' exists for app '")
+                << AppT::NAME << "'.";
         }
+    }
 
-        return factory;
+    /// Parameterize an app factory. Call this after enableApp() but before
+    /// createEnabledApps(). Your app subclass must have a public nested class
+    /// called "AppFactory", inheriting publicly from simdb::AppFactoryBase.
+    template <typename AppT, typename... Args>
+    static void parameterizeAppFactoryInstance(size_t instance_num, [[maybe_unused]] Args&&... args)
+    {
+        if constexpr (utils::has_nested_factory<AppT>::value)
+        {
+            auto factory = getAppFactory_<AppT>();
+            factory->parameterize(instance_num, std::forward<Args>(args)...);
+        }
+        else
+        {
+            throw DBException("No nested class 'AppFactory' exists for app '")
+                << AppT::NAME << "'.";
+        }
     }
 
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
@@ -184,6 +262,19 @@ public:
     {
         static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
         return instantiated(AppT::NAME);
+    }
+
+    /// See how many instances of a particular app are enabled.
+    size_t getEnabledAppInstances(const std::string& app_name)
+    {
+        return enabled(app_name) ? enabled_apps_.at(app_name) : 0;
+    }
+
+    /// See how many instances of a particular app are enabled.
+    template <typename AppT>
+    size_t getEnabledAppInstances()
+    {
+        return getEnabledAppInstances(AppT::NAME);
     }
 
     /// Call after command line args and config files are parsed.
@@ -445,6 +536,41 @@ private:
     {
         static std::map<std::string, std::shared_ptr<AppFactoryBase>> app_factories;
         return app_factories;
+    }
+
+    /// Access an app factory.
+    template <typename AppT>
+    static
+    std::conditional_t<
+        utils::has_nested_factory<AppT>::value,
+        typename AppT::AppFactory*,
+        AppFactory<AppT>*>
+    getAppFactory_(bool must_exist = true)
+    {
+        auto& app_factories = getAppFactories_();
+
+        auto it = app_factories.find(AppT::NAME);
+        if (it == app_factories.end())
+        {
+            if (must_exist)
+            {
+                throw DBException("No factory named ") << AppT::NAME << " exists.";
+            }
+            return nullptr;
+        }
+
+        using factory_t = std::conditional_t<
+            utils::has_nested_factory<AppT>::value,
+            typename AppT::AppFactory,
+            AppFactory<AppT>>;
+
+        auto factory = dynamic_cast<factory_t*>(it->second.get());
+        if (!factory)
+        {
+            throw DBException("Factory is not the expected subclass type");
+        }
+
+        return factory;
     }
 
     /// Instantiated apps (implicitly enabled).
