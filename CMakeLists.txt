@@ -3,9 +3,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_DEBUG "-U_FORTIFY_SOURCE -O0 -g3")
 
-project(simdb LANGUAGES CXX VERSION 4.0.0)
+project(simdb LANGUAGES CXX)
 add_library(simdb INTERFACE)
-add_library(SimDB::simdb ALIAS simdb)
 
 find_package(SQLite3 3.19 REQUIRED)
 message(STATUS "Using SQLite3 ${SQLite3_VERSION}")
@@ -26,14 +25,17 @@ if(SIMDB_PEDANTIC)
 endif()
 
 target_include_directories(simdb INTERFACE
-    $<BUILD_INTERFACE:${SIMDB_BASE}/include>
     $<INSTALL_INTERFACE:include>
 )
 
+target_include_directories(simdb SYSTEM INTERFACE
+    $<BUILD_INTERFACE:${SIMDB_BASE}/include>
+    ${SQLite3_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+)
+
 target_link_libraries(simdb INTERFACE
-    SQLite::SQLite3
-    ZLIB::ZLIB
-    Threads::Threads
+    sqlite3 ZLIB::ZLIB Threads::Threads
 )
 
 include(CTest)
@@ -54,40 +56,4 @@ endmacro()
 add_subdirectory(test EXCLUDE_FROM_ALL)
 add_subdirectory(examples EXCLUDE_FROM_ALL)
 
-include(CMakePackageConfigHelpers)
-
-configure_package_config_file(
-    cmake/SimDBConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SimDB
-)
-
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfigVersion.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-include(GNUInstallDirs)
-
-install(
-    FILES
-        ${CMAKE_CURRENT_LIST_DIR}/cmake/SimDBMacros.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SimDB
-)
-
-install(
-    DIRECTORY include/simdb
-    DESTINATION include/simdb
-)
-
-install(TARGETS simdb
-    EXPORT SimDBTargets
-)
-
-install(EXPORT SimDBTargets
-    NAMESPACE SimDB::
-    DESTINATION lib/cmake/SimDB
-)
+install(DIRECTORY include/simdb/ DESTINATION include/simdb)

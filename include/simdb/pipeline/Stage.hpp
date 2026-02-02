@@ -139,7 +139,7 @@ protected:
 
 private:
     void assignThread_(DatabaseManager* db_mgr,
-                       std::vector<std::unique_ptr<PollingThread>>&,
+                       std::vector<std::unique_ptr<PollingThread>>& threads,
                        std::unique_ptr<DatabaseThread>& database_thread) override final
     {
         // Prepare the DatabaseAccessor
