@@ -28,16 +28,23 @@ public:
     template <typename AppT>
     static void registerApp()
     {
-        app_factory_instantiators_.emplace_back(
-            std::make_unique<AppFactoryInstantiatorT<AppT>>());
+        auto & app_factories = getAppFactories_();
+        auto & factory = app_factories[AppT::NAME];
+        if (factory)
+        {
+            throw DBException("App already registered: ") << AppT::NAME;
+        }
+        factory = std::make_shared<AppFactory<AppT>>();
     }
 
     /// Access an app factory.
     template <typename AppT>
     AppFactory<AppT>* getAppFactory(bool must_exist = true)
     {
-        auto it = app_factories_.find(AppT::NAME);
-        if (it == app_factories_.end())
+        auto& app_factories = getAppFactories_();
+
+        auto it = app_factories.find(AppT::NAME);
+        if (it == app_factories.end())
         {
             if (must_exist)
             {
@@ -60,17 +67,7 @@ public:
         : db_mgr_(db_mgr)
         , msg_log_(msg_log)
         , err_log_(err_log)
-    {
-        for (const auto& instantiator : app_factory_instantiators_)
-        {
-            std::string app_name = instantiator->getAppName();
-            if (app_factories_.find(app_name) != app_factories_.end())
-            {
-                throw DBException("App already registered: ") << app_name;
-            }
-            app_factories_[app_name] = instantiator->createFactory();
-        }
-    }
+    {}
 
     /// Disable all messages to stdout.
     void disableMessageLog()
@@ -100,8 +97,10 @@ public:
     ///   simdb::AppManager::getInstance().enableApp(MyApp::NAME);
     void enableApp(const std::string& app_name, size_t num_instances = 1)
     {
-        auto it = app_factories_.find(app_name);
-        if (it == app_factories_.end())
+        auto& app_factories = getAppFactories_();
+
+        auto it = app_factories.find(app_name);
+        if (it == app_factories.end())
         {
             throw DBException("No factory named ") << app_name << " exists.";
         }
@@ -116,7 +115,7 @@ public:
             for (size_t i = 1; i <= num_instances; ++i)
             {
                 std::string instance_name = app_name + std::string("-") + std::to_string(i);
-                app_factories_[instance_name] = factory;
+                app_factories[instance_name] = factory;
             }
         }
 
@@ -190,17 +189,19 @@ public:
     /// Call after command line args and config files are parsed.
     void createEnabledApps()
     {
+        auto& app_factories = getAppFactories_();
+
         for (const auto& [app_name, num_instances] : enabled_apps_)
         {
             if (num_instances == 1)
             {
-                App* app = app_factories_[app_name]->createApp(db_mgr_, 0);
+                App* app = app_factories[app_name]->createApp(db_mgr_, 0);
                 // Single-instance apps have instance number 0 already
                 apps_[app_name] = std::unique_ptr<App>(app);
             } else {
                 for (size_t instance_num = 1; instance_num <= num_instances; ++instance_num)
                 {
-                    App* app = app_factories_[app_name]->createApp(db_mgr_, instance_num);
+                    App* app = app_factories[app_name]->createApp(db_mgr_, instance_num);
                     app->setInstance(instance_num);
                     std::string instance_name = app_name + std::string("-") + std::to_string(instance_num);
                     apps_[instance_name] = std::unique_ptr<App>(app);
@@ -264,6 +265,8 @@ public:
     {
         PROFILE_APP_PHASE
 
+        auto& app_factories = getAppFactories_();
+
         db_mgr_->safeTransaction(
             [&]()
             {
@@ -290,7 +293,7 @@ public:
                         SQL_VALUES(app_name));
 
                     Schema app_schema;
-                    auto& factory = app_factories_[app_name];
+                    auto& factory = app_factories[app_name];
                     factory->defineSchema(app_schema);
                     db_mgr_->appendSchema(app_schema);
                 }
@@ -437,33 +440,12 @@ private:
         return apps;
     }
 
-    /// Registered app factories.
-    std::map<std::string, std::shared_ptr<AppFactoryBase>> app_factories_;
-
-    class AppFactoryInstantiator
+    /// Get a static map for all registered app factories.
+    static std::map<std::string, std::shared_ptr<AppFactoryBase>> & getAppFactories_()
     {
-    public:
-        virtual ~AppFactoryInstantiator() = default;
-        virtual std::string getAppName() const = 0;
-        virtual std::shared_ptr<AppFactoryBase> createFactory() const = 0;
-    };
-
-    template <typename AppT>
-    class AppFactoryInstantiatorT : public AppFactoryInstantiator
-    {
-    public:
-        std::string getAppName() const override
-        {
-            return AppT::NAME;
-        }
-
-        std::shared_ptr<AppFactoryBase> createFactory() const override
-        {
-            return std::make_shared<AppFactory<AppT>>();
-        }
-    };
-
-    static inline std::vector<std::unique_ptr<AppFactoryInstantiator>> app_factory_instantiators_;
+        static std::map<std::string, std::shared_ptr<AppFactoryBase>> app_factories;
+        return app_factories;
+    }
 
     /// Instantiated apps (implicitly enabled).
     /// Key is the App's NAME static member, or NAME-<instance>
