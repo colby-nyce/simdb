@@ -72,7 +72,6 @@ include(GNUInstallDirs)
 
 install(
     FILES
-        ${CMAKE_CURRENT_LIST_DIR}/cmake/SimDBMacros.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfig.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SimDB
