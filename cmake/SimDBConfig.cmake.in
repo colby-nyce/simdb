@@ -1,4 +1,3 @@
 @PACKAGE_INIT@
 
 include("${CMAKE_CURRENT_LIST_DIR}/SimDBTargets.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/SimDBMacros.cmake")
