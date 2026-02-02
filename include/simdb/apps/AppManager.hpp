@@ -96,14 +96,14 @@ public:
     ///
     /// Then do this:
     ///
-    ///   // Assume have the AppManager
-    ///   app_mgr.enableApp(MyApp::NAME);
-    ///   app_mgr.enableApp(MyApp::NAME, 2 /*inst count*/);
-    ///
-    ///   // Parameterize before createEnabledApps()
+    ///   // Parameterize before createEnabledApps() - or even before creating AppManager
     ///   AppManager::parameterizeAppFactory<MyApp>(1, 2.2);
     ///   AppManager::parameterizeAppFactoryInstance<MyApp>(1 /*inst num*/, 1, 2.2);
     ///   AppManager::parameterizeAppFactoryInstance<MyApp>(2 /*inst num*/, 3, 4.4);
+    ///
+    ///   // Assume have the AppManager by now:
+    ///   app_mgr.enableApp(MyApp::NAME);
+    ///   app_mgr.enableApp(MyApp::NAME, 2 /*inst count*/);
     ///
     ///   // Then continue and create the apps:
     ///   app_mgr.createEnabledApps();
