@@ -165,6 +165,49 @@ public:
         }
     }
 
+    /// Check if we have a factory for the app with the given name.
+    /// If you are checking for a factory for an app that has a nested
+    /// AppFactory class in it, consider using hasAppFactoryOfType<AppT>().
+    static bool hasAppFactory(const std::string& app_name)
+    {
+        const auto& app_factories = getAppFactories_();
+        if (app_factories.find(app_name) == app_factories.end())
+        {
+            return false;
+        }
+        return true;
+    }
+
+    /// Check if we have a factory for the app with the given name and type.
+    /// Only call this if your app is expected to have only ONE instance.
+    /// For apps with >1 instance, call hasAppFactoryInstanceOfType<AppT>().
+    template <typename AppT>
+    static bool hasAppFactoryOfType()
+    {
+        static_assert(utils::has_nested_factory<AppT>::value,
+                      "You may only call this method for apps with a nested AppFactory");
+
+        constexpr size_t global_instance_num = 0;
+        return getNestedAppFactory_<AppT>(global_instance_num, false /*do not create*/) != nullptr;
+    }
+
+    /// Check if we have a factory for the app with the given name, type, and
+    /// instance number. For apps with only one instance, you should call the
+    /// hasAppFactoryOfType<AppT>() method instead.
+    template <typename AppT>
+    static bool hasAppFactoryInstanceOfType(size_t instance_num)
+    {
+        static_assert(utils::has_nested_factory<AppT>::value,
+                      "You may only call this method for apps with a nested AppFactory");
+
+        if (instance_num == 0)
+        {
+            throw DBException("Call hasAppFactoryOfType<AppT>() instead for 1-instance apps");
+        }
+
+        return getNestedAppFactory_<AppT>(instance_num, false /*do not create*/) != nullptr;
+    }
+
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
     AppManager(DatabaseManager* db_mgr, std::ostream* msg_log = &std::cout, std::ostream* err_log = &std::cerr)
         : db_mgr_(db_mgr)
@@ -607,9 +650,33 @@ private:
     /// Access an app factory.
     template <typename AppT>
     static typename AppT::AppFactory*
-    getNestedAppFactory_(size_t instance_num)
+    getNestedAppFactory_(size_t instance_num, bool create_if_needed = true)
     {
         auto& app_factories = getAppFactories_();
+        if (!create_if_needed)
+        {
+            auto it = app_factories.find(AppT::NAME);
+            if (it == app_factories.end())
+            {
+                return nullptr;
+            }
+
+            auto it2 = it->second.find(instance_num);
+            if (it2 == it->second.end())
+            {
+                return nullptr;
+            }
+
+            auto factory = dynamic_cast<typename AppT::AppFactory*>(it2->second.get());
+            if (!factory)
+            {
+                throw DBException("Failed to downcast app factory for '")
+                    << AppT::NAME << "'.";
+            }
+
+            return factory;
+        }
+
         auto& factory = app_factories[AppT::NAME][instance_num];
         if (!factory)
         {
