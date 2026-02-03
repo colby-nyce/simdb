@@ -28,10 +28,10 @@ int main()
     // Should not be able to get app with unspecified instance
     EXPECT_THROW(app_mgr.getApp<SimplePipeline>());
 
-    auto app1 = app_mgr.getApp<SimplePipeline>(1);
-    auto app2 = app_mgr.getApp<SimplePipeline>(2);
-    auto app3 = app_mgr.getApp<SimplePipeline>(3);
-    auto app4 = app_mgr.getApp<SimplePipeline>(4);
+    auto app1 = app_mgr.getAppInstance<SimplePipeline>(0);
+    auto app2 = app_mgr.getAppInstance<SimplePipeline>(1);
+    auto app3 = app_mgr.getAppInstance<SimplePipeline>(2);
+    auto app4 = app_mgr.getAppInstance<SimplePipeline>(3);
     SimplePipeline* apps[] = {app1, app2, app3, app4};
 
     // Instantiate the DB schema
@@ -53,9 +53,9 @@ int main()
             val = rand() % 100 * M_PI;
         }
 
-        auto instance = rand() % 4 + 1;
+        auto instance = rand() % 4;
         test_data[instance].push_back(data);
-        apps[instance - 1]->process(data);
+        apps[instance]->process(data);
     }
 
     // Let the threads keep running for a second just to get
