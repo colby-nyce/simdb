@@ -122,14 +122,28 @@ public:
     ///   // Then continue and create the apps:
     ///   app_mgr.createEnabledApps();
     ///
-    /// TODO cnyce: tell about accidentally blowing away instance-specific factories
-    /// if you already configured them.
+    /// IMPORTANT: If you already configured specific app instance factories
+    /// with parameterizeAppFactoryInstance(), this method will throw away
+    /// all your factory configurations, and all instances will end up using
+    /// the same factory that is being "globally" configured right now (unless
+    /// you call parameterizeAppFactoryInstance() again). Only a warning will
+    /// be issued.
     template <typename AppT, typename... Args>
     static void parameterizeAppFactory([[maybe_unused]] Args&&... args)
     {
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
             auto& app_factories = getAppFactories_();
+
+            auto num_overwritten = app_factories[AppT::NAME].size();
+            if (num_overwritten > 0)
+            {
+                std::cout << "WARNING: Throwing away " << num_overwritten
+                    << " app factor" << (num_overwritten > 1 ? "ies " : "y")
+                    << " and creating a new one for all apps of type "
+                    << AppT::NAME << ". Was this intentional?\n";
+            }
+
             app_factories[AppT::NAME].clear();
 
             constexpr size_t global_instance_num = 0;
@@ -151,6 +165,7 @@ public:
     {
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
+            std::cout << "Parameterizing '" << AppT::NAME << "' app, instance " << instance_num << "\n";
             auto factory = getNestedAppFactory_<AppT>(instance_num);
             factory->parameterize(std::forward<Args>(args)...);
         }
