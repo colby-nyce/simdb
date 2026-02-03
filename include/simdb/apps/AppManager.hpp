@@ -133,6 +133,11 @@ public:
     {
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
+            if (!enabled(AppT::NAME))
+            {
+                throw DBException("You need to call enableApp() before parameterizing factories.");
+            }
+
             auto& app_factories = getAppFactories_();
 
             auto num_overwritten = app_factories[AppT::NAME].size();
@@ -165,6 +170,11 @@ public:
     {
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
+            if (!enabled(AppT::NAME))
+            {
+                throw DBException("You need to call enableApp() before parameterizing factories.");
+            }
+
             std::cout << "Parameterizing '" << AppT::NAME << "' app, instance " << instance_num << "\n";
             auto factory = getNestedAppFactory_<AppT>(instance_num);
             factory->parameterize(std::forward<Args>(args)...);
@@ -222,7 +232,7 @@ public:
     }
 
     /// Check if your app is enabled (might not be instantiated yet).
-    bool enabled(const std::string& app_name) const
+    static bool enabled(const std::string& app_name)
     {
         const auto& enabled_apps = getEnabledApps_();
         return enabled_apps.find(app_name) != enabled_apps.end();
@@ -230,21 +240,21 @@ public:
 
     /// Check if your app is enabled (might not be instantiated yet).
     template <typename AppT>
-    bool enabled() const
+    static bool enabled()
     {
         static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
         return enabled(AppT::NAME);
     }
 
     /// See how many instances of a particular app are enabled.
-    size_t getEnabledAppInstances(const std::string& app_name)
+    static size_t getEnabledAppInstances(const std::string& app_name)
     {
         return enabled(app_name) ? getEnabledApps_().at(app_name) : 0;
     }
 
     /// See how many instances of a particular app are enabled.
     template <typename AppT>
-    size_t getEnabledAppInstances()
+    static size_t getEnabledAppInstances()
     {
         return getEnabledAppInstances(AppT::NAME);
     }
