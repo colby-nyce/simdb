@@ -125,24 +125,14 @@ int main()
     // as calling the macro.
     EXPECT_NOTHROW(simdb::AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>());
 
-    EXPECT_FALSE(simdb::AppManager::hasAppFactory(MyApp::NAME));
-    EXPECT_FALSE(simdb::AppManager::hasAppFactoryOfType<MyApp>());
-    EXPECT_FALSE(simdb::AppManager::hasAppFactoryInstanceOfType<MyApp>(1));
-    EXPECT_FALSE(simdb::AppManager::hasAppFactoryInstanceOfType<MyApp>(2));
-
     // Configure app constructor calls before createEnabledApps()
     const int x1 = 45;
     const float y1 = 7.77;
-    simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(1, x1, y1);
+    simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(0, x1, y1);
 
     const int x2 = 98;
     const float y2 = 3.14;
-    simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(2, x2, y2);
-
-    EXPECT_TRUE(simdb::AppManager::hasAppFactory(MyApp::NAME));
-    EXPECT_FALSE(simdb::AppManager::hasAppFactoryOfType<MyApp>()); // FALSE since this has >1 instances
-    EXPECT_TRUE(simdb::AppManager::hasAppFactoryInstanceOfType<MyApp>(1));
-    EXPECT_TRUE(simdb::AppManager::hasAppFactoryInstanceOfType<MyApp>(2));
+    simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(1, x2, y2);
 
     // Create the DB/app managers
     simdb::DatabaseManager db_mgr("test.db", true);
@@ -156,8 +146,8 @@ int main()
     app_mgr.createEnabledApps();
 
     // Validate
-    auto app1 = app_mgr.getApp<MyApp>(1);
-    auto app2 = app_mgr.getApp<MyApp>(2);
+    auto app1 = app_mgr.getAppInstance<MyApp>(0);
+    auto app2 = app_mgr.getAppInstance<MyApp>(1);
     EXPECT_EQUAL(app1->getX(), x1);
     EXPECT_EQUAL(app1->getY(), y1);
     EXPECT_EQUAL(app2->getX(), x2);

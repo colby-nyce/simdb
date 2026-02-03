@@ -103,8 +103,8 @@ private:
     class DatabaseStage : public simdb::pipeline::DatabaseStage<SimplePipeline>
     {
     public:
-        DatabaseStage(size_t instance_num)
-            : instance_num_(instance_num)
+        DatabaseStage(size_t app_instance_num)
+            : app_instance_num_(app_instance_num)
         {
             addInPort_<std::vector<char>>("data_to_write", input_queue_);
         }
@@ -120,7 +120,7 @@ private:
             std::vector<char> data;
             if (input_queue_->try_pop(data)) {
                 auto inserter = getTableInserter_("CompressedData");
-                inserter->setColumnValue(0, (int)instance_num_);
+                inserter->setColumnValue(0, (int)app_instance_num_);
                 inserter->setColumnValue(1, data);
                 inserter->createRecord();
                 return simdb::pipeline::PROCEED;
@@ -129,7 +129,7 @@ private:
             return simdb::pipeline::SLEEP;
         }
 
-        size_t instance_num_ = 0;
+        size_t app_instance_num_ = 0;
         simdb::ConcurrentQueue<std::vector<char>>* input_queue_ = nullptr;
     };
 };
