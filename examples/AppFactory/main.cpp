@@ -47,20 +47,14 @@ public:
     public:
         using AppT = MyApp;
 
-        void parameterize(size_t instance_num, int x, float y)
+        void parameterize(int x, float y)
         {
-            ctor_args_by_instance_[instance_num] = std::make_pair(x, y);
+            ctor_args_ = std::make_pair(x, y);
         }
 
-        AppT* createApp(simdb::DatabaseManager* db_mgr, size_t instance_num = 0) override
+        AppT* createApp(simdb::DatabaseManager* db_mgr) override
         {
-            auto it = ctor_args_by_instance_.find(instance_num);
-            if (it == ctor_args_by_instance_.end())
-            {
-                throw simdb::DBException("Invalid instance: ") << instance_num;
-            }
-
-            const auto [x, y] = it->second;
+            const auto& [x, y] = ctor_args_;
             return new AppT(db_mgr, x, y);
         }
 
@@ -70,8 +64,7 @@ public:
         }
 
     private:
-        using CtorArgs = std::pair<int, float>;
-        std::map<size_t /*instance_num*/, CtorArgs> ctor_args_by_instance_;
+        std::pair<int, float> ctor_args_;
     };
 
 private:
@@ -101,7 +94,7 @@ public:
     class AppFactory : public simdb::AppFactoryBase
     {
     public:
-        simdb::App* create(simdb::DatabaseManager*, size_t)
+        simdb::App* createApp(simdb::DatabaseManager*) override
         {
             EXPECT_TRUE(false); // Should never get hit
             return nullptr;
@@ -112,9 +105,10 @@ public:
             EXPECT_TRUE(false); // Should never get hit
         }
 
-        void parameterize(size_t /*instance_num*/)
+        void parameterize()
         {
-            EXPECT_TRUE(false); // Should never get hit
+            // Gets hit in calls to:
+            // AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>()
         }
     };
 };
@@ -123,11 +117,13 @@ TEST_INIT;
 
 int main()
 {
-    // Quick negative test: try to parameterize an unregistered app
+    // Quick negative test: try to parameterize an unregistered app using global instance_num
     EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<UnregisteredApp>());
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>());
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<UnregisteredApp>(404));
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<UnregisteredAppWithFactory>(404));
+
+    // Note that we can lazily register an app even without REGISTER_SIMDB_APPLICATION
+    // as long as there is a nested AppFactory class in our app. This has the same effect
+    // as calling the macro.
+    EXPECT_NOTHROW(simdb::AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>());
 
     // Configure app constructor calls before createEnabledApps()
     const int x1 = 45;
