@@ -143,6 +143,16 @@ public:
     template <typename AppT, typename... Args>
     static void parameterizeAppFactoryInstance(size_t instance_num, [[maybe_unused]] Args&&... args)
     {
+        if (instance_num == 0)
+        {
+            // This is likely user error as this API is meant for parameterizing
+            // specific instances. Using a value of 0 means "do this for all apps
+            // of this type", and the parameterizeAppFactory() method should be
+            // called instead.
+            throw DBException("Cannot call parameterizeAppFactoryInstance() with ")
+                << "an instance number of 0. Call parameterizeAppFactory() instead.";
+        }
+
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
             auto factory = getNestedAppFactory_<AppT>(instance_num);
