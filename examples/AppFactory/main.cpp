@@ -117,13 +117,20 @@ TEST_INIT;
 
 int main()
 {
-    // Quick negative test: try to parameterize an unregistered app using global instance_num
+    // Quick negative test: try to parameterize an unregistered app
     EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<UnregisteredApp>());
+    EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>());
+    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<UnregisteredApp>(404));
+    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<UnregisteredAppWithFactory>(404));
 
-    // Note that we can lazily register an app even without REGISTER_SIMDB_APPLICATION
-    // as long as there is a nested AppFactory class in our app. This has the same effect
-    // as calling the macro.
-    EXPECT_NOTHROW(simdb::AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>());
+    // Another negative test: try to parameterize a registered app that is not enabled
+    EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<MyApp>(1/*x*/, 2.2/*y*/));
+    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(0 /*inst num*/, 1/*x*/, 2.2/*y*/));
+    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(0 /*inst num*/, 3/*x*/, 4.4/*y*/));
+
+    // Enable 2 app instances
+    simdb::AppManager::enableApp(MyApp::NAME, 2);
+    EXPECT_EQUAL(simdb::AppManager::getEnabledAppInstances<MyApp>(), 2);
 
     // Configure app constructor calls before createEnabledApps()
     const int x1 = 45;
@@ -137,10 +144,6 @@ int main()
     // Create the DB/app managers
     simdb::DatabaseManager db_mgr("test.db", true);
     simdb::AppManager app_mgr(&db_mgr);
-
-    // Enable 2 app instances
-    app_mgr.enableApp(MyApp::NAME, 2);
-    EXPECT_EQUAL(app_mgr.getEnabledAppInstances<MyApp>(), 2);
 
     // Create the apps
     app_mgr.createEnabledApps();
