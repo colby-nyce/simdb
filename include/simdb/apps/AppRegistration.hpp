@@ -9,7 +9,6 @@ struct AppRegistration
 {
     AppRegistration()
     {
-        //TODO cnyce: use has_nested_factory trick to decide which factory to use
         simdb::AppManager::registerApp<AppT>();
     }
 };
