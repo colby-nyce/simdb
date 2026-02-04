@@ -52,7 +52,7 @@ int main(int argc, char** argv)
     }
 
     // Finalize...
-    app_mgr.postSimLoopTeardown();
+    app_mgrs.postSimLoopTeardown();
 
     // Validate...
     auto query = db_mgr.createQuery("CompressedData");

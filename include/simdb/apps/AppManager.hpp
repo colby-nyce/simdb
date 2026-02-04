@@ -64,6 +64,12 @@ public:
         }
     }
 
+    /// Get our associated DatabaseManager.
+    DatabaseManager* getDatabaseManager() const
+    {
+        return db_mgr_;
+    }
+
     /// Parameterize an app factory. Call this before createEnabledApps().
     /// Your app subclass must have a public nested class called "AppFactory",
     /// inheriting publicly from simdb::AppFactoryBase. Your nested AppFactory
@@ -841,6 +847,17 @@ public:
         return *app_mgr;
     }
 
+    /// Get all AppManager's we have.
+    std::vector<AppManager*> getAllAppManagers()
+    {
+        std::vector<AppManager*> app_mgrs;
+        for (auto& [_, app_mgr] : app_mgrs_by_db_file_)
+        {
+            app_mgrs.push_back(app_mgr.get());
+        }
+        return app_mgrs;
+    }
+
     /// If there is only one AppManager, return it. Otherwise throw.
     AppManager& getAppManager()
     {
@@ -863,6 +880,15 @@ public:
 
         throw DBException("Cannot call getDatabaseManager() since there are ")
             << db_mgrs_by_db_file_.size() << " AppManager's. Must be only one.";
+    }
+
+    /// Call postSimLoopTeardown() on all AppManager's.
+    void postSimLoopTeardown(bool delete_apps = false)
+    {
+        for (auto app_mgr : getAllAppManagers())
+        {
+            app_mgr->postSimLoopTeardown(delete_apps);
+        }
     }
 
 private:

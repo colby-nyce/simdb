@@ -644,7 +644,7 @@ int main()
     flush_verif_queue();
 
     // Finish...
-    app_mgr.postSimLoopTeardown();
+    app_mgrs.postSimLoopTeardown();
 
     // This MUST be put at the end of unit test files' main() function.
     REPORT_ERROR;

@@ -227,7 +227,7 @@ int main()
     EXPECT_EQUAL(num_records, num_sent);
 
     // Finish...
-    app_mgr.postSimLoopTeardown();
+    app_mgrs.postSimLoopTeardown();
 
     REPORT_ERROR;
     return ERROR_CODE;

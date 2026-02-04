@@ -65,7 +65,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Finish...
-    app_mgr.postSimLoopTeardown();
+    app_mgrs.postSimLoopTeardown();
 
     // Validate...
     for (size_t instance = 1; instance <= 4; ++instance)

@@ -291,7 +291,7 @@ int main()
     }
 
     // Finalize...
-    app_mgr.postSimLoopTeardown();
+    app_mgrs.postSimLoopTeardown();
 
     // Validate...
     auto calc_query = db_mgr.createQuery("CalcValues");
