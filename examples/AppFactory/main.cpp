@@ -155,6 +155,31 @@ int main()
     EXPECT_EQUAL(app2->getX(), x2);
     EXPECT_EQUAL(app2->getY(), y2);
 
+    // Create two MyApp instances, each one going to a different database
+    app_mgrs.destroyAll();
+    auto& app_mgr1 = app_mgrs.getAppManager("test1.db", true /*new file*/);
+    auto& app_mgr2 = app_mgrs.getAppManager("test2.db", true /*new file*/);
+
+    // Send one MyApp to each database
+    app_mgr1.enableApp(MyApp::NAME);
+    app_mgr2.enableApp(MyApp::NAME);
+
+    // Parameterize the two apps
+    app_mgr1.parameterizeAppFactoryInstance<MyApp>(0, x1, y1);
+    app_mgr2.parameterizeAppFactoryInstance<MyApp>(0, x2, y2);
+
+    // Create the two apps
+    app_mgr1.createEnabledApps();
+    app_mgr2.createEnabledApps();
+
+    // Validate the two apps
+    app1 = app_mgr1.getAppInstance<MyApp>(0);
+    app2 = app_mgr2.getAppInstance<MyApp>(0);
+    EXPECT_EQUAL(app1->getX(), x1);
+    EXPECT_EQUAL(app1->getY(), y1);
+    EXPECT_EQUAL(app2->getX(), x2);
+    EXPECT_EQUAL(app2->getY(), y2);
+
     REPORT_ERROR;
     return ERROR_CODE;
 }
