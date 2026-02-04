@@ -882,6 +882,25 @@ public:
         return *it->second;
     }
 
+    /// Get a mapping from all active AppManager's and their associated
+    /// DatabaseManager's.
+    std::vector<std::pair<AppManager*, DatabaseManager*>> getAllManagers()
+    {
+        std::vector<std::pair<AppManager*, DatabaseManager*>> mgrs;
+        for (auto& [db_file, db_mgr] : db_mgrs_by_db_file_)
+        {
+            auto it = app_mgrs_by_db_file_.find(db_file);
+            if (it == app_mgrs_by_db_file_.end())
+            {
+                continue;
+            }
+
+            auto& app_mgr = it->second;
+            mgrs.push_back(std::make_pair(app_mgr.get(), db_mgr.get()));
+        }
+        return mgrs;
+    }
+
     /// Call postSimLoopTeardown() on all AppManager's. This destroys all Apps
     /// and AppManager's. It does NOT destroy the DatabaseManager's. Once this
     /// method is called, you have to access the DatabaseManager's using the

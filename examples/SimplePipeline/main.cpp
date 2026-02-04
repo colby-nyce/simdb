@@ -51,6 +51,12 @@ int main(int argc, char** argv)
         app->process(data);
     }
 
+    // Get coverage for the getAllManagers() API before teardown.
+    auto all_mgrs = app_mgrs.getAllManagers();
+    EXPECT_EQUAL(all_mgrs.size(), 1);
+    EXPECT_EQUAL(all_mgrs.at(0).first, &app_mgr);
+    EXPECT_EQUAL(all_mgrs.at(0).second, &db_mgr);
+
     // Finalize...
     app_mgrs.postSimLoopTeardown();
 
@@ -72,6 +78,12 @@ int main(int argc, char** argv)
 
     // Get coverage for the getDatabaseManager(db_file) API
     EXPECT_EQUAL(&app_mgrs.getDatabaseManager("test.db"), &db_mgr);
+
+    // Get coverage for the getAllManagers() API after teardown.
+    // Since the AppManager has been destroyed, this should return
+    // nothing even though the DatabaseManager is still alive.
+    all_mgrs = app_mgrs.getAllManagers();
+    EXPECT_TRUE(all_mgrs.empty());
 
     REPORT_ERROR;
     return ERROR_CODE;
