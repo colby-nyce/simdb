@@ -12,8 +12,9 @@ TEST_INIT;
 
 int main()
 {
-    simdb::DatabaseManager db_mgr("test.db", true);
-    simdb::AppManager app_mgr(&db_mgr);
+    simdb::AppManagers app_mgrs;
+    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& db_mgr = app_mgrs.getDatabaseManager();
 
     // Disable pipeline messages; it clutters up stdout with so many running apps
     app_mgr.disableMessageLog();

@@ -13,8 +13,7 @@ class MultiPortStages : public simdb::App
 public:
     static constexpr auto NAME = "mimo-pipeline-app";
 
-    MultiPortStages(simdb::DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
+    MultiPortStages(simdb::DatabaseManager*)
     {}
 
     ~MultiPortStages() noexcept = default;
@@ -194,7 +193,6 @@ private:
         simdb::ConcurrentQueue<size_t>* num_unaligned_output_queue_ = nullptr;
         ValidValue<double> ready_x_;
         ValidValue<double> ready_y_;
-        size_t pair_count_ = 0;
     };
 
     /// Receive XY pairs and write the sum and product to the database. Also receive
@@ -248,7 +246,6 @@ private:
         simdb::ConcurrentQueue<size_t>* num_unaligned_input_queue_ = nullptr;
     };
 
-    simdb::DatabaseManager* db_mgr_ = nullptr;
     simdb::ConcurrentQueue<double>* x_input_queue_ = nullptr;
     simdb::ConcurrentQueue<double>* y_input_queue_ = nullptr;
 };
@@ -261,11 +258,12 @@ int main()
 {
     std::srand(std::time(nullptr));
 
-    simdb::DatabaseManager db_mgr("test.db", true);
-    simdb::AppManager app_mgr(&db_mgr);
-    app_mgr.enableApp(MultiPortStages::NAME);
+    simdb::AppManagers app_mgrs;
+    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& db_mgr = app_mgrs.getDatabaseManager();
 
     // Setup...
+    app_mgr.enableApp(MultiPortStages::NAME);
     app_mgr.createEnabledApps();
     app_mgr.createSchemas();
     app_mgr.initializePipelines();

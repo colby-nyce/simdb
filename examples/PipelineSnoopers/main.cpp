@@ -74,8 +74,7 @@ class PipelineSnooper : public simdb::App
 public:
     static constexpr auto NAME = "pipeline-snooper";
 
-    PipelineSnooper(simdb::DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
+    PipelineSnooper(simdb::DatabaseManager*)
     {}
 
     static void defineSchema(simdb::Schema& schema)
@@ -576,7 +575,6 @@ private:
         uint32_t& snooped_database_counter_;
     };
 
-    simdb::DatabaseManager* db_mgr_ = nullptr;
     simdb::pipeline::PipelineManager* pipeline_mgr_ = nullptr;
     std::unique_ptr<simdb::pipeline::Flusher> pipeline_flusher_;
 
@@ -600,11 +598,11 @@ TEST_INIT;
 
 int main()
 {
-    simdb::DatabaseManager db_mgr("test.db", true);
-    simdb::AppManager app_mgr(&db_mgr);
-    app_mgr.enableApp(PipelineSnooper::NAME);
+    simdb::AppManagers app_mgrs;
+    auto& app_mgr = app_mgrs.getAppManager("test.db");
 
     // Setup...
+    app_mgr.enableApp(PipelineSnooper::NAME);
     app_mgr.createEnabledApps();
     app_mgr.createSchemas();
     app_mgr.initializePipelines();
