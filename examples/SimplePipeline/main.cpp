@@ -52,7 +52,7 @@ int main(int argc, char** argv)
     }
 
     // Finalize...
-    app_mgr.postSimLoopTeardown();
+    app_mgrs.postSimLoopTeardown();
 
     // Validate...
     auto query = db_mgr.createQuery("CompressedData");
@@ -69,6 +69,9 @@ int main(int argc, char** argv)
         EXPECT_EQUAL(decompressed_data, test_data[row_idx]);
         row_idx++;
     }
+
+    // Get coverage for the getDatabaseManager(db_file) API
+    EXPECT_EQUAL(&app_mgrs.getDatabaseManager("test.db"), &db_mgr);
 
     REPORT_ERROR;
     return ERROR_CODE;
