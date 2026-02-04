@@ -12,11 +12,27 @@ TEST_INIT;
 
 int main(int argc, char** argv)
 {
-    simdb::DatabaseManager db_mgr("test.db", true);
-    simdb::AppManager app_mgr(&db_mgr);
-    app_mgr.enableApp(SimplePipeline::NAME);
+    simdb::AppManagers app_mgrs;
+
+    // Test misuse of getAppManager(db_file, create_if_needed)
+    EXPECT_THROW(app_mgrs.getAppManager("test.db", false));
+
+    // Test misuse of getAppManager() / getDatabaseManager() APIs
+    EXPECT_THROW(app_mgrs.getAppManager());
+    EXPECT_THROW(app_mgrs.getDatabaseManager());
+
+    // Create the app/db managers
+    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& db_mgr = app_mgrs.getDatabaseManager();
+
+    // Get coverage for getAppManager() overload
+    EXPECT_EQUAL(&app_mgrs.getAppManager(), &app_mgr);
+
+    // Get coverage for getDatabaseManager() method
+    EXPECT_EQUAL(&app_mgrs.getDatabaseManager(), &db_mgr);
 
     // Setup...
+    app_mgr.enableApp(SimplePipeline::NAME);
     app_mgr.createEnabledApps();
     app_mgr.createSchemas();
     app_mgr.postInit(argc, argv);

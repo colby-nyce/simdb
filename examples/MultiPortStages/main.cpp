@@ -261,11 +261,12 @@ int main()
 {
     std::srand(std::time(nullptr));
 
-    simdb::DatabaseManager db_mgr("test.db", true);
-    simdb::AppManager app_mgr(&db_mgr);
-    app_mgr.enableApp(MultiPortStages::NAME);
+    simdb::AppManagers app_mgrs;
+    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& db_mgr = app_mgrs.getDatabaseManager();
 
     // Setup...
+    app_mgr.enableApp(MultiPortStages::NAME);
     app_mgr.createEnabledApps();
     app_mgr.createSchemas();
     app_mgr.initializePipelines();

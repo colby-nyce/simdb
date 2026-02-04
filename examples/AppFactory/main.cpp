@@ -117,33 +117,32 @@ TEST_INIT;
 
 int main()
 {
+    simdb::AppManagers app_mgrs;
+    auto& app_mgr = app_mgrs.getAppManager("test.db");
+
     // Quick negative test: try to parameterize an unregistered app
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<UnregisteredApp>());
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<UnregisteredAppWithFactory>());
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<UnregisteredApp>(404));
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<UnregisteredAppWithFactory>(404));
+    EXPECT_THROW(app_mgr.parameterizeAppFactory<UnregisteredApp>());
+    EXPECT_THROW(app_mgr.parameterizeAppFactory<UnregisteredAppWithFactory>());
+    EXPECT_THROW(app_mgr.parameterizeAppFactoryInstance<UnregisteredApp>(404));
+    EXPECT_THROW(app_mgr.parameterizeAppFactoryInstance<UnregisteredAppWithFactory>(404));
 
     // Another negative test: try to parameterize a registered app that is not enabled
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactory<MyApp>(1/*x*/, 2.2/*y*/));
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(0 /*inst num*/, 1/*x*/, 2.2/*y*/));
-    EXPECT_THROW(simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(0 /*inst num*/, 3/*x*/, 4.4/*y*/));
+    EXPECT_THROW(app_mgr.parameterizeAppFactory<MyApp>(1/*x*/, 2.2/*y*/));
+    EXPECT_THROW(app_mgr.parameterizeAppFactoryInstance<MyApp>(0 /*inst num*/, 1/*x*/, 2.2/*y*/));
+    EXPECT_THROW(app_mgr.parameterizeAppFactoryInstance<MyApp>(0 /*inst num*/, 3/*x*/, 4.4/*y*/));
 
     // Enable 2 app instances
-    simdb::AppManager::enableApp(MyApp::NAME, 2);
-    EXPECT_EQUAL(simdb::AppManager::getEnabledAppInstances<MyApp>(), 2);
+    app_mgr.enableApp(MyApp::NAME, 2);
+    EXPECT_EQUAL(app_mgr.getEnabledAppInstances<MyApp>(), 2);
 
     // Configure app constructor calls before createEnabledApps()
     const int x1 = 45;
     const float y1 = 7.77;
-    simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(0, x1, y1);
+    app_mgr.parameterizeAppFactoryInstance<MyApp>(0, x1, y1);
 
     const int x2 = 98;
     const float y2 = 3.14;
-    simdb::AppManager::parameterizeAppFactoryInstance<MyApp>(1, x2, y2);
-
-    // Create the DB/app managers
-    simdb::DatabaseManager db_mgr("test.db", true);
-    simdb::AppManager app_mgr(&db_mgr);
+    app_mgr.parameterizeAppFactoryInstance<MyApp>(1, x2, y2);
 
     // Create the apps
     app_mgr.createEnabledApps();

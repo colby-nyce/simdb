@@ -22,6 +22,8 @@ namespace utils {
     struct has_nested_factory<T, std::void_t<typename T::AppFactory>> : std::true_type{};
 }
 
+class AppManagers;
+
 /// This class is responsible for registering, enabling, instantiating,
 /// and managing the lifecycle of all SimDB applications running in a
 /// simulation.
@@ -50,7 +52,7 @@ public:
         }
         else
         {
-            auto & app_factories = getAppFactories_();
+            auto & app_factories = getDefaultAppFactories_();
             if (app_factories.find(AppT::NAME) != app_factories.end())
             {
                 throw DBException("App already registered: ") << AppT::NAME;
@@ -106,14 +108,14 @@ public:
     ///
     /// Then do this:
     ///
-    ///   // Parameterize before createEnabledApps() - or even before creating AppManager.
+    ///   // Parameterize before createEnabledApps()
     ///
     ///   // How to parameterize all instances of your app:
-    ///   AppManager::parameterizeAppFactory<MyApp>(1 /*x*/, 2.2 /*y*/);
+    ///   app_mgr.parameterizeAppFactory<MyApp>(1 /*x*/, 2.2 /*y*/);
     ///
     ///   // How to parameterize one instance of your app:
-    ///   AppManager::parameterizeAppFactoryInstance<MyApp>(1 /*inst num*/, 1 /*x*/, 2.2 /*y*/);
-    ///   AppManager::parameterizeAppFactoryInstance<MyApp>(2 /*inst num*/, 3 /*x*/, 4.4 /*y*/);
+    ///   app_mgr.parameterizeAppFactoryInstance<MyApp>(1 /*inst num*/, 1 /*x*/, 2.2 /*y*/);
+    ///   app_mgr.parameterizeAppFactoryInstance<MyApp>(2 /*inst num*/, 3 /*x*/, 4.4 /*y*/);
     ///
     ///   // Assume have the AppManager by now:
     ///   app_mgr.enableApp(MyApp::NAME);
@@ -129,7 +131,7 @@ public:
     /// you call parameterizeAppFactoryInstance() again). Only a warning will
     /// be issued.
     template <typename AppT, typename... Args>
-    static void parameterizeAppFactory([[maybe_unused]] Args&&... args)
+    void parameterizeAppFactory([[maybe_unused]] Args&&... args)
     {
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
@@ -138,7 +140,7 @@ public:
                 throw DBException("You need to call enableApp() before parameterizing factories.");
             }
 
-            auto& app_factories = getAppFactories_();
+            auto& app_factories = getDefaultAppFactories_();
 
             auto num_overwritten = app_factories[AppT::NAME].size();
             if (num_overwritten > 0)
@@ -166,7 +168,7 @@ public:
     /// createEnabledApps(). Your app subclass must have a public nested class
     /// called "AppFactory", inheriting publicly from simdb::AppFactoryBase.
     template <typename AppT, typename... Args>
-    static void parameterizeAppFactoryInstance(size_t instance_num, [[maybe_unused]] Args&&... args)
+    void parameterizeAppFactoryInstance(size_t instance_num, [[maybe_unused]] Args&&... args)
     {
         if constexpr (utils::has_nested_factory<AppT>::value)
         {
@@ -185,13 +187,6 @@ public:
                 << AppT::NAME << "'.";
         }
     }
-
-    /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr, std::ostream* msg_log = &std::cout, std::ostream* err_log = &std::cerr)
-        : db_mgr_(db_mgr)
-        , msg_log_(msg_log)
-        , err_log_(err_log)
-    {}
 
     /// Disable all messages to stdout.
     void disableMessageLog()
@@ -219,20 +214,20 @@ public:
     ///   // Somewhere in your main function or config parsing code (meaning,
     ///   // after command line args are parsed and very early in the simulation):
     ///   simdb::AppManager::getInstance().enableApp(MyApp::NAME);
-    static void enableApp(const std::string& app_name, size_t num_instances = 1)
+    void enableApp(const std::string& app_name, size_t num_instances = 1)
     {
         getEnabledApps_()[app_name] = num_instances;
     }
 
     template <typename AppT>
-    static void enableApp(size_t num_instances = 1)
+    void enableApp(size_t num_instances = 1)
     {
         static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
         enableApp(AppT::NAME, num_instances);
     }
 
     /// Check if your app is enabled (might not be instantiated yet).
-    static bool enabled(const std::string& app_name)
+    bool enabled(const std::string& app_name)
     {
         const auto& enabled_apps = getEnabledApps_();
         return enabled_apps.find(app_name) != enabled_apps.end();
@@ -240,21 +235,21 @@ public:
 
     /// Check if your app is enabled (might not be instantiated yet).
     template <typename AppT>
-    static bool enabled()
+    bool enabled()
     {
         static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
         return enabled(AppT::NAME);
     }
 
     /// See how many instances of a particular app are enabled.
-    static size_t getEnabledAppInstances(const std::string& app_name)
+    size_t getEnabledAppInstances(const std::string& app_name)
     {
         return enabled(app_name) ? getEnabledApps_().at(app_name) : 0;
     }
 
     /// See how many instances of a particular app are enabled.
     template <typename AppT>
-    static size_t getEnabledAppInstances()
+    size_t getEnabledAppInstances()
     {
         return getEnabledAppInstances(AppT::NAME);
     }
@@ -503,6 +498,16 @@ public:
     }
 
 private:
+    /// AppManagers are associated 1-to-1 with a DatabaseManager.
+    AppManager(DatabaseManager* db_mgr, std::ostream* msg_log = &std::cout, std::ostream* err_log = &std::cerr)
+        : db_mgr_(db_mgr)
+        , msg_log_(msg_log)
+        , err_log_(err_log)
+    {}
+
+    /// AppManager only to be instantiated by simdb::AppManagers
+    friend class AppManagers;
+
     /// Get all Apps that belong to the given database.
     std::vector<App*> getApps_()
     {
@@ -520,22 +525,25 @@ private:
                      std::shared_ptr<AppFactoryBase>>>; // Factory
 
     /// Get a static map for all registered app factories.
-    static app_factories_t & getAppFactories_()
+    static app_factories_t & getDefaultAppFactories_()
     {
         static app_factories_t app_factories;
         return app_factories;
     }
 
+    /// Non-static app factories created by this AppManager.
+    /// Specific to apps that have a nested AppFactory class.
+    app_factories_t nested_app_factories_;
+
     /// Access an app factory.
     template <typename AppT>
-    static typename AppT::AppFactory*
+    typename AppT::AppFactory*
     getNestedAppFactory_(size_t instance_num, bool create_if_needed = true)
     {
-        auto& app_factories = getAppFactories_();
         if (!create_if_needed)
         {
-            auto it = app_factories.find(AppT::NAME);
-            if (it == app_factories.end())
+            auto it = nested_app_factories_.find(AppT::NAME);
+            if (it == nested_app_factories_.end())
             {
                 return nullptr;
             }
@@ -556,7 +564,7 @@ private:
             return factory;
         }
 
-        auto& factory = app_factories[AppT::NAME][instance_num];
+        auto& factory = nested_app_factories_[AppT::NAME][instance_num];
         if (!factory)
         {
             factory = std::make_shared<typename AppT::AppFactory>();
@@ -569,7 +577,7 @@ private:
                                    size_t instance_num,
                                    bool must_exist = true) const
     {
-        auto& app_factories = getAppFactories_();
+        auto app_factories = getAllAppFactories_();
 
         auto it = app_factories.find(app_name);
         if (it == app_factories.end())
@@ -602,6 +610,39 @@ private:
         }
 
         return it2->second.get();
+    }
+
+    /// Return a union of the global and local app factories.
+    app_factories_t getAllAppFactories_() const
+    {
+        auto default_app_factories = getDefaultAppFactories_();
+        return combineFactories_(default_app_factories, nested_app_factories_);
+    }
+
+    /// Merge two app_factories_t together, verifying that they
+    /// have no overlap.
+    app_factories_t combineFactories_(
+        const app_factories_t& global,
+        const app_factories_t& local) const
+    {
+        app_factories_t result = global;
+
+        for (const auto& [app_name, local_instances] : local) {
+            auto& result_instances = result[app_name];
+
+            for (const auto& [instance_id, factory] : local_instances) {
+                const auto [it, inserted] =
+                    result_instances.emplace(instance_id, factory);
+
+                if (!inserted) {
+                    throw std::logic_error(
+                        "Duplicate AppFactory entry for app '" + app_name +
+                        "', instance " + std::to_string(instance_id));
+                }
+            }
+        }
+
+        return result;
     }
 
     /// Instantiated apps (implicitly enabled).
@@ -734,6 +775,72 @@ private:
 
     Logger msg_log_;
     Logger err_log_;
+};
+
+/// This class holds onto all DatabaseManagers and their AppManagers.
+class AppManagers
+{
+public:
+    /// Get (or create) a new AppManager with an existing DatabaseManager
+    AppManager& getAppManager(DatabaseManager* db_mgr, bool create_if_needed = true)
+    {
+        return getAppManager(db_mgr->getDatabaseFilePath(), create_if_needed);
+    }
+
+    /// Get (or create) a new AppManager with a database filename / filepath
+    AppManager& getAppManager(const std::string& db_file, bool create_if_needed = true)
+    {
+        auto& app_mgr = app_mgrs_by_db_file_[db_file];
+        if (!app_mgr && !create_if_needed)
+        {
+            app_mgrs_by_db_file_.erase(db_file);
+            throw DBException("AppManager does not exist for DB: ") << db_file;
+        }
+        else if (!app_mgr)
+        {
+            // Sanity check
+            assert(db_mgrs_by_db_file_.find(db_file) == db_mgrs_by_db_file_.end());
+
+            // Create a new DatabaseManager and AppManager for it
+            auto db_mgr = std::make_shared<DatabaseManager>(db_file, true /*new file*/);
+            app_mgr.reset(new AppManager(db_mgr.get()));
+
+            db_mgrs_by_db_file_[db_file] = db_mgr;
+            app_mgrs_by_db_mgr_[db_mgr.get()] = app_mgr;
+            db_mgrs_by_app_mgr_[app_mgr.get()] = db_mgr;
+        }
+        return *app_mgr;
+    }
+
+    /// If there is only one AppManager, return it. Otherwise throw.
+    AppManager& getAppManager()
+    {
+        if (app_mgrs_by_db_file_.size() == 1)
+        {
+            return *app_mgrs_by_db_file_.begin()->second;
+        }
+
+        throw DBException("Cannot call getAppManager() since there are ")
+            << app_mgrs_by_db_file_.size() << " AppManager's. Must be only one.";
+    }
+
+    /// If there is only one AppManager, return its DatabaseManager. Otherwise throw.
+    DatabaseManager& getDatabaseManager()
+    {
+        if (db_mgrs_by_db_file_.size() == 1)
+        {
+            return *db_mgrs_by_db_file_.begin()->second;
+        }
+
+        throw DBException("Cannot call getDatabaseManager() since there are ")
+            << db_mgrs_by_db_file_.size() << " AppManager's. Must be only one.";
+    }
+
+private:
+    std::map<std::string, std::shared_ptr<DatabaseManager>> db_mgrs_by_db_file_;
+    std::map<std::string, std::shared_ptr<AppManager>> app_mgrs_by_db_file_;
+    std::map<DatabaseManager*, std::shared_ptr<AppManager>> app_mgrs_by_db_mgr_;
+    std::map<AppManager*, std::shared_ptr<DatabaseManager>> db_mgrs_by_app_mgr_; 
 };
 
 } // namespace simdb
