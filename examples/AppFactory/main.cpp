@@ -175,6 +175,7 @@ int main()
     // Validate the two apps
     app1 = app_mgr1.getAppInstance<MyApp>(0);
     app2 = app_mgr2.getAppInstance<MyApp>(0);
+    EXPECT_NOTEQUAL(app1, app2);
     EXPECT_EQUAL(app1->getX(), x1);
     EXPECT_EQUAL(app1->getY(), y1);
     EXPECT_EQUAL(app2->getX(), x2);
