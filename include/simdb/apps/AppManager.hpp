@@ -912,6 +912,18 @@ public:
             app_mgr->postSimLoopTeardown_();
         }
 
+        destroy_(false);
+    }
+
+    /// Destroy every AppManager and DatabaseManager we have.
+    void destroyAll()
+    {
+        destroy_(true);
+    }
+
+private:
+    void destroy_(bool destroy_all)
+    {
         /// Destroy all AppManagers, DatabaseManagers, and Apps
         for (auto& [_, app_mgr] : app_mgrs_by_db_file_)
         {
@@ -926,9 +938,14 @@ public:
         // Clear DatabaseManager maps. Hang onto db_mgrs_by_db_file_
         // so 'getDatabaseManager(db_file)' is still available.
         db_mgrs_by_app_mgr_.clear();
+
+        // Destroy DatabaseManagers
+        if (destroy_all)
+        {
+            db_mgrs_by_db_file_.clear();
+        }
     }
 
-private:
     std::map<std::string, std::shared_ptr<DatabaseManager>> db_mgrs_by_db_file_;
     std::map<std::string, std::shared_ptr<AppManager>> app_mgrs_by_db_file_;
     std::map<DatabaseManager*, std::shared_ptr<AppManager>> app_mgrs_by_db_mgr_;
