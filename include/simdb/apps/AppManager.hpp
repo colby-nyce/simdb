@@ -188,16 +188,28 @@ public:
         }
     }
 
-    /// Disable all messages to stdout.
+    /// Disable all logged messages.
     void disableMessageLog()
     {
         msg_log_.disable();
     }
 
-    /// Disable all messages to stderr.
+    /// Disable all logged errors.
     void disableErrorLog()
     {
         err_log_.disable();
+    }
+
+    /// Redirect messages (defaults to stdout)
+    void redirectMessageLog(std::ostream* msg_log)
+    {
+        msg_log_.redirectMessages(msg_log);
+    }
+
+    /// Redirect errors (defaults to stderr)
+    void redirectErrorsLog(std::ostream* err_log)
+    {
+        err_log_.redirectErrors(err_log);
     }
 
     /// After parsing command line arguments or configuration files,
@@ -499,10 +511,10 @@ public:
 
 private:
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr, std::ostream* msg_log = &std::cout, std::ostream* err_log = &std::cerr)
+    AppManager(DatabaseManager* db_mgr)
         : db_mgr_(db_mgr)
-        , msg_log_(msg_log)
-        , err_log_(err_log)
+        , msg_log_(&std::cout)
+        , err_log_(&std::cerr)
     {}
 
     /// AppManager only to be instantiated by simdb::AppManagers
@@ -766,6 +778,23 @@ private:
         void enable()
         {
             enabled_ = true;
+        }
+
+        void enable(bool enabled)
+        {
+            enabled_ = enabled;
+        }
+
+        void redirectMessages(std::ostream* msg_log)
+        {
+            out_ = msg_log;
+            enable(out_ != nullptr);
+        }
+
+        void redirectErrors(std::ostream* err_log)
+        {
+            out_ = err_log;
+            enable(out_ != nullptr);
         }
 
     private:
