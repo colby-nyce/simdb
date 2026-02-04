@@ -13,8 +13,7 @@ class MultiPortStages : public simdb::App
 public:
     static constexpr auto NAME = "mimo-pipeline-app";
 
-    MultiPortStages(simdb::DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
+    MultiPortStages(simdb::DatabaseManager*)
     {}
 
     ~MultiPortStages() noexcept = default;
@@ -194,7 +193,6 @@ private:
         simdb::ConcurrentQueue<size_t>* num_unaligned_output_queue_ = nullptr;
         ValidValue<double> ready_x_;
         ValidValue<double> ready_y_;
-        size_t pair_count_ = 0;
     };
 
     /// Receive XY pairs and write the sum and product to the database. Also receive
@@ -248,7 +246,6 @@ private:
         simdb::ConcurrentQueue<size_t>* num_unaligned_input_queue_ = nullptr;
     };
 
-    simdb::DatabaseManager* db_mgr_ = nullptr;
     simdb::ConcurrentQueue<double>* x_input_queue_ = nullptr;
     simdb::ConcurrentQueue<double>* y_input_queue_ = nullptr;
 };

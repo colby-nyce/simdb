@@ -72,8 +72,7 @@ class DatabaseWatchdog : public simdb::App
 public:
     static constexpr auto NAME = "db-watchdog";
 
-    DatabaseWatchdog(simdb::DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
+    DatabaseWatchdog(simdb::DatabaseManager*)
     {}
 
     ~DatabaseWatchdog() noexcept = default;
@@ -163,7 +162,6 @@ private:
         pipeline_app_->thresholdReached_();
     }
 
-    simdb::DatabaseManager* db_mgr_ = nullptr;
     WatchedPipeline* pipeline_app_ = nullptr;
     friend class Watchdog;
 };
