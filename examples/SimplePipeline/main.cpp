@@ -70,6 +70,9 @@ int main(int argc, char** argv)
         row_idx++;
     }
 
+    // Get coverage for the getDatabaseManager(db_file) API
+    EXPECT_EQUAL(&app_mgrs.getDatabaseManager("test.db"), &db_mgr);
+
     REPORT_ERROR;
     return ERROR_CODE;
 }

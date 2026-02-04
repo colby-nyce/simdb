@@ -474,10 +474,32 @@ public:
         pipeline_mgr_->openPipelines();
     }
 
+private:
+    /// AppManagers are associated 1-to-1 with a DatabaseManager.
+    AppManager(DatabaseManager* db_mgr)
+        : db_mgr_(db_mgr)
+        , msg_log_(&std::cout)
+        , err_log_(&std::cerr)
+    {}
+
+    /// AppManager only to be instantiated by simdb::AppManagers
+    friend class AppManagers;
+
+    /// Get all Apps that belong to the given database.
+    std::vector<App*> getApps_()
+    {
+        std::vector<App*> apps;
+        for (const auto& [key, app] : apps_)
+        {
+            apps.push_back(app.get());
+        }
+        return apps;
+    }
+
     /// This method is to be called after the main simulation loop ends.
     /// All running apps' pipelines will be flushed, and all threads
     /// will be torn down.
-    void postSimLoopTeardown(bool delete_apps = false)
+    void postSimLoopTeardown_()
     {
         PROFILE_APP_PHASE
 
@@ -499,42 +521,15 @@ public:
                     app->postTeardown();
                 }
             });
-
-        if (delete_apps)
-        {
-            destroyAllApps();
-        }
     }
 
     /// Delete all instantiated apps. This may be needed since AppManager
     /// is a singleton and your simulator might want to call app destructors
     /// before the AppManager itself is destroyed on program exit.
-    void destroyAllApps()
+    void destroyAllApps_()
     {
         pipeline_mgr_.reset();
         apps_.clear();
-    }
-
-private:
-    /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
-        , msg_log_(&std::cout)
-        , err_log_(&std::cerr)
-    {}
-
-    /// AppManager only to be instantiated by simdb::AppManagers
-    friend class AppManagers;
-
-    /// Get all Apps that belong to the given database.
-    std::vector<App*> getApps_()
-    {
-        std::vector<App*> apps;
-        for (const auto& [key, app] : apps_)
-        {
-            apps.push_back(app.get());
-        }
-        return apps;
     }
 
     using app_factories_t =
@@ -816,12 +811,6 @@ private:
 class AppManagers
 {
 public:
-    /// Get (or create) a new AppManager with an existing DatabaseManager
-    AppManager& getAppManager(DatabaseManager* db_mgr, bool create_if_needed = true)
-    {
-        return getAppManager(db_mgr->getDatabaseFilePath(), create_if_needed);
-    }
-
     /// Get (or create) a new AppManager with a database filename / filepath
     AppManager& getAppManager(const std::string& db_file, bool create_if_needed = true)
     {
@@ -836,8 +825,18 @@ public:
             // Sanity check
             assert(db_mgrs_by_db_file_.find(db_file) == db_mgrs_by_db_file_.end());
 
-            // Create a new DatabaseManager and AppManager for it
-            auto db_mgr = std::make_shared<DatabaseManager>(db_file, true /*new file*/);
+            // Create a new DatabaseManager (if needed)
+            std::shared_ptr<DatabaseManager> db_mgr;
+            if (auto it = db_mgrs_by_db_file_.find(db_file); it != db_mgrs_by_db_file_.end())
+            {
+                db_mgr = it->second;
+            }
+            else
+            {
+                db_mgr = std::make_shared<DatabaseManager>(db_file, true /*new file*/);
+            }
+
+            // Create a new AppManager for this database
             app_mgr.reset(new AppManager(db_mgr.get()));
 
             db_mgrs_by_db_file_[db_file] = db_mgr;
@@ -845,17 +844,6 @@ public:
             db_mgrs_by_app_mgr_[app_mgr.get()] = db_mgr;
         }
         return *app_mgr;
-    }
-
-    /// Get all AppManager's we have.
-    std::vector<AppManager*> getAllAppManagers()
-    {
-        std::vector<AppManager*> app_mgrs;
-        for (auto& [_, app_mgr] : app_mgrs_by_db_file_)
-        {
-            app_mgrs.push_back(app_mgr.get());
-        }
-        return app_mgrs;
     }
 
     /// If there is only one AppManager, return it. Otherwise throw.
@@ -882,20 +870,50 @@ public:
             << db_mgrs_by_db_file_.size() << " AppManager's. Must be only one.";
     }
 
-    /// Call postSimLoopTeardown() on all AppManager's.
-    void postSimLoopTeardown(bool delete_apps = false)
+    /// Get a DatabaseManager for the given DB file. Throws if not found.
+    DatabaseManager& getDatabaseManager(const std::string& db_file)
     {
-        for (auto app_mgr : getAllAppManagers())
+        auto it = db_mgrs_by_db_file_.find(db_file);
+        if (it == db_mgrs_by_db_file_.end())
         {
-            app_mgr->postSimLoopTeardown(delete_apps);
+            throw DBException("DatabaseManager does not exist for file '")
+                << db_file << "'.";
         }
+        return *it->second;
+    }
+
+    /// Call postSimLoopTeardown() on all AppManager's. This destroys all Apps
+    /// and AppManager's. It does NOT destroy the DatabaseManager's. Once this
+    /// method is called, you have to access the DatabaseManager's using the
+    /// 'getDatabaseManager(db_file)' API.
+    void postSimLoopTeardown()
+    {
+        for (auto& [_, app_mgr] : app_mgrs_by_db_file_)
+        {
+            app_mgr->postSimLoopTeardown_();
+        }
+
+        /// Destroy all AppManagers, DatabaseManagers, and Apps
+        for (auto& [_, app_mgr] : app_mgrs_by_db_file_)
+        {
+            app_mgr->destroyAllApps_();
+        }
+
+        // Destroy AppManager's first in case they need to touch
+        // the database in their destructors.
+        app_mgrs_by_db_mgr_.clear();
+        app_mgrs_by_db_file_.clear();
+
+        // Clear DatabaseManager maps. Hang onto db_mgrs_by_db_file_
+        // so 'getDatabaseManager(db_file)' is still available.
+        db_mgrs_by_app_mgr_.clear();
     }
 
 private:
     std::map<std::string, std::shared_ptr<DatabaseManager>> db_mgrs_by_db_file_;
     std::map<std::string, std::shared_ptr<AppManager>> app_mgrs_by_db_file_;
     std::map<DatabaseManager*, std::shared_ptr<AppManager>> app_mgrs_by_db_mgr_;
-    std::map<AppManager*, std::shared_ptr<DatabaseManager>> db_mgrs_by_app_mgr_; 
+    std::map<AppManager*, std::shared_ptr<DatabaseManager>> db_mgrs_by_app_mgr_;
 };
 
 } // namespace simdb
