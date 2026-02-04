@@ -33,11 +33,11 @@ int main(int argc, char** argv)
 
     // Setup...
     app_mgr.enableApp(SimplePipeline::NAME);
-    app_mgr.createEnabledApps();
-    app_mgr.createSchemas();
-    app_mgr.postInit(argc, argv);
-    app_mgr.initializePipelines();
-    app_mgr.openPipelines();
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(argc, argv);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
 
     // Simulate...
     auto app = app_mgr.getApp<SimplePipeline>();

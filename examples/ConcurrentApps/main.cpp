@@ -24,7 +24,7 @@ int main()
     app_mgr.enableApp(SimplePipeline::NAME, 4);
 
     // Create all the apps
-    app_mgr.createEnabledApps();
+    app_mgrs.createEnabledApps();
 
     // Should not be able to get app with unspecified instance
     EXPECT_THROW(app_mgr.getApp<SimplePipeline>());
@@ -36,13 +36,13 @@ int main()
     SimplePipeline* apps[] = {app1, app2, app3, app4};
 
     // Instantiate the DB schema
-    app_mgr.createSchemas();
+    app_mgrs.createSchemas();
 
     // Initialize all pipelines
-    app_mgr.initializePipelines();
+    app_mgrs.initializePipelines();
 
     // Finally, launch all threads for all app pipelines
-    app_mgr.openPipelines();
+    app_mgrs.openPipelines();
 
     // Simulate...
     std::map<size_t, std::vector<std::vector<double>>> test_data;

@@ -264,10 +264,10 @@ int main()
 
     // Setup...
     app_mgr.enableApp(MultiPortStages::NAME);
-    app_mgr.createEnabledApps();
-    app_mgr.createSchemas();
-    app_mgr.initializePipelines();
-    app_mgr.openPipelines();
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
 
     // Simulate...
     auto app = app_mgr.getApp<MultiPortStages>();
