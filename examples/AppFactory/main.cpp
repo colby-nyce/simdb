@@ -145,7 +145,7 @@ int main()
     app_mgr.parameterizeAppFactoryInstance<MyApp>(1, x2, y2);
 
     // Create the apps
-    app_mgr.createEnabledApps();
+    app_mgrs.createEnabledApps();
 
     // Validate
     auto app1 = app_mgr.getAppInstance<MyApp>(0);
@@ -169,8 +169,7 @@ int main()
     app_mgr2.parameterizeAppFactoryInstance<MyApp>(0, x2, y2);
 
     // Create the two apps
-    app_mgr1.createEnabledApps();
-    app_mgr2.createEnabledApps();
+    app_mgrs.createEnabledApps();
 
     // Validate the two apps
     app1 = app_mgr1.getAppInstance<MyApp>(0);

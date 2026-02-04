@@ -10,7 +10,7 @@
 #include <set>
 #include <iostream>
 
-#define PROFILE_APP_PHASE ScopedTimer timer(__FUNCTION__, msg_log_); (void)timer;
+#define PROFILE_APP_PHASE [[maybe_unused]] ScopedTimer timer(getDatabaseManager(), __FUNCTION__, msg_log_);
 
 namespace simdb {
 
@@ -272,27 +272,6 @@ public:
         return getEnabledAppInstances(AppT::NAME);
     }
 
-    /// Call after command line args and config files are parsed.
-    void createEnabledApps()
-    {
-        for (const auto& [app_name, num_instances] : getEnabledApps_())
-        {
-            for (size_t instance_num = 0; instance_num < num_instances; ++instance_num)
-            {
-                auto factory = getAppFactory_(app_name, instance_num, false /*do not create*/);
-                if (!factory)
-                {
-                    continue;
-                }
-
-                App* app = factory->createApp(db_mgr_);
-                app->setInstance(instance_num);
-                std::string instance_name = app_name + std::string("-") + std::to_string(instance_num);
-                apps_[instance_name] = std::unique_ptr<App>(app);
-            }
-        }
-    }
-
     /// Get an instantiated app. You may only call this method if AppT had exactly one
     /// instance configured:
     ///   AppManager::enableApp(AppT::NAME);
@@ -361,78 +340,6 @@ public:
         return nullptr;
     }
 
-    /// Create app-specific schemas for the instantiated apps.
-    void createSchemas()
-    {
-        PROFILE_APP_PHASE
-
-        db_mgr_->safeTransaction(
-            [&]()
-            {
-                for (const auto& [app_name, app] : apps_)
-                {
-                    auto user_app_name = app_name;
-                    auto idx = user_app_name.find_last_of("-");
-                    assert(idx != std::string::npos);
-                    user_app_name = user_app_name.substr(0, idx);
-
-                    auto tmp_substr = app_name.substr(idx);
-                    auto instance_num = static_cast<size_t>(std::stoull(tmp_substr));
-                    AppFactoryBase* factory = getAppFactory_(user_app_name, instance_num);
-
-                    Schema app_schema;
-                    factory->defineSchema(app_schema);
-                    db_mgr_->appendSchema(app_schema);
-                }
-            });
-    }
-
-    /// Call this after command line args and config files are parsed.
-    void postInit(int argc, char** argv)
-    {
-        PROFILE_APP_PHASE
-
-        db_mgr_->safeTransaction(
-            [&]()
-            {
-                for (auto app : getApps_())
-                {
-                    app->postInit(argc, argv);
-                }
-            });
-    }
-
-    /// Call this once after postInit(). This will create all pipelines
-    /// for all enabled apps, but it will not open the threads yet.
-    void initializePipelines()
-    {
-        PROFILE_APP_PHASE
-
-        if (pipeline_mgr_)
-        {
-            throw DBException("Pipelines already open");
-        }
-
-        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
-        for (const auto& [app_name, app] : apps_)
-        {
-            app->createPipeline(pipeline_mgr_.get());
-        }
-
-        // Print final pipeline configurations.
-        msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
-        for (auto pipeline : pipeline_mgr_->getPipelines())
-        {
-            msg_log_ << "---- Pipeline: " << pipeline->getName() << "\n";
-            for (auto& [stage_name, stage] : pipeline->getOrderedStages())
-            {
-                msg_log_ << "------ Stage: " << stage_name << "\n";
-            }
-        }
-
-        msg_log_ << std::endl;
-    }
-
     /// Optionally call this method after initializePipelines(), but before
     /// openPipelines(). This will reduce the number of non-database threads
     /// to the minimum across all app pipelines.
@@ -461,19 +368,6 @@ public:
         pipeline_mgr_->minimizeThreads(app, std::forward<Apps>(rest)...);
     }
 
-    /// Call this once after initializePipelines() (and after minimizeThreads()
-    /// if you called that too).
-    void openPipelines()
-    {
-        PROFILE_APP_PHASE
-
-        if (!pipeline_mgr_)
-        {
-            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
-        }
-        pipeline_mgr_->openPipelines();
-    }
-
 private:
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
     AppManager(DatabaseManager* db_mgr)
@@ -494,6 +388,112 @@ private:
             apps.push_back(app.get());
         }
         return apps;
+    }
+
+    /// Call after command line args and config files are parsed.
+    void createEnabledApps_()
+    {
+        for (const auto& [app_name, num_instances] : getEnabledApps_())
+        {
+            for (size_t instance_num = 0; instance_num < num_instances; ++instance_num)
+            {
+                auto factory = getAppFactory_(app_name, instance_num, false /*do not create*/);
+                if (!factory)
+                {
+                    continue;
+                }
+
+                App* app = factory->createApp(db_mgr_);
+                app->setInstance(instance_num);
+                std::string instance_name = app_name + std::string("-") + std::to_string(instance_num);
+                apps_[instance_name] = std::unique_ptr<App>(app);
+            }
+        }
+    }
+
+    /// Create app-specific schemas for the instantiated apps.
+    void createSchemas_()
+    {
+        PROFILE_APP_PHASE
+
+        db_mgr_->safeTransaction(
+            [&]()
+            {
+                for (const auto& [app_name, app] : apps_)
+                {
+                    auto user_app_name = app_name;
+                    auto idx = user_app_name.find_last_of("-");
+                    assert(idx != std::string::npos);
+                    user_app_name = user_app_name.substr(0, idx);
+
+                    auto tmp_substr = app_name.substr(idx);
+                    auto instance_num = static_cast<size_t>(std::stoull(tmp_substr));
+                    AppFactoryBase* factory = getAppFactory_(user_app_name, instance_num);
+
+                    Schema app_schema;
+                    factory->defineSchema(app_schema);
+                    db_mgr_->appendSchema(app_schema);
+                }
+            });
+    }
+
+    /// Call this after command line args and config files are parsed.
+    void postInit_(int argc, char** argv)
+    {
+        PROFILE_APP_PHASE
+
+        db_mgr_->safeTransaction(
+            [&]()
+            {
+                for (auto app : getApps_())
+                {
+                    app->postInit(argc, argv);
+                }
+            });
+    }
+
+    /// Call this once after postInit(). This will create all pipelines
+    /// for all enabled apps, but it will not open the threads yet.
+    void initializePipelines_()
+    {
+        PROFILE_APP_PHASE
+
+        if (pipeline_mgr_)
+        {
+            throw DBException("Pipelines already open");
+        }
+
+        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(db_mgr_);
+        for (const auto& [app_name, app] : apps_)
+        {
+            app->createPipeline(pipeline_mgr_.get());
+        }
+
+        // Print final pipeline configurations.
+        msg_log_ << "\nSimDB app pipeline configuration for database '" << db_mgr_->getDatabaseFilePath() << "':\n";
+        for (auto pipeline : pipeline_mgr_->getPipelines())
+        {
+            msg_log_ << "---- Pipeline: " << pipeline->getName() << "\n";
+            for (auto& [stage_name, stage] : pipeline->getOrderedStages())
+            {
+                msg_log_ << "------ Stage: " << stage_name << "\n";
+            }
+        }
+
+        msg_log_ << std::endl;
+    }
+
+    /// Call this once after initializePipelines() (and after minimizeThreads()
+    /// if you called that too).
+    void openPipelines_()
+    {
+        PROFILE_APP_PHASE
+
+        if (!pipeline_mgr_)
+        {
+            throw DBException("Pipeline manager not set - did you call initializePipelines()?");
+        }
+        pipeline_mgr_->openPipelines();
     }
 
     /// This method is to be called after the main simulation loop ends.
@@ -678,18 +678,20 @@ private:
     /// All pipelines and threads are managed by PipelineManager.
     std::unique_ptr<pipeline::PipelineManager> pipeline_mgr_;
 
-    /// RAII timer to measure the performance of teardown()
+    /// RAII timer to measure the performance of various app setup/teardown phases.
     class ScopedTimer
     {
     public:
-        ScopedTimer(const std::string& block_name, std::ostream* msg_out = &std::cout)
+        ScopedTimer(const DatabaseManager* db_mgr, const std::string& block_name, std::ostream* msg_out = &std::cout)
             : start_(std::chrono::high_resolution_clock::now())
             , block_name_(block_name)
             , msg_out_(msg_out)
         {
             if (msg_out_)
             {
-                *msg_out_ << "SimDB: Entering " << block_name << "\n";
+                auto db_filepath = db_mgr->getDatabaseFilePath();
+                *msg_out_ << "SimDB: Entering " << block_name << " for database: "
+                          << db_filepath << "\n";
             }
         }
 
@@ -899,6 +901,53 @@ public:
             mgrs.push_back(std::make_pair(app_mgr.get(), db_mgr.get()));
         }
         return mgrs;
+    }
+
+    /// Call after command line args and config files are parsed.
+    void createEnabledApps()
+    {
+        for (auto& [app_mgr, _] : getAllManagers())
+        {
+            app_mgr->createEnabledApps_();
+        }
+    }
+
+    /// Create app-specific schemas for the instantiated apps.
+    void createSchemas()
+    {
+        for (auto& [app_mgr, _] : getAllManagers())
+        {
+            app_mgr->createSchemas_();
+        }
+    }
+
+    /// Call this after command line args and config files are parsed.
+    void postInit(int argc, char** argv)
+    {
+        for (auto& [app_mgr, _] : getAllManagers())
+        {
+            app_mgr->postInit_(argc, argv);
+        }
+    }
+
+    /// Call this once after postInit(). This will create all pipelines
+    /// for all enabled apps, but it will not open the threads yet.
+    void initializePipelines()
+    {
+        for (auto& [app_mgr, _] : getAllManagers())
+        {
+            app_mgr->initializePipelines_();
+        }
+    }
+
+    /// Call this once after initializePipelines() (and after minimizeThreads()
+    /// if you called that too).
+    void openPipelines()
+    {
+        for (auto& [app_mgr, _] : getAllManagers())
+        {
+            app_mgr->openPipelines_();
+        }
     }
 
     /// Call postSimLoopTeardown() on all AppManager's. This destroys all Apps
