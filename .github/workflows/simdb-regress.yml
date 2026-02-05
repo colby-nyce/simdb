@@ -39,6 +39,10 @@ jobs:
           sudo apt-get update --fix-missing
           sudo apt-get install libboost-all-dev llvm lld sqlite3 libsqlite3-dev
 
+      # Invoke CMake
+      - name: CMake
+        run: ./.github/actions/cmake.sh
+
       # Regress
       - name: Regress
         run: ./.github/actions/regress.sh
