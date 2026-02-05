@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simdb/schema/SchemaDef.hpp"
+#include "simdb/schema/Blob.hpp"
 #include "simdb/sqlite/Connection.hpp"
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/utf16.hpp"
