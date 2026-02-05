@@ -4,13 +4,8 @@
 
 #include "simdb/apps/AppManager.hpp"
 
-template <typename AppT>
-struct AppRegistration
-{
-    AppRegistration()
-    {
-        simdb::AppManager::registerApp<AppT>();
-    }
+template <typename AppT> struct AppRegistration {
+    AppRegistration() { simdb::AppManager::registerApp<AppT>(); }
 };
 
 #define SIMDB_CONCATENATE_DETAIL(x, y) x##y
@@ -29,5 +24,5 @@ struct AppRegistration
 ///   ----------------------------------------
 ///   REGISTER_SIMDB_APPLICATION(MyApp);
 ///
-#define REGISTER_SIMDB_APPLICATION(ApplicationType) \
+#define REGISTER_SIMDB_APPLICATION(ApplicationType)                                                \
     AppRegistration<ApplicationType> SIMDB_CONCATENATE(__simdb_app_registration_, __COUNTER__)

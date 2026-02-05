@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/Exceptions.hpp"
+#include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <iostream>
 #include <memory>
@@ -17,8 +17,7 @@ class PipelineManager;
 class PollingThread;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
-enum PipelineAction
-{
+enum PipelineAction {
     // Return if the runnable (task) pushed any data to its output queue,
     // or otherwise should leave the pipeline tasks greedily executing
     // as normal.
@@ -33,22 +32,17 @@ enum PipelineAction
 };
 
 /// Base class for all things that can be run on a pipeline thread.
-class Runnable
-{
-public:
+class Runnable {
+  public:
     virtual ~Runnable() = default;
 
     /// Get this runnable's description.
-    std::string getDescription() const
-    {
+    std::string getDescription() const {
         return !description_.empty() ? description_ : getDescription_();
     }
 
     /// Set/overwrite the this runnable's description.
-    void setDescription(const std::string& desc)
-    {
-        description_ = desc;
-    }
+    void setDescription(const std::string &desc) { description_ = desc; }
 
     /// Process one item from the input queue, returning true
     /// if this runnable did anything.
@@ -59,24 +53,17 @@ public:
     virtual PipelineAction processAll(bool force) = 0;
 
     /// Print info about this runnable for reporting purposes.
-    virtual void print(std::ostream& os, int indent) const
-    {
+    virtual void print(std::ostream &os, int indent) const {
         os << std::string(indent, ' ') << getDescription() << "\n";
     }
 
     /// Check if this runnable is enabled.
-    bool enabled() const
-    {
-        return enabled_;
-    }
+    bool enabled() const { return enabled_; }
 
     /// Disable/re-enable this runnable.
-    void enable(bool enable = true)
-    {
-        enabled_ = enable;
-    }
+    void enable(bool enable = true) { enabled_ = enable; }
 
-private:
+  private:
     virtual std::string getDescription_() const = 0;
     std::string description_;
     bool enabled_ = true;
@@ -84,24 +71,21 @@ private:
 
 /// RAII utility used to disable all runnables while in scope,
 /// re-enabling them when going out of scope.
-class ScopedRunnableDisabler
-{
-public:
+class ScopedRunnableDisabler {
+  public:
     ~ScopedRunnableDisabler();
 
-private:
-    ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
-                           const std::vector<Runnable*>& runnables,
-                           const std::vector<PollingThread*>& polling_threads);
+  private:
+    ScopedRunnableDisabler(PipelineManager *pipeline_mgr, const std::vector<Runnable *> &runnables,
+                           const std::vector<PollingThread *> &polling_threads);
 
-    ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
-                           const std::vector<Runnable*>& runnables);
+    ScopedRunnableDisabler(PipelineManager *pipeline_mgr, const std::vector<Runnable *> &runnables);
 
     void notifyPipelineMgrReenabled_();
 
-    PipelineManager* pipeline_mgr_ = nullptr;
-    std::vector<Runnable*> disabled_runnables_;
-    std::vector<PollingThread*> paused_threads_;
+    PipelineManager *pipeline_mgr_ = nullptr;
+    std::vector<Runnable *> disabled_runnables_;
+    std::vector<PollingThread *> paused_threads_;
     friend class PipelineManager;
 };
 

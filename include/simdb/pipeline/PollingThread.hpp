@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/pipeline/Runnable.hpp"
 #include "simdb/Exceptions.hpp"
+#include "simdb/pipeline/Runnable.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -19,84 +19,59 @@ namespace simdb::pipeline {
 
 /// Timer thread which "polls" its runnables for any activity. Goes back
 /// to sleep for a fixed amount of time before polling again.
-class PollingThread
-{
-public:
+class PollingThread {
+  public:
     /// Create a thread with an "interval" in milliseconds. This value says
     /// how long the thread should sleep if none of its Runnables had any
     /// work to do.
-    PollingThread(const size_t interval_milliseconds = 100)
-        : interval_ms_(interval_milliseconds)
-    {
-    }
+    PollingThread(const size_t interval_milliseconds = 100) : interval_ms_(interval_milliseconds) {}
 
     virtual ~PollingThread() noexcept = default;
 
-    size_t getIntervalMilliseconds() const
-    {
-        return interval_ms_;
-    }
+    size_t getIntervalMilliseconds() const { return interval_ms_; }
 
-    void addRunnable(Runnable* runnable)
-    {
-        if (is_running_)
-        {
+    void addRunnable(Runnable *runnable) {
+        if (is_running_) {
             throw DBException("Cannot add runnables while thread is running");
         }
         runnables_.emplace_back(runnable);
     }
 
-    const std::vector<Runnable*>& getRunnables() const
-    {
-        return runnables_;
-    }
+    const std::vector<Runnable *> &getRunnables() const { return runnables_; }
 
-    size_t getNumRunnables() const
-    {
-        return runnables_.size();
-    }
+    size_t getNumRunnables() const { return runnables_.size(); }
 
-    void ensureRelativeOrder(const std::vector<Runnable*>& runnables)
-    {
-        const std::set<Runnable*> my_runnables(runnables_.begin(), runnables_.end());
-        std::vector<Runnable*> ordered_runnables;
-        for (auto runnable : runnables)
-        {
-            if (my_runnables.count(runnable))
-            {
+    void ensureRelativeOrder(const std::vector<Runnable *> &runnables) {
+        const std::set<Runnable *> my_runnables(runnables_.begin(), runnables_.end());
+        std::vector<Runnable *> ordered_runnables;
+        for (auto runnable : runnables) {
+            if (my_runnables.count(runnable)) {
                 ordered_runnables.push_back(runnable);
             }
         }
         std::swap(ordered_runnables, runnables_);
     }
 
-    virtual bool flushRunnables()
-    {
+    virtual bool flushRunnables() {
         bool did_work = false;
-        for (auto runnable : runnables_)
-        {
-            if (!runnable->enabled())
-            {
+        for (auto runnable : runnables_) {
+            if (!runnable->enabled()) {
                 continue;
             }
 
-            if (runnable->processAll(true) == PipelineAction::PROCEED)
-            {
+            if (runnable->processAll(true) == PipelineAction::PROCEED) {
                 did_work = true;
             }
         }
         return did_work;
     }
 
-    virtual void open()
-    {
-        if (runnables_.empty())
-        {
+    virtual void open() {
+        if (runnables_.empty()) {
             return;
         }
 
-        if (!thread_)
-        {
+        if (!thread_) {
             stop_requested_ = false;
             paused_ = false;
             is_running_ = true;
@@ -105,10 +80,8 @@ public:
         }
     }
 
-    virtual void close() noexcept
-    {
-        if (!thread_)
-        {
+    virtual void close() noexcept {
+        if (!thread_) {
             return;
         }
 
@@ -119,18 +92,15 @@ public:
         }
         pause_cv_.notify_all();
 
-        if (thread_->joinable())
-        {
+        if (thread_->joinable()) {
             thread_->join();
         }
         is_running_ = false;
         thread_.reset();
     }
 
-    void pause()
-    {
-        if (!is_running_ || paused_)
-        {
+    void pause() {
+        if (!is_running_ || paused_) {
             return;
         }
 
@@ -149,15 +119,10 @@ public:
         paused_promise_.get_future().wait();
     }
 
-    bool paused()
-    {
-        return paused_;
-    }
+    bool paused() { return paused_; }
 
-    void resume()
-    {
-        if (!is_running_ || !paused_)
-        {
+    void resume() {
+        if (!is_running_ || !paused_) {
             return;
         }
 
@@ -169,15 +134,12 @@ public:
         pause_cv_.notify_all(); // Wake the thread to resume
     }
 
-    void printPerfReport(std::ostream& os) const noexcept
-    {
-        if (runnables_.empty())
-        {
+    void printPerfReport(std::ostream &os) const noexcept {
+        if (runnables_.empty()) {
             return;
         }
 
-        if (is_running_)
-        {
+        if (is_running_) {
             return;
         }
 
@@ -188,87 +150,75 @@ public:
         const auto pct_time_working = 100 - pct_time_sleeping;
 
         os << "Thread containing:\n";
-        for (const auto runnable : runnables_)
-        {
+        for (const auto runnable : runnables_) {
             runnable->print(os, 4);
         }
 
         os << "\n";
         os << "    Performance report:\n";
         os << "        Num times run:      " << num_times_run_ << "\n";
-        os << "        Pct time sleeping:  " << std::fixed << std::setprecision(1) << pct_time_sleeping << "%\n";
-        os << "        Pct time working:   " << std::fixed << std::setprecision(1) << pct_time_working << "%\n";
+        os << "        Pct time sleeping:  " << std::fixed << std::setprecision(1)
+           << pct_time_sleeping << "%\n";
+        os << "        Pct time working:   " << std::fixed << std::setprecision(1)
+           << pct_time_working << "%\n";
         os << "\n";
     }
 
-private:
-    void loop_()
-    {
-        while (!stop_requested_)
-        {
+  private:
+    void loop_() {
+        while (!stop_requested_) {
             // Pause handling
             {
                 std::unique_lock<std::mutex> lock(pause_mutex_);
-                while (paused_ && !stop_requested_)
-                {
-                    if (has_pending_pause_ack_)
-                    {
+                while (paused_ && !stop_requested_) {
+                    if (has_pending_pause_ack_) {
                         paused_promise_.set_value();
                         has_pending_pause_ack_ = false;
                     }
                     pause_cv_.wait(lock);
                 }
 
-                if (stop_requested_)
-                {
+                if (stop_requested_) {
                     break;
                 }
             }
 
-            if (!run_(false))
-            {
+            if (!run_(false)) {
                 // Sleep for a fixed amount of time before polling all runnables again
                 // but wake early if paused or stop is requested
                 auto sleep_start = std::chrono::high_resolution_clock::now();
                 std::unique_lock<std::mutex> lock(pause_mutex_);
-                pause_cv_.wait_for(lock, std::chrono::milliseconds(interval_ms_), [this] {
-                    return paused_ || stop_requested_;
-                });
+                pause_cv_.wait_for(lock, std::chrono::milliseconds(interval_ms_),
+                                   [this] { return paused_ || stop_requested_; });
 
                 auto sleep_end = std::chrono::high_resolution_clock::now();
-                auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(sleep_end - sleep_start);
+                auto duration_us =
+                    std::chrono::duration_cast<std::chrono::microseconds>(sleep_end - sleep_start);
                 total_sleep_seconds_ += duration_us.count() / 1'000'000.0;
-            }
-            else
-            {
+            } else {
                 ++num_times_run_;
             }
         }
 
         // Flush
-        while (run_(true)) {}
+        while (run_(true)) {
+        }
     }
 
-    virtual bool run_(bool force)
-    {
+    virtual bool run_(bool force) {
         bool did_work = false;
-        while (true)
-        {
+        while (true) {
             bool processed = false;
-            for (auto runner : runnables_)
-            {
-                if (!runner->enabled())
-                {
+            for (auto runner : runnables_) {
+                if (!runner->enabled()) {
                     continue;
                 }
 
-                if (runner->processOne(force) == PipelineAction::PROCEED)
-                {
+                if (runner->processOne(force) == PipelineAction::PROCEED) {
                     processed = true;
                 }
             }
-            if (!processed)
-            {
+            if (!processed) {
                 break;
             }
             did_work = true;
@@ -277,7 +227,7 @@ private:
     }
 
     const size_t interval_ms_;
-    std::vector<Runnable*> runnables_;
+    std::vector<Runnable *> runnables_;
     std::unique_ptr<std::thread> thread_;
 
     std::mutex pause_mutex_;
@@ -297,26 +247,20 @@ private:
 
 /// Defined here so we can avoid circular includes
 inline ScopedRunnableDisabler::ScopedRunnableDisabler(
-    PipelineManager* pipeline_mgr,
-    const std::vector<Runnable*>& runnables,
-    const std::vector<PollingThread*>& polling_threads)
-    : pipeline_mgr_(pipeline_mgr)
-{
+    PipelineManager *pipeline_mgr, const std::vector<Runnable *> &runnables,
+    const std::vector<PollingThread *> &polling_threads)
+    : pipeline_mgr_(pipeline_mgr) {
     // Disable runnables
-    for (auto r : runnables)
-    {
-        if (r->enabled())
-        {
+    for (auto r : runnables) {
+        if (r->enabled()) {
             r->enable(false);
             disabled_runnables_.push_back(r);
         }
     }
 
     // Pause polling threads
-    for (auto pt : polling_threads)
-    {
-        if (!pt->paused())
-        {
+    for (auto pt : polling_threads) {
+        if (!pt->paused()) {
             pt->pause();
             paused_threads_.push_back(pt);
         }
@@ -324,16 +268,12 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(
 }
 
 /// Defined here so we can avoid circular includes
-inline ScopedRunnableDisabler::ScopedRunnableDisabler(
-    PipelineManager* pipeline_mgr,
-    const std::vector<Runnable*>& runnables)
-    : pipeline_mgr_(pipeline_mgr)
-{
+inline ScopedRunnableDisabler::ScopedRunnableDisabler(PipelineManager *pipeline_mgr,
+                                                      const std::vector<Runnable *> &runnables)
+    : pipeline_mgr_(pipeline_mgr) {
     // Disable runnables
-    for (auto r : runnables)
-    {
-        if (r->enabled())
-        {
+    for (auto r : runnables) {
+        if (r->enabled()) {
             r->enable(false);
             disabled_runnables_.push_back(r);
         }
@@ -341,15 +281,12 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(
 }
 
 /// Defined here so we can avoid circular includes
-inline ScopedRunnableDisabler::~ScopedRunnableDisabler()
-{
-    for (auto pt : paused_threads_)
-    {
+inline ScopedRunnableDisabler::~ScopedRunnableDisabler() {
+    for (auto pt : paused_threads_) {
         pt->resume();
     }
 
-    for (auto r : disabled_runnables_)
-    {
+    for (auto r : disabled_runnables_) {
         r->enable(true);
     }
 

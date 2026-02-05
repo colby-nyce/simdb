@@ -2,11 +2,11 @@
 
 #pragma once
 
+#include "SimDBTester.hpp"
 #include "simdb/apps/App.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/Compress.hpp"
-#include "SimDBTester.hpp"
 
 /// This class demonstrates a simple pipeline design using SimDB.
 /// It is reused by most of the examples.
@@ -14,28 +14,23 @@
 /// Tests that use this pipeline need to add this to the .cpp file:
 ///   REGISTER_SIMDB_APPLICATION(SimplePipeline);
 
-class SimplePipeline : public simdb::App
-{
-public:
+class SimplePipeline : public simdb::App {
+  public:
     static constexpr auto NAME = "simple-pipeline";
 
-    SimplePipeline(simdb::DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
-    {}
+    SimplePipeline(simdb::DatabaseManager *db_mgr) : db_mgr_(db_mgr) {}
 
     ~SimplePipeline() noexcept = default;
 
-    static void defineSchema(simdb::Schema& schema)
-    {
+    static void defineSchema(simdb::Schema &schema) {
         using dt = simdb::SqlDataType;
 
-        auto& tbl = schema.addTable("CompressedData");
+        auto &tbl = schema.addTable("CompressedData");
         tbl.addColumn("AppInstance", dt::int32_t);
         tbl.addColumn("DataBlob", dt::blob_t);
     }
 
-    void createPipeline(simdb::pipeline::PipelineManager* pipeline_mgr) override
-    {
+    void createPipeline(simdb::pipeline::PipelineManager *pipeline_mgr) override {
         auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
         pipeline->addStage<CompressionStage>("compressor");
@@ -56,24 +51,19 @@ public:
         pipeline_mgr_ = pipeline_mgr;
     }
 
-    void process(const std::vector<double>& data)
-    {
-        pipeline_head_->push(data);
-    }
+    void process(const std::vector<double> &data) { pipeline_head_->push(data); }
 
-protected:
-    simdb::DatabaseManager* db_mgr_ = nullptr;
-    simdb::ConcurrentQueue<std::vector<double>>* pipeline_head_ = nullptr;
-    simdb::pipeline::PipelineManager* pipeline_mgr_ = nullptr;
+  protected:
+    simdb::DatabaseManager *db_mgr_ = nullptr;
+    simdb::ConcurrentQueue<std::vector<double>> *pipeline_head_ = nullptr;
+    simdb::pipeline::PipelineManager *pipeline_mgr_ = nullptr;
     std::unique_ptr<simdb::pipeline::Flusher> pipeline_flusher_;
 
-private:
+  private:
     /// Compress on pipeline thread 1
-    class CompressionStage : public simdb::pipeline::Stage
-    {
-    public:
-        CompressionStage()
-        {
+    class CompressionStage : public simdb::pipeline::Stage {
+      public:
+        CompressionStage() {
             addInPort_<std::vector<double>>("input_data", input_queue_);
             addOutPort_<std::vector<char>>("compressed_data", output_queue_);
 
@@ -81,9 +71,8 @@ private:
             EXPECT_EQUAL(getAsyncDatabaseAccessor_(), nullptr);
         }
 
-    private:
-        simdb::pipeline::PipelineAction run_(bool) override
-        {
+      private:
+        simdb::pipeline::PipelineAction run_(bool) override {
             std::vector<double> data;
             if (input_queue_->try_pop(data)) {
                 std::vector<char> compressed_data;
@@ -95,23 +84,19 @@ private:
             return simdb::pipeline::SLEEP;
         }
 
-        simdb::ConcurrentQueue<std::vector<double>>* input_queue_ = nullptr;
-        simdb::ConcurrentQueue<std::vector<char>>* output_queue_ = nullptr;
+        simdb::ConcurrentQueue<std::vector<double>> *input_queue_ = nullptr;
+        simdb::ConcurrentQueue<std::vector<char>> *output_queue_ = nullptr;
     };
 
     /// Write to SQLite on dedicated database thread
-    class DatabaseStage : public simdb::pipeline::DatabaseStage<SimplePipeline>
-    {
-    public:
-        DatabaseStage(size_t app_instance_num)
-            : app_instance_num_(app_instance_num)
-        {
+    class DatabaseStage : public simdb::pipeline::DatabaseStage<SimplePipeline> {
+      public:
+        DatabaseStage(size_t app_instance_num) : app_instance_num_(app_instance_num) {
             addInPort_<std::vector<char>>("data_to_write", input_queue_);
         }
 
-    private:
-        simdb::pipeline::PipelineAction run_(bool) override
-        {
+      private:
+        simdb::pipeline::PipelineAction run_(bool) override {
             // Ensure we cannot get the AsyncDatabaseAccessor - we are already
             // going to be on the database thread, and should just use the
             // DatabaseManager directly (getDatabaseManager_).
@@ -130,6 +115,6 @@ private:
         }
 
         size_t app_instance_num_ = 0;
-        simdb::ConcurrentQueue<std::vector<char>>* input_queue_ = nullptr;
+        simdb::ConcurrentQueue<std::vector<char>> *input_queue_ = nullptr;
     };
 };

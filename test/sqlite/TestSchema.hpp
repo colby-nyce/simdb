@@ -4,8 +4,7 @@
 
 namespace test::utils {
 
-inline void defineTestSchema(simdb::Schema& schema)
-{
+inline void defineTestSchema(simdb::Schema &schema) {
     using dt = simdb::SqlDataType;
 
     schema.addTable("SignedIntegerTypes")
@@ -22,14 +21,11 @@ inline void defineTestSchema(simdb::Schema& schema)
         .addColumn("SomeUInt32", dt::uint32_t)
         .addColumn("SomeUInt64", dt::uint64_t);
 
-    schema.addTable("FloatingPointTypes")
-        .addColumn("SomeDouble", dt::double_t);
+    schema.addTable("FloatingPointTypes").addColumn("SomeDouble", dt::double_t);
 
-    schema.addTable("StringTypes")
-        .addColumn("SomeString", dt::string_t);
+    schema.addTable("StringTypes").addColumn("SomeString", dt::string_t);
 
-    schema.addTable("BlobTypes")
-        .addColumn("SomeBlob", dt::blob_t);
+    schema.addTable("BlobTypes").addColumn("SomeBlob", dt::blob_t);
 
     schema.addTable("MixAndMatch")
         .addColumn("SomeInt32", dt::int32_t)

@@ -8,8 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
 /// This class is used to build a tree structure from a list of string locations.
 /// For example, given the three locations:
@@ -31,39 +30,31 @@ namespace simdb
 ///         |   +-- bottom2
 ///         |
 ///         +-- bottom3
-struct TreeNode
-{
+struct TreeNode {
     std::string name;
     std::vector<std::unique_ptr<TreeNode>> children;
-    const TreeNode* parent = nullptr;
+    const TreeNode *parent = nullptr;
 
     int db_id = 0;
     int clk_id = 0;
     bool is_collectable = false;
 
-    TreeNode(const std::string& name, const TreeNode* parent = nullptr)
-        : name(name)
-        , parent(parent)
-    {
-    }
+    TreeNode(const std::string &name, const TreeNode *parent = nullptr)
+        : name(name), parent(parent) {}
 
-    std::string getLocation() const
-    {
+    std::string getLocation() const {
         std::vector<std::string> node_names;
         auto node = this;
-        while (node && node->parent)
-        {
+        while (node && node->parent) {
             node_names.push_back(node->name);
             node = node->parent;
         }
 
         std::reverse(node_names.begin(), node_names.end());
         std::ostringstream oss;
-        for (size_t idx = 0; idx < node_names.size(); ++idx)
-        {
+        for (size_t idx = 0; idx < node_names.size(); ++idx) {
             oss << node_names[idx];
-            if (idx != node_names.size() - 1)
-            {
+            if (idx != node_names.size() - 1) {
                 oss << ".";
             }
         }

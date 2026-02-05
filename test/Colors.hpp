@@ -38,43 +38,72 @@
 #define SIMDB_UNMANAGED_COLOR_BG_CYAN "\033[0;46m"
 
 /// Macros for accessing the colors through the default scheme.
-#define SIMDB_CURRENT_COLOR_NORMAL simdb::color::ColorScheme::getDefaultScheme().color(Color::Normal)
-#define SIMDB_CURRENT_COLOR_BRIGHT_NORMAL simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightNormal)
-#define SIMDB_CURRENT_COLOR_BG_NORMAL simdb::color::ColorScheme::getDefaultScheme().color(Color::BgNormal)
+#define SIMDB_CURRENT_COLOR_NORMAL                                                                 \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::Normal)
+#define SIMDB_CURRENT_COLOR_BRIGHT_NORMAL                                                          \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightNormal)
+#define SIMDB_CURRENT_COLOR_BG_NORMAL                                                              \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgNormal)
 #define SIMDB_CURRENT_COLOR_BOLD simdb::color::ColorScheme::getDefaultScheme().color(Color::Bold)
-#define SIMDB_CURRENT_COLOR_BRIGHT_BOLD simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightBold)
-#define SIMDB_CURRENT_COLOR_BG_BOLD simdb::color::ColorScheme::getDefaultScheme().color(Color::BgBold)
+#define SIMDB_CURRENT_COLOR_BRIGHT_BOLD                                                            \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightBold)
+#define SIMDB_CURRENT_COLOR_BG_BOLD                                                                \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgBold)
 #define SIMDB_CURRENT_COLOR_RED simdb::color::ColorScheme::getDefaultScheme().color(Color::Red)
-#define SIMDB_CURRENT_COLOR_BRIGHT_RED simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightRed)
+#define SIMDB_CURRENT_COLOR_BRIGHT_RED                                                             \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightRed)
 #define SIMDB_CURRENT_COLOR_BG_RED simdb::color::ColorScheme::getDefaultScheme().color(Color::BgRed)
 #define SIMDB_CURRENT_COLOR_GREEN simdb::color::ColorScheme::getDefaultScheme().color(Color::Green)
-#define SIMDB_CURRENT_COLOR_BRIGHT_GREEN simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightGreen)
-#define SIMDB_CURRENT_COLOR_BG_GREEN simdb::color::ColorScheme::getDefaultScheme().color(Color::BgGreen)
-#define SIMDB_CURRENT_COLOR_YELLOW simdb::color::ColorScheme::getDefaultScheme().color(Color::Yellow)
-#define SIMDB_CURRENT_COLOR_BRIGHT_YELLOW simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightYellow)
-#define SIMDB_CURRENT_COLOR_BG_YELLOW simdb::color::ColorScheme::getDefaultScheme().color(Color::BgYellow)
+#define SIMDB_CURRENT_COLOR_BRIGHT_GREEN                                                           \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightGreen)
+#define SIMDB_CURRENT_COLOR_BG_GREEN                                                               \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgGreen)
+#define SIMDB_CURRENT_COLOR_YELLOW                                                                 \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::Yellow)
+#define SIMDB_CURRENT_COLOR_BRIGHT_YELLOW                                                          \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightYellow)
+#define SIMDB_CURRENT_COLOR_BG_YELLOW                                                              \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgYellow)
 #define SIMDB_CURRENT_COLOR_BLUE simdb::color::ColorScheme::getDefaultScheme().color(Color::Blue)
-#define SIMDB_CURRENT_COLOR_BRIGHT_BLUE simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightBlue)
-#define SIMDB_CURRENT_COLOR_BG_BLUE simdb::color::ColorScheme::getDefaultScheme().color(Color::BgBlue)
-#define SIMDB_CURRENT_COLOR_MAGENTA simdb::color::ColorScheme::getDefaultScheme().color(Color::Magenta)
-#define SIMDB_CURRENT_COLOR_BRIGHT_MAGENTA simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightMagenta)
-#define SIMDB_CURRENT_COLOR_BG_MAGENTA simdb::color::ColorScheme::getDefaultScheme().color(Color::BgMagenta)
+#define SIMDB_CURRENT_COLOR_BRIGHT_BLUE                                                            \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightBlue)
+#define SIMDB_CURRENT_COLOR_BG_BLUE                                                                \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgBlue)
+#define SIMDB_CURRENT_COLOR_MAGENTA                                                                \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::Magenta)
+#define SIMDB_CURRENT_COLOR_BRIGHT_MAGENTA                                                         \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightMagenta)
+#define SIMDB_CURRENT_COLOR_BG_MAGENTA                                                             \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgMagenta)
 #define SIMDB_CURRENT_COLOR_CYAN simdb::color::ColorScheme::getDefaultScheme().color(Color::Cyan)
-#define SIMDB_CURRENT_COLOR_BRIGHT_CYAN simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightCyan)
-#define SIMDB_CURRENT_COLOR_BG_CYAN simdb::color::ColorScheme::getDefaultScheme().color(Color::BgCyan)
+#define SIMDB_CURRENT_COLOR_BRIGHT_CYAN                                                            \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BrightCyan)
+#define SIMDB_CURRENT_COLOR_BG_CYAN                                                                \
+    simdb::color::ColorScheme::getDefaultScheme().color(Color::BgCyan)
 
-static constexpr const char* ALL_COLORS[] = {
-    SIMDB_UNMANAGED_COLOR_NORMAL,         SIMDB_UNMANAGED_COLOR_BOLD,          SIMDB_UNMANAGED_COLOR_RED,
-    SIMDB_UNMANAGED_COLOR_GREEN,          SIMDB_UNMANAGED_COLOR_YELLOW,        SIMDB_UNMANAGED_COLOR_BLUE,
-    SIMDB_UNMANAGED_COLOR_MAGENTA,        SIMDB_UNMANAGED_COLOR_CYAN,          SIMDB_UNMANAGED_COLOR_BRIGHT_RED,
-    SIMDB_UNMANAGED_COLOR_BRIGHT_GREEN,   SIMDB_UNMANAGED_COLOR_BRIGHT_YELLOW, SIMDB_UNMANAGED_COLOR_BRIGHT_BLUE,
-    SIMDB_UNMANAGED_COLOR_BRIGHT_MAGENTA, SIMDB_UNMANAGED_COLOR_BRIGHT_CYAN,   SIMDB_UNMANAGED_COLOR_BG_RED,
-    SIMDB_UNMANAGED_COLOR_BG_GREEN,       SIMDB_UNMANAGED_COLOR_BG_YELLOW,     SIMDB_UNMANAGED_COLOR_BG_BLUE,
-    SIMDB_UNMANAGED_COLOR_BG_MAGENTA,     SIMDB_UNMANAGED_COLOR_BG_CYAN};
+static constexpr const char *ALL_COLORS[] = {SIMDB_UNMANAGED_COLOR_NORMAL,
+                                             SIMDB_UNMANAGED_COLOR_BOLD,
+                                             SIMDB_UNMANAGED_COLOR_RED,
+                                             SIMDB_UNMANAGED_COLOR_GREEN,
+                                             SIMDB_UNMANAGED_COLOR_YELLOW,
+                                             SIMDB_UNMANAGED_COLOR_BLUE,
+                                             SIMDB_UNMANAGED_COLOR_MAGENTA,
+                                             SIMDB_UNMANAGED_COLOR_CYAN,
+                                             SIMDB_UNMANAGED_COLOR_BRIGHT_RED,
+                                             SIMDB_UNMANAGED_COLOR_BRIGHT_GREEN,
+                                             SIMDB_UNMANAGED_COLOR_BRIGHT_YELLOW,
+                                             SIMDB_UNMANAGED_COLOR_BRIGHT_BLUE,
+                                             SIMDB_UNMANAGED_COLOR_BRIGHT_MAGENTA,
+                                             SIMDB_UNMANAGED_COLOR_BRIGHT_CYAN,
+                                             SIMDB_UNMANAGED_COLOR_BG_RED,
+                                             SIMDB_UNMANAGED_COLOR_BG_GREEN,
+                                             SIMDB_UNMANAGED_COLOR_BG_YELLOW,
+                                             SIMDB_UNMANAGED_COLOR_BG_BLUE,
+                                             SIMDB_UNMANAGED_COLOR_BG_MAGENTA,
+                                             SIMDB_UNMANAGED_COLOR_BG_CYAN};
 
 /// Define enums for accessing the different colors via a ColorScheme.
-enum class Color
-{
+enum class Color {
     Normal,
     Bold,
     Red,
@@ -97,24 +126,22 @@ enum class Color
     BgCyan
 };
 
-#define SIMDB_CMDLINE_COLOR_NORMAL "" // SIMDB_UNMANAGED_COLOR_NORMAL
-#define SIMDB_CMDLINE_COLOR_ERROR "" // SIMDB_UNMANAGED_COLOR_ERROR
+#define SIMDB_CMDLINE_COLOR_NORMAL ""  // SIMDB_UNMANAGED_COLOR_NORMAL
+#define SIMDB_CMDLINE_COLOR_ERROR ""   // SIMDB_UNMANAGED_COLOR_ERROR
 #define SIMDB_CMDLINE_COLOR_WARNING "" // SIMDB_UNMANAGED_COLOR_YELLOW
-#define SIMDB_CMDLINE_COLOR_GOOD "" // SIMDB_UNMANAGED_COLOR_GOOD
+#define SIMDB_CMDLINE_COLOR_GOOD ""    // SIMDB_UNMANAGED_COLOR_GOOD
 
 namespace simdb::color {
 
 /**
-     * \class ColorScheme
-     * \brief Accessor methods for obtaining color code strings.
-     * \details The idea behind ColorScheme is to have the ability
-     * to disable terminal colors in the module with a simple flag.
-     */
-class ColorScheme
-{
-public:
-    static ColorScheme& getDefaultScheme()
-    {
+ * \class ColorScheme
+ * \brief Accessor methods for obtaining color code strings.
+ * \details The idea behind ColorScheme is to have the ability
+ * to disable terminal colors in the module with a simple flag.
+ */
+class ColorScheme {
+  public:
+    static ColorScheme &getDefaultScheme() {
         static ColorScheme scheme;
         return scheme;
     }
@@ -122,34 +149,27 @@ public:
     ~ColorScheme() = default;
 
     /**
-         * \brief Enable or disable colors.
-         * \param enabled Flag denoting whether colors are enabled for
-         * error reporting in SimDB.
-         */
-    void setIsEnabled(const bool enabled)
-    {
-        enabled_ = enabled;
-    }
+     * \brief Enable or disable colors.
+     * \param enabled Flag denoting whether colors are enabled for
+     * error reporting in SimDB.
+     */
+    void setIsEnabled(const bool enabled) { enabled_ = enabled; }
 
     /// The accessors that should always be used for colors.
-    const char* color(const Color c) const
-    {
-        if (enabled_)
-        {
+    const char *color(const Color c) const {
+        if (enabled_) {
             using utype = typename std::underlying_type<Color>::type;
             return all_colors_.at(static_cast<utype>(c)).c_str();
         }
 
-        static const char* empty = "";
+        static const char *empty = "";
         return empty;
     }
 
-private:
-    ColorScheme()
-    {
+  private:
+    ColorScheme() {
         // Load all the colors.
-        for (const char* c : ALL_COLORS)
-        {
+        for (const char *c : ALL_COLORS) {
             all_colors_.emplace_back(c);
         }
     }
