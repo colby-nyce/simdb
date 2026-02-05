@@ -4,16 +4,13 @@
 
 namespace test::utils {
 
-inline void defineTestSchema(simdb::Schema &schema) {
+inline void defineTestSchema(simdb::Schema& schema)
+{
     using dt = simdb::SqlDataType;
 
-    schema.addTable("SignedIntegerTypes")
-        .addColumn("SomeInt32", dt::int32_t)
-        .addColumn("SomeInt64", dt::int64_t);
+    schema.addTable("SignedIntegerTypes").addColumn("SomeInt32", dt::int32_t).addColumn("SomeInt64", dt::int64_t);
 
-    schema.addTable("UnsignedIntegerTypes")
-        .addColumn("SomeUInt32", dt::uint32_t)
-        .addColumn("SomeUInt64", dt::uint64_t);
+    schema.addTable("UnsignedIntegerTypes").addColumn("SomeUInt32", dt::uint32_t).addColumn("SomeUInt64", dt::uint64_t);
 
     schema.addTable("AllIntegerTypes")
         .addColumn("SomeInt32", dt::int32_t)

@@ -8,23 +8,28 @@
 
 namespace simdb {
 
-template <typename DataT, size_t BufferLen> class CircularBuffer {
-  public:
+template <typename DataT, size_t BufferLen> class CircularBuffer
+{
+public:
     // Add an element using move semantics
-    void push(DataT &&item) {
+    void push(DataT&& item)
+    {
         array_[head_] = std::move(item);
         advanceHead_();
     }
 
     // Emplace construct in-place
-    template <typename... Args> void emplace(Args &&...args) {
+    template <typename... Args> void emplace(Args&&... args)
+    {
         array_[head_] = DataT(std::forward<Args>(args)...);
         advanceHead_();
     }
 
     // Pop the oldest element (moved out)
-    DataT pop() {
-        if (empty()) {
+    DataT pop()
+    {
+        if (empty())
+        {
             throw simdb::DBException("Buffer is empty");
         }
 
@@ -41,12 +46,15 @@ template <typename DataT, size_t BufferLen> class CircularBuffer {
     bool full() const { return full_; }
 
     // Get number of elements in buffer
-    size_t size() const {
-        if (full_) {
+    size_t size() const
+    {
+        if (full_)
+        {
             return BufferLen;
         }
 
-        if (head_ >= tail_) {
+        if (head_ >= tail_)
+        {
             return head_ - tail_;
         }
 
@@ -54,14 +62,17 @@ template <typename DataT, size_t BufferLen> class CircularBuffer {
     }
 
     // Reset the buffer (does not deallocate DataT's - based on std::array)
-    void reset() {
+    void reset()
+    {
         head_ = tail_;
         full_ = false;
     }
 
-  private:
-    void advanceHead_() {
-        if (full_) {
+private:
+    void advanceHead_()
+    {
+        if (full_)
+        {
             tail_ = (tail_ + 1) % BufferLen;
         }
         head_ = (head_ + 1) % BufferLen;

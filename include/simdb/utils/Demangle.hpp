@@ -20,18 +20,21 @@ namespace simdb {
  * truncated or fail for very symbols. Change this value to support longer
  * symbol names.
  */
-inline std::string demangle(const std::string &name) noexcept {
+inline std::string demangle(const std::string& name) noexcept
+{
     char buf[DEMANGLE_BUF_LENGTH];
     size_t buf_size = DEMANGLE_BUF_LENGTH;
     int status;
-    char *out = __cxxabiv1::__cxa_demangle(name.c_str(), buf, &buf_size, &status);
-    if (nullptr == out) {
+    char* out = __cxxabiv1::__cxa_demangle(name.c_str(), buf, &buf_size, &status);
+    if (nullptr == out)
+    {
         return name;
     }
     return std::string(out);
 }
 
-template <typename T> inline std::string demangle_type() noexcept {
+template <typename T> inline std::string demangle_type() noexcept
+{
     return demangle(typeid(T).name());
 }
 

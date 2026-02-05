@@ -21,9 +21,11 @@ enum class CompressionLevel {
 };
 
 /// Perform zlib compression.
-inline void compressData(const void *data_ptr, size_t num_bytes, std::vector<char> &out,
-                         CompressionLevel compression_level = CompressionLevel::DEFAULT) {
-    if (num_bytes == 0) {
+inline void compressData(const void* data_ptr, size_t num_bytes, std::vector<char>& out,
+                         CompressionLevel compression_level = CompressionLevel::DEFAULT)
+{
+    if (num_bytes == 0)
+    {
         out.clear();
         return;
     }
@@ -34,20 +36,21 @@ inline void compressData(const void *data_ptr, size_t num_bytes, std::vector<cha
     defstream.opaque = Z_NULL;
 
     defstream.avail_in = (uInt)num_bytes;
-    defstream.next_in = (Bytef *)data_ptr;
+    defstream.next_in = (Bytef*)data_ptr;
 
     // Compression can technically result in a larger output, although it is not
-    // likely except for possibly very small input vectors. There is no deterministic
-    // value for the maximum number of bytes after decompression, but we can choose
-    // a very safe minimum.
+    // likely except for possibly very small input vectors. There is no
+    // deterministic value for the maximum number of bytes after decompression,
+    // but we can choose a very safe minimum.
     auto max_bytes_after = num_bytes * 2;
-    if (max_bytes_after < 1000) {
+    if (max_bytes_after < 1000)
+    {
         max_bytes_after = 1000;
     }
     out.resize(max_bytes_after);
 
     defstream.avail_out = (uInt)(out.size());
-    defstream.next_out = (Bytef *)(out.data());
+    defstream.next_out = (Bytef*)(out.data());
 
     deflateInit(&defstream, static_cast<int>(compression_level));
     deflate(&defstream, Z_FINISH);
@@ -59,16 +62,19 @@ inline void compressData(const void *data_ptr, size_t num_bytes, std::vector<cha
 
 /// Perform zlib compression on a vector.
 template <typename T>
-inline void compressData(const std::vector<T> &in, std::vector<char> &out,
-                         CompressionLevel compression_level = CompressionLevel::DEFAULT) {
-    const void *data_ptr = in.data();
+inline void compressData(const std::vector<T>& in, std::vector<char>& out,
+                         CompressionLevel compression_level = CompressionLevel::DEFAULT)
+{
+    const void* data_ptr = in.data();
     size_t num_bytes = in.size() * sizeof(T);
     compressData(data_ptr, num_bytes, out, compression_level);
 }
 
 /// Perform zlib decompression.
-template <typename T> inline void decompressData(const std::vector<char> &in, std::vector<T> &out) {
-    if (in.empty()) {
+template <typename T> inline void decompressData(const std::vector<char>& in, std::vector<T>& out)
+{
+    if (in.empty())
+    {
         out.clear();
         return;
     }
@@ -78,22 +84,25 @@ template <typename T> inline void decompressData(const std::vector<char> &in, st
     decompressed_buffer.reserve(CHUNK_SIZE);
 
     z_stream stream{};
-    stream.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(in.data()));
+    stream.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(in.data()));
     stream.avail_in = static_cast<uInt>(in.size());
 
-    if (inflateInit(&stream) != Z_OK) {
+    if (inflateInit(&stream) != Z_OK)
+    {
         throw DBException("Failed to initialize zlib inflate stream.");
     }
 
-    do {
+    do
+    {
         size_t current_size = decompressed_buffer.size();
         decompressed_buffer.resize(current_size + CHUNK_SIZE);
-        stream.next_out = reinterpret_cast<Bytef *>(&decompressed_buffer[current_size]);
+        stream.next_out = reinterpret_cast<Bytef*>(&decompressed_buffer[current_size]);
         stream.avail_out = CHUNK_SIZE;
 
         int ret = inflate(&stream, Z_NO_FLUSH);
 
-        if (ret != Z_OK && ret != Z_STREAM_END) {
+        if (ret != Z_OK && ret != Z_STREAM_END)
+        {
             inflateEnd(&stream);
             throw DBException("Decompression failed with zlib error code: " + std::to_string(ret));
         }
@@ -106,7 +115,8 @@ template <typename T> inline void decompressData(const std::vector<char> &in, st
 
     // Convert decompressed bytes to std::vector<T>
     size_t byte_count = decompressed_buffer.size();
-    if (byte_count % sizeof(T) != 0) {
+    if (byte_count % sizeof(T) != 0)
+    {
         throw DBException("Decompressed data size is not aligned with type T.");
     }
 

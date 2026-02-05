@@ -2,22 +2,27 @@
 
 namespace simdb {
 
-template <typename Mutex> class ConditionalLock {
-  public:
-    ConditionalLock(Mutex &m, bool lock = true) : mutex_(m), locked_(lock) {
-        if (locked_) {
+template <typename Mutex> class ConditionalLock
+{
+public:
+    ConditionalLock(Mutex& m, bool lock = true) : mutex_(m), locked_(lock)
+    {
+        if (locked_)
+        {
             mutex_.lock();
         }
     }
 
-    ~ConditionalLock() {
-        if (locked_) {
+    ~ConditionalLock()
+    {
+        if (locked_)
+        {
             mutex_.unlock();
         }
     }
 
-  private:
-    Mutex &mutex_;
+private:
+    Mutex& mutex_;
     const bool locked_;
 };
 

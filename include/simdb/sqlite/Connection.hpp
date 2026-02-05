@@ -15,13 +15,15 @@ namespace simdb {
 
 /// Callback which gets invoked during SELECT queries that involve
 /// floating point comparisons with a supplied tolerance.
-inline void fuzzyMatch(sqlite3_context *context, int, sqlite3_value **argv) {
+inline void fuzzyMatch(sqlite3_context* context, int, sqlite3_value** argv)
+{
     const double column_value = sqlite3_value_double(argv[0]);
     const double target_value = sqlite3_value_double(argv[1]);
     const int constraint = sqlite3_value_int(argv[2]);
     static constexpr double tolerance = std::numeric_limits<double>::epsilon();
 
-    if (constraint >= static_cast<int>(SetConstraints::IN_SET)) {
+    if (constraint >= static_cast<int>(SetConstraints::IN_SET))
+    {
         throw DBException("Invalid constraint in fuzzyMatch(). Should be Constraints enum.");
     }
 
@@ -31,14 +33,17 @@ inline void fuzzyMatch(sqlite3_context *context, int, sqlite3_value **argv) {
 
     auto check_equal = [=](const bool should_be_equal) {
         const bool approx_equal = approximatelyEqual(column_value, target_value, tolerance);
-        if (approx_equal == should_be_equal) {
+        if (approx_equal == should_be_equal)
+        {
             set_is_match(true);
-        } else {
+        } else
+        {
             set_is_match(false);
         }
     };
 
-    switch (e_constraint) {
+    switch (e_constraint)
+    {
     case Constraints::EQUAL: {
         check_equal(true);
         break;
@@ -52,10 +57,12 @@ inline void fuzzyMatch(sqlite3_context *context, int, sqlite3_value **argv) {
         break;
     }
     case Constraints::LESS_EQUAL: {
-        if (column_value < target_value) {
+        if (column_value < target_value)
+        {
             set_is_match(true);
             break;
-        } else {
+        } else
+        {
             check_equal(true);
         }
         break;
@@ -65,9 +72,11 @@ inline void fuzzyMatch(sqlite3_context *context, int, sqlite3_value **argv) {
         break;
     }
     case Constraints::GREATER_EQUAL: {
-        if (column_value > target_value) {
+        if (column_value > target_value)
+        {
             set_is_match(true);
-        } else {
+        } else
+        {
             check_equal(true);
         }
         break;
@@ -81,36 +90,45 @@ inline void fuzzyMatch(sqlite3_context *context, int, sqlite3_value **argv) {
 /*!
  * \class Connection
  *
- * \brief This class instantiates the SQLite schema and issues database commands.
+ * \brief This class instantiates the SQLite schema and issues database
+ * commands.
  */
-class Connection : public Transaction {
-  public:
+class Connection : public Transaction
+{
+public:
     /// Close the sqlite3 connection.
-    ~Connection() {
-        if (db_conn_) {
-            if (sqlite3_close(db_conn_) != SQLITE_OK) {
-                // Failed to close the database connection. Not much we can do here.
-                std::cerr << "Warning: Failed to close database connection: "
-                          << sqlite3_errmsg(db_conn_) << std::endl;
+    ~Connection()
+    {
+        if (db_conn_)
+        {
+            if (sqlite3_close(db_conn_) != SQLITE_OK)
+            {
+                // Failed to close the database connection. Not much we can do
+                // here.
+                std::cerr << "Warning: Failed to close database connection: " << sqlite3_errmsg(db_conn_) << std::endl;
             }
         }
     }
 
     /// Instantiate tables, columns, indexes, etc. on the sqlite3 connection.
-    void realizeSchema(const Schema &schema) {
+    void realizeSchema(const Schema& schema)
+    {
         safeTransaction([&]() {
-            for (const auto &table : schema.getTables()) {
+            for (const auto& table : schema.getTables())
+            {
                 // First create the table and its columns
                 std::ostringstream oss;
                 oss << "CREATE TABLE IF NOT EXISTS " << table.getName() << "(";
 
                 // All tables have an auto-incrementing primary key
-                if (table.use_auto_inc_primary_key_) {
+                if (table.use_auto_inc_primary_key_)
+                {
                     oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
                 }
 
                 // Fill in the rest of the CREATE TABLE command:
-                // CREATE TABLE Id INTEGER PRIMARY KEY AUTOINCREMENT First TEXT, ...
+                // CREATE TABLE Id INTEGER PRIMARY KEY AUTOINCREMENT First TEXT,
+                // ...
                 //                                                   ---------------
                 oss << getColumnsSqlCommand_(table) << ");";
 
@@ -119,9 +137,11 @@ class Connection : public Transaction {
 
                 // Now create any table indexes, for example:
                 //     CREATE INDEX customer_fullname ON Customers (First,Last)
-                //     CREATE INDEX county_population ON Counties (CountyName,Population)
+                //     CREATE INDEX county_population ON Counties
+                //     (CountyName,Population)
                 //     ...
-                for (const auto &cmd : table.index_creation_strs_) {
+                for (const auto& cmd : table.index_creation_strs_)
+                {
                     executeCommand(cmd);
                 }
             }
@@ -129,7 +149,7 @@ class Connection : public Transaction {
     }
 
     /// Get the full database filename being used.
-    const std::string &getDatabaseFilePath() const { return db_filepath_; }
+    const std::string& getDatabaseFilePath() const { return db_filepath_; }
 
     /// Is this connection alive and well?
     bool isValid() const { return (db_conn_ != nullptr); }
@@ -137,16 +157,18 @@ class Connection : public Transaction {
     /// Execute the provided statement against the database
     /// connection. This will validate the command, and throw
     /// if this command is disallowed.
-    void executeCommand(const std::string &command) {
-        auto rc =
-            SQLiteReturnCode(sqlite3_exec(db_conn_, command.c_str(), nullptr, nullptr, nullptr));
-        if (rc) {
+    void executeCommand(const std::string& command)
+    {
+        auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_, command.c_str(), nullptr, nullptr, nullptr));
+        if (rc)
+        {
             throw DBException(sqlite3_errmsg(db_conn_));
         }
     }
 
     /// Turn the given command into an SQL prepared statement.
-    SQLitePreparedStatement prepareStatement(const std::string &command) {
+    SQLitePreparedStatement prepareStatement(const std::string& command)
+    {
         return SQLitePreparedStatement(db_conn_, command);
     }
 
@@ -154,38 +176,43 @@ class Connection : public Transaction {
     int getLastInsertRowId() const { return sqlite3_last_insert_rowid(db_conn_); }
 
     /// Get direct access to the underlying SQLite database.
-    sqlite3 *getDatabase() const { return db_conn_; }
+    sqlite3* getDatabase() const { return db_conn_; }
 
-  private:
+private:
     /// Private constructor. Called by friend class DatabaseManager.
     Connection() {}
 
     /// First-time database file open.
-    std::string openDbFile_(const std::string &db_file) {
+    std::string openDbFile_(const std::string& db_file)
+    {
         db_filepath_ = resolveDbFilename_(db_file);
-        if (db_filepath_.empty()) {
+        if (db_filepath_.empty())
+        {
             db_filepath_ = db_file;
         }
 
         const int db_open_flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
-        sqlite3 *sqlite_conn = nullptr;
+        sqlite3* sqlite_conn = nullptr;
         auto err_code = sqlite3_open_v2(db_filepath_.c_str(), &sqlite_conn, db_open_flags, 0);
 
-        if (err_code != SQLITE_OK) {
+        if (err_code != SQLITE_OK)
+        {
             throw DBException("Unable to connect to the database file: ") << db_file;
         }
 
-        if (!validateConnectionIsSQLite_(sqlite_conn)) {
+        if (!validateConnectionIsSQLite_(sqlite_conn))
+        {
             sqlite3_close(sqlite_conn);
             sqlite_conn = nullptr;
         }
 
-        if (sqlite_conn) {
+        if (sqlite_conn)
+        {
             db_conn_ = sqlite_conn;
-            sqlite3_create_function(db_conn_, "fuzzyMatch", 3, SQLITE_UTF8, nullptr, &fuzzyMatch,
-                                    nullptr, nullptr);
+            sqlite3_create_function(db_conn_, "fuzzyMatch", 3, SQLITE_UTF8, nullptr, &fuzzyMatch, nullptr, nullptr);
             return db_filepath_;
-        } else {
+        } else
+        {
             db_conn_ = nullptr;
             return "";
         }
@@ -193,17 +220,21 @@ class Connection : public Transaction {
 
     /// Return a string that is used as part of the CREATE TABLE command:
     /// First TEXT, Last TEXT, Age INT, Balance REAL DEFAULT 50.00
-    std::string getColumnsSqlCommand_(const Table &table) const {
+    std::string getColumnsSqlCommand_(const Table& table) const
+    {
         std::ostringstream oss;
-        const auto &columns = table.getColumns();
+        const auto& columns = table.getColumns();
 
-        for (size_t idx = 0; idx < columns.size(); ++idx) {
+        for (size_t idx = 0; idx < columns.size(); ++idx)
+        {
             auto column = columns[idx];
             oss << column->getName() << " " << column->getDataType();
-            if (column->hasDefaultValue()) {
+            if (column->hasDefaultValue())
+            {
                 oss << " DEFAULT " << column->getDefaultValueAsString();
             }
-            if (idx != columns.size() - 1) {
+            if (idx != columns.size() - 1)
+            {
                 oss << ", ";
             }
         }
@@ -214,13 +245,15 @@ class Connection : public Transaction {
     // See if there is an existing file by the name <dir/file>
     // and return it. If not, return just <file> if it exists.
     // Return "" if neither could be found.
-    std::string resolveDbFilename_(const std::string &db_file) const {
+    std::string resolveDbFilename_(const std::string& db_file) const
+    {
         std::ifstream fin(db_file);
         return fin.good() ? db_file : "";
     }
 
     /// Attempt to run an SQL command against our open connection.
-    bool validateConnectionIsSQLite_(sqlite3 *db_conn) {
+    bool validateConnectionIsSQLite_(sqlite3* db_conn)
+    {
         const auto command = "SELECT name FROM sqlite_master WHERE type='table'";
         auto rc = SQLiteReturnCode(sqlite3_exec(db_conn, command, nullptr, nullptr, nullptr));
         return rc == SQLITE_OK;
