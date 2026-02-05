@@ -3,7 +3,7 @@ set -euo pipefail
 
 FILES=$(git ls-files '*.cpp' '*.cc' '*.cxx' '*.h' '*.hpp')
 
-clang-format -i $FILES
+clang-format-17 -i $FILES
 
 if ! git diff --quiet; then
   echo "clang-format violations detected"
