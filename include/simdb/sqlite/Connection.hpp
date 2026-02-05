@@ -6,9 +6,9 @@
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/FloatCompare.hpp"
 
-#include <sqlite3.h>
 #include <fstream>
 #include <memory>
+#include <sqlite3.h>
 #include <string>
 
 namespace simdb {
@@ -31,14 +31,12 @@ inline void fuzzyMatch(sqlite3_context* context, int, sqlite3_value** argv)
 
     auto set_is_match = [context](const bool match) { sqlite3_result_int(context, match ? 1 : 0); };
 
-    auto check_equal = [=](const bool should_be_equal)
-    {
+    auto check_equal = [=](const bool should_be_equal) {
         const bool approx_equal = approximatelyEqual(column_value, target_value, tolerance);
         if (approx_equal == should_be_equal)
         {
             set_is_match(true);
-        }
-        else
+        } else
         {
             set_is_match(false);
         }
@@ -46,62 +44,54 @@ inline void fuzzyMatch(sqlite3_context* context, int, sqlite3_value** argv)
 
     switch (e_constraint)
     {
-        case Constraints::EQUAL:
+    case Constraints::EQUAL: {
+        check_equal(true);
+        break;
+    }
+    case Constraints::NOT_EQUAL: {
+        check_equal(false);
+        break;
+    }
+    case Constraints::LESS: {
+        set_is_match(column_value < target_value);
+        break;
+    }
+    case Constraints::LESS_EQUAL: {
+        if (column_value < target_value)
+        {
+            set_is_match(true);
+            break;
+        } else
         {
             check_equal(true);
-            break;
         }
-        case Constraints::NOT_EQUAL:
+        break;
+    }
+    case Constraints::GREATER: {
+        set_is_match(column_value > target_value);
+        break;
+    }
+    case Constraints::GREATER_EQUAL: {
+        if (column_value > target_value)
         {
-            check_equal(false);
-            break;
-        }
-        case Constraints::LESS:
+            set_is_match(true);
+        } else
         {
-            set_is_match(column_value < target_value);
-            break;
+            check_equal(true);
         }
-        case Constraints::LESS_EQUAL:
-        {
-            if (column_value < target_value)
-            {
-                set_is_match(true);
-                break;
-            }
-            else
-            {
-                check_equal(true);
-            }
-            break;
-        }
-        case Constraints::GREATER:
-        {
-            set_is_match(column_value > target_value);
-            break;
-        }
-        case Constraints::GREATER_EQUAL:
-        {
-            if (column_value > target_value)
-            {
-                set_is_match(true);
-            }
-            else
-            {
-                check_equal(true);
-            }
-            break;
-        }
-        case Constraints::__NUM_CONSTRAINTS__:
-        {
-            throw DBException("Invalid constraint in fuzzyMatch()");
-        }
+        break;
+    }
+    case Constraints::__NUM_CONSTRAINTS__: {
+        throw DBException("Invalid constraint in fuzzyMatch()");
+    }
     }
 }
 
 /*!
  * \class Connection
  *
- * \brief This class instantiates the SQLite schema and issues database commands.
+ * \brief This class instantiates the SQLite schema and issues database
+ * commands.
  */
 class Connection : public Transaction
 {
@@ -113,9 +103,9 @@ public:
         {
             if (sqlite3_close(db_conn_) != SQLITE_OK)
             {
-                // Failed to close the database connection. Not much we can do here.
-                std::cerr << "Warning: Failed to close database connection: "
-                          << sqlite3_errmsg(db_conn_) << std::endl;
+                // Failed to close the database connection. Not much we can do
+                // here.
+                std::cerr << "Warning: Failed to close database connection: " << sqlite3_errmsg(db_conn_) << std::endl;
             }
         }
     }
@@ -123,52 +113,46 @@ public:
     /// Instantiate tables, columns, indexes, etc. on the sqlite3 connection.
     void realizeSchema(const Schema& schema)
     {
-        safeTransaction(
-            [&]()
+        safeTransaction([&]() {
+            for (const auto& table : schema.getTables())
             {
-                for (const auto& table : schema.getTables())
+                // First create the table and its columns
+                std::ostringstream oss;
+                oss << "CREATE TABLE IF NOT EXISTS " << table.getName() << "(";
+
+                // All tables have an auto-incrementing primary key
+                if (table.use_auto_inc_primary_key_)
                 {
-                    // First create the table and its columns
-                    std::ostringstream oss;
-                    oss << "CREATE TABLE IF NOT EXISTS " << table.getName() << "(";
-
-                    // All tables have an auto-incrementing primary key
-                    if (table.use_auto_inc_primary_key_)
-                    {
-                        oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
-                    }
-
-                    // Fill in the rest of the CREATE TABLE command:
-                    // CREATE TABLE Id INTEGER PRIMARY KEY AUTOINCREMENT First TEXT, ...
-                    //                                                   ---------------
-                    oss << getColumnsSqlCommand_(table) << ");";
-
-                    // Create the table in the database
-                    executeCommand(oss.str());
-
-                    // Now create any table indexes, for example:
-                    //     CREATE INDEX customer_fullname ON Customers (First,Last)
-                    //     CREATE INDEX county_population ON Counties (CountyName,Population)
-                    //     ...
-                    for (const auto& cmd : table.index_creation_strs_)
-                    {
-                        executeCommand(cmd);
-                    }
+                    oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
                 }
-            });
+
+                // Fill in the rest of the CREATE TABLE command:
+                // CREATE TABLE Id INTEGER PRIMARY KEY AUTOINCREMENT First TEXT,
+                // ...
+                //                                                   ---------------
+                oss << getColumnsSqlCommand_(table) << ");";
+
+                // Create the table in the database
+                executeCommand(oss.str());
+
+                // Now create any table indexes, for example:
+                //     CREATE INDEX customer_fullname ON Customers (First,Last)
+                //     CREATE INDEX county_population ON Counties
+                //     (CountyName,Population)
+                //     ...
+                for (const auto& cmd : table.index_creation_strs_)
+                {
+                    executeCommand(cmd);
+                }
+            }
+        });
     }
 
     /// Get the full database filename being used.
-    const std::string& getDatabaseFilePath() const
-    {
-        return db_filepath_;
-    }
+    const std::string& getDatabaseFilePath() const { return db_filepath_; }
 
     /// Is this connection alive and well?
-    bool isValid() const
-    {
-        return (db_conn_ != nullptr);
-    }
+    bool isValid() const { return (db_conn_ != nullptr); }
 
     /// Execute the provided statement against the database
     /// connection. This will validate the command, and throw
@@ -189,22 +173,14 @@ public:
     }
 
     /// Get the database ID of the last INSERT statement.
-    int getLastInsertRowId() const
-    {
-        return sqlite3_last_insert_rowid(db_conn_);
-    }
+    int getLastInsertRowId() const { return sqlite3_last_insert_rowid(db_conn_); }
 
     /// Get direct access to the underlying SQLite database.
-    sqlite3* getDatabase() const
-    {
-        return db_conn_;
-    }
+    sqlite3* getDatabase() const { return db_conn_; }
 
 private:
     /// Private constructor. Called by friend class DatabaseManager.
-    Connection()
-    {
-    }
+    Connection() {}
 
     /// First-time database file open.
     std::string openDbFile_(const std::string& db_file)
@@ -235,8 +211,7 @@ private:
             db_conn_ = sqlite_conn;
             sqlite3_create_function(db_conn_, "fuzzyMatch", 3, SQLITE_UTF8, nullptr, &fuzzyMatch, nullptr, nullptr);
             return db_filepath_;
-        }
-        else
+        } else
         {
             db_conn_ = nullptr;
             return "";

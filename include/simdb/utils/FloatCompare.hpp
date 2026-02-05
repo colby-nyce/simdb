@@ -2,11 +2,11 @@
 
 #pragma once
 
-#include <time.h>
 #include <cinttypes>
 #include <cmath>
 #include <limits>
 #include <random>
+#include <time.h>
 
 namespace simdb {
 

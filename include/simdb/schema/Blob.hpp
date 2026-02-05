@@ -16,9 +16,7 @@ struct SqlBlob
     size_t num_bytes = 0;
 
     template <typename T>
-    SqlBlob(const std::vector<T>& vals)
-        : data_ptr(vals.data())
-        , num_bytes(vals.size() * sizeof(T))
+    SqlBlob(const std::vector<T>& vals) : data_ptr(vals.data()), num_bytes(vals.size() * sizeof(T))
     {
     }
 
@@ -34,8 +32,8 @@ inline std::ostream& operator<<(std::ostream& os, const SqlBlob& blob)
         return os;
     }
 
-    os << "blob(" << std::hex << reinterpret_cast<uintptr_t>(blob.data_ptr)
-       << ", n=" << std::dec << blob.num_bytes << ")";
+    os << "blob(" << std::hex << reinterpret_cast<uintptr_t>(blob.data_ptr) << ", n=" << std::dec << blob.num_bytes
+       << ")";
 
     return os;
 }

@@ -8,7 +8,7 @@
 #include <string>
 
 namespace simdb {
-    class DatabaseManager;
+class DatabaseManager;
 }
 
 namespace simdb::pipeline {
@@ -65,9 +65,7 @@ public:
     }
 
 private:
-    AsyncDatabaseAccessor(AsyncDatabaseAccessHandler* db_access_handler)
-        : db_access_handler_(db_access_handler)
-    {}
+    AsyncDatabaseAccessor(AsyncDatabaseAccessHandler* db_access_handler) : db_access_handler_(db_access_handler) {}
 
     AsyncDatabaseAccessHandler* db_access_handler_ = nullptr;
     friend class DatabaseThread;

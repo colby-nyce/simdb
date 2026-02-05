@@ -4,9 +4,9 @@
 
 #include "simdb/utils/MetaStructs.hpp"
 
-#include <stdint.h>
 #include <cstring>
 #include <iostream>
+#include <stdint.h>
 #include <vector>
 
 namespace simdb {
@@ -23,8 +23,7 @@ namespace simdb {
 class CollectionBuffer
 {
 public:
-    CollectionBuffer(std::vector<char>& buffer)
-        : buffer_(buffer)
+    CollectionBuffer(std::vector<char>& buffer) : buffer_(buffer)
     {
         buffer_.clear();
         buffer_.reserve(buffer_.capacity());
@@ -33,8 +32,7 @@ public:
     /// Note that the elem_id corresponds to a database record's primary key,
     /// and thus typically will not be zero. Passing in elem_id=0 means "do not
     /// write elem_id to the buffer".
-    CollectionBuffer(std::vector<char>& buffer, uint16_t elem_id)
-        : CollectionBuffer(buffer)
+    CollectionBuffer(std::vector<char>& buffer, uint16_t elem_id) : CollectionBuffer(buffer)
     {
         if (elem_id != 0)
         {
@@ -53,15 +51,15 @@ private:
 };
 
 template <typename T>
-inline typename std::enable_if<std::is_arithmetic<T>::value && std::is_scalar<T>::value && !type_traits::is_any_pointer<T>::value,
+inline typename std::enable_if<std::is_arithmetic<T>::value && std::is_scalar<T>::value &&
+                                   !type_traits::is_any_pointer<T>::value,
                                CollectionBuffer&>::type
 operator<<(CollectionBuffer& buffer, const T& val)
 {
     if constexpr (std::is_same<T, bool>::value)
     {
         buffer << static_cast<int>(val);
-    }
-    else
+    } else
     {
         buffer.append(&val, sizeof(T));
     }
@@ -70,7 +68,8 @@ operator<<(CollectionBuffer& buffer, const T& val)
 }
 
 template <typename T>
-inline typename std::enable_if<std::is_enum<T>::value, CollectionBuffer&>::type operator<<(CollectionBuffer& buffer, const T& val)
+inline typename std::enable_if<std::is_enum<T>::value, CollectionBuffer&>::type operator<<(CollectionBuffer& buffer,
+                                                                                           const T& val)
 {
     using dtype = typename std::underlying_type<T>::type;
     return buffer << static_cast<dtype>(val);

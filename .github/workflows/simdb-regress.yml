@@ -19,7 +19,7 @@ jobs:
       - name: Install clang-format
         run: |
           sudo apt-get update --fix-missing
-          sudo apt-get install -y clang-format
+          sudo apt-get install -y clang-format-17
 
       - name: Check formatting
         run: |

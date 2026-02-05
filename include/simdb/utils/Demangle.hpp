@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <cxxabi.h>
+#include <string>
 
 namespace simdb {
 
@@ -33,8 +33,7 @@ inline std::string demangle(const std::string& name) noexcept
     return std::string(out);
 }
 
-template <typename T>
-inline std::string demangle_type() noexcept
+template <typename T> inline std::string demangle_type() noexcept
 {
     return demangle(typeid(T).name());
 }

@@ -2,12 +2,12 @@
 
 #pragma once
 
-#include "simdb/pipeline/Stage.hpp"
 #include "simdb/pipeline/Flusher.hpp"
+#include "simdb/pipeline/Stage.hpp"
 #include <map>
 
 namespace simdb {
-    class DatabaseManager;
+class DatabaseManager;
 }
 
 namespace simdb::pipeline {
@@ -21,32 +21,23 @@ class Pipeline
 {
 public:
     Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app)
-        : db_mgr_(db_mgr)
-        , pipeline_name_(name)
-        , app_(app)
-    {}
-
-    const App* getOwningApp() const
+        : db_mgr_(db_mgr), pipeline_name_(name), app_(app)
     {
-        return app_;
     }
 
-    DatabaseManager* getDatabaseManager() const
-    {
-        return db_mgr_;
-    }
+    const App* getOwningApp() const { return app_; }
 
-    std::string getName() const
-    {
-        return pipeline_name_;
-    }
+    DatabaseManager* getDatabaseManager() const { return db_mgr_; }
+
+    std::string getName() const { return pipeline_name_; }
 
     template <typename StageType, typename... StageCtorArgs>
     StageType* addStage(const std::string& name, StageCtorArgs&&... args)
     {
         if (state_ != State::ACCEPTING_STAGES)
         {
-            throw DBException("Cannot add stage '" + name + "' to pipeline '" + pipeline_name_ + "'; not accepting stages.");
+            throw DBException("Cannot add stage '" + name + "' to pipeline '" + pipeline_name_ +
+                              "'; not accepting stages.");
         }
 
         auto& stage = stages_[name];
@@ -64,7 +55,8 @@ public:
     {
         if (state_ != State::ACCEPTING_STAGES)
         {
-            throw DBException("Cannot finalize stages for pipeline '" + pipeline_name_ + "'; stage changes already finalized.");
+            throw DBException("Cannot finalize stages for pipeline '" + pipeline_name_ +
+                              "'; stage changes already finalized.");
         }
         for (auto& [stage_name, stage] : stages_)
         {
@@ -87,14 +79,14 @@ public:
     {
         if (state_ != State::ACCEPTING_BINDINGS)
         {
-            throw DBException("Cannot finalize bindings for pipeline '" + pipeline_name_ + "'; binding changes already finalized.");
+            throw DBException("Cannot finalize bindings for pipeline '" + pipeline_name_ +
+                              "'; binding changes already finalized.");
         }
         queue_repo_.finalizeBindings();
         state_ = State::BINDINGS_COMPLETE;
     }
 
-    template <typename T>
-    simdb::ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
+    template <typename T> simdb::ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
         if (state_ != State::BINDINGS_COMPLETE && state_ != State::FINALIZED)
         {
@@ -103,8 +95,7 @@ public:
         return queue_repo_.getInPortQueue<T>(port_full_name);
     }
 
-    template <typename T>
-    simdb::ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
+    template <typename T> simdb::ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
     {
         if (state_ != State::BINDINGS_COMPLETE && state_ != State::FINALIZED)
         {
@@ -118,7 +109,8 @@ public:
     {
         if (state_ != State::BINDINGS_COMPLETE)
         {
-            throw DBException("Cannot assign stage threads for pipeline '" + pipeline_name_ + "; noMoreBindings() never called");
+            throw DBException("Cannot assign stage threads for pipeline '" + pipeline_name_ +
+                              "; noMoreBindings() never called");
         }
 
         queue_repo_.validateQueues();
@@ -134,8 +126,8 @@ public:
     std::unique_ptr<Flusher> createFlusher(const std::vector<std::string>& stage_names = {})
     {
         std::vector<Stage*> stages;
-        const auto & ordered_stage_names = !stage_names.empty() ? stage_names : stages_in_order_;
-        for (const auto & name : ordered_stage_names)
+        const auto& ordered_stage_names = !stage_names.empty() ? stage_names : stages_in_order_;
+        for (const auto& name : ordered_stage_names)
         {
             auto it = stages_.find(name);
             if (it == stages_.end())
@@ -154,15 +146,11 @@ public:
             }
         }
 
-        return has_db_stage ?
-            std::unique_ptr<FlusherWithTransaction>(new FlusherWithTransaction(stages, db_mgr_)) :
-            std::unique_ptr<Flusher>(new Flusher(stages));
+        return has_db_stage ? std::unique_ptr<FlusherWithTransaction>(new FlusherWithTransaction(stages, db_mgr_))
+                            : std::unique_ptr<Flusher>(new Flusher(stages));
     }
 
-    AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const
-    {
-        return async_db_accessor_;
-    }
+    AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const { return async_db_accessor_; }
 
     std::map<std::string, Stage*> getStages()
     {
@@ -195,12 +183,7 @@ private:
     PipelineQueueRepo queue_repo_;
     AsyncDatabaseAccessor* async_db_accessor_ = nullptr;
 
-    enum class State {
-        ACCEPTING_STAGES,
-        ACCEPTING_BINDINGS,
-        BINDINGS_COMPLETE,
-        FINALIZED
-    };
+    enum class State { ACCEPTING_STAGES, ACCEPTING_BINDINGS, BINDINGS_COMPLETE, FINALIZED };
 
     State state_ = State::ACCEPTING_STAGES;
 };

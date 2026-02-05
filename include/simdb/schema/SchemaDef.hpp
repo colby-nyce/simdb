@@ -15,16 +15,7 @@
 namespace simdb {
 
 /// Data types supported by SimDB schemas
-enum class SqlDataType
-{
-    int32_t,
-    uint32_t,
-    int64_t,
-    uint64_t,
-    double_t,
-    string_t,
-    blob_t
-};
+enum class SqlDataType { int32_t, uint32_t, int64_t, uint64_t, double_t, string_t, blob_t };
 
 /// Stream operator used when creating various SQL commands.
 inline std::ostream& operator<<(std::ostream& os, const SqlDataType dtype)
@@ -33,32 +24,28 @@ inline std::ostream& operator<<(std::ostream& os, const SqlDataType dtype)
 
     switch (dtype)
     {
-        case dt::int32_t:
-        case dt::uint32_t:
-        case dt::int64_t:
-        {
-            os << "INT";
-            break;
-        }
+    case dt::int32_t:
+    case dt::uint32_t:
+    case dt::int64_t: {
+        os << "INT";
+        break;
+    }
 
-        case dt::string_t:
-        case dt::uint64_t:
-        {
-            os << "TEXT";
-            break;
-        }
+    case dt::string_t:
+    case dt::uint64_t: {
+        os << "TEXT";
+        break;
+    }
 
-        case dt::double_t:
-        {
-            os << "REAL";
-            break;
-        }
+    case dt::double_t: {
+        os << "REAL";
+        break;
+    }
 
-        case dt::blob_t:
-        {
-            os << "BLOB";
-            break;
-        }
+    case dt::blob_t: {
+        os << "BLOB";
+        break;
+    }
     }
 
     return os;
@@ -73,35 +60,19 @@ class Column
 {
 public:
     /// Construct with the column name and data type.
-    Column(const std::string& column_name, const SqlDataType dt)
-        : name_(column_name)
-        , dt_(dt)
-    {
-    }
+    Column(const std::string& column_name, const SqlDataType dt) : name_(column_name), dt_(dt) {}
 
     /// Equivalence is defined as having the same name and data type.
-    bool operator==(const Column& rhs) const
-    {
-        return name_ == rhs.name_ && dt_ == rhs.dt_;
-    }
+    bool operator==(const Column& rhs) const { return name_ == rhs.name_ && dt_ == rhs.dt_; }
 
     /// Equivalence is defined as having the same name and data type.
-    bool operator!=(const Column& rhs) const
-    {
-        return !(*this == rhs);
-    }
+    bool operator!=(const Column& rhs) const { return !(*this == rhs); }
 
     /// Get the name of this column.
-    const std::string& getName() const
-    {
-        return name_;
-    }
+    const std::string& getName() const { return name_; }
 
     /// Get the data type of this column.
-    SqlDataType getDataType() const
-    {
-        return dt_;
-    }
+    SqlDataType getDataType() const { return dt_; }
 
     /// Optionally specify a default value for this Column.
     /// Defaults for SqlBlob data types are not allowed and will
@@ -160,18 +131,12 @@ public:
     }
 
     /// Check if this column has a default value set or not.
-    bool hasDefaultValue() const
-    {
-        return !default_val_string_.empty();
-    }
+    bool hasDefaultValue() const { return !default_val_string_.empty(); }
 
     /// Get this Column's default value. These are returned as
     /// strings since the schema creation command is one string,
     /// e.g. "CREATE TABLE ..."
-    const std::string& getDefaultValueAsString() const
-    {
-        return default_val_string_;
-    }
+    const std::string& getDefaultValueAsString() const { return default_val_string_; }
 
 private:
     /// Default values are stringified. For doubles, we need maximum precision.
@@ -180,10 +145,11 @@ private:
         oss << std::numeric_limits<long double>::digits10 + 1 << val;
     }
 
-    /// Default values are stringified. For non-doubles, e.g. INT and TEXT types,
-    /// we use default precision.
+    /// Default values are stringified. For non-doubles, e.g. INT and TEXT
+    /// types, we use default precision.
     template <typename T>
-    typename std::enable_if<std::is_integral_v<T> || std::is_same_v<T, std::string> || std::is_same_v<T, const char*>, void>::type
+    typename std::enable_if<std::is_integral_v<T> || std::is_same_v<T, std::string> || std::is_same_v<T, const char*>,
+                            void>::type
     writeDefaultValue_(std::ostringstream& oss, const T& val) const
     {
         oss << val;
@@ -191,7 +157,8 @@ private:
 
     /// Throw for columns that do not support default values.
     template <typename T>
-    typename std::enable_if<!std::is_integral_v<T> && !std::is_same_v<T, std::string> && !std::is_same_v<T, const char*>, void>::type
+    typename std::enable_if<
+        !std::is_integral_v<T> && !std::is_same_v<T, std::string> && !std::is_same_v<T, const char*>, void>::type
     writeDefaultValue_(std::ostringstream&, const T&) const
     {
         throw DBException("Only INT/REAL/TEXT columns support default values");
@@ -216,16 +183,10 @@ class Table
 {
 public:
     /// Construct with a name.
-    Table(const std::string& table_name)
-        : name_(table_name)
-    {
-    }
+    Table(const std::string& table_name) : name_(table_name) {}
 
     /// Get the name of this table.
-    const std::string& getName() const
-    {
-        return name_;
-    }
+    const std::string& getName() const { return name_; }
 
     /// Add a column to this table's schema with a name and data type.
     Table& addColumn(const std::string& name, const SqlDataType dt)
@@ -286,10 +247,7 @@ public:
 
     /// Index this table's records on the given column.
     /// CREATE INDEX IndexName ON TableName(ColumnName)
-    Table& createIndexOn(const std::string& col_name)
-    {
-        return createCompoundIndexOn({col_name});
-    }
+    Table& createIndexOn(const std::string& col_name) { return createCompoundIndexOn({col_name}); }
 
     /// Index this table's records on the given columns.
     /// CREATE INDEX IndexName ON TableName(ColA,ColB,ColC)
@@ -332,10 +290,7 @@ public:
     }
 
     /// Read-only access to this table's columns.
-    const std::vector<std::shared_ptr<Column>>& getColumns() const
-    {
-        return columns_;
-    }
+    const std::vector<std::shared_ptr<Column>>& getColumns() const { return columns_; }
 
     /// Equivalency check.
     bool operator==(const Table& rhs) const
@@ -362,10 +317,7 @@ public:
     }
 
     /// Equivalency check.
-    bool operator!=(const Table& rhs) const
-    {
-        return !(*this == rhs);
-    }
+    bool operator!=(const Table& rhs) const { return !(*this == rhs); }
 
 private:
     /// Name of this table
@@ -408,7 +360,8 @@ public:
         {
             if (lhs.getName() == table_name)
             {
-                throw DBException("Cannot add table '" + table_name + "' to schema. A table with that name already exists.");
+                throw DBException("Cannot add table '" + table_name +
+                                  "' to schema. A table with that name already exists.");
             }
         }
 
@@ -426,11 +379,11 @@ public:
                 auto& existing_table = getTable(table.getName());
                 if (existing_table != table)
                 {
-                    throw DBException("Cannot append schema - it has a table we already have by that name ")
+                    throw DBException("Cannot append schema - it has a table "
+                                      "we already have by that name ")
                         << "(" << table.getName() << ")";
                 }
-            }
-            else
+            } else
             {
                 tables_.push_back(table);
             }
@@ -438,10 +391,7 @@ public:
     }
 
     /// Read-only access to this schema's tables.
-    const std::deque<Table>& getTables() const
-    {
-        return tables_;
-    }
+    const std::deque<Table>& getTables() const { return tables_; }
 
     /// Get a table by its name. Throws if not found.
     const Table& getTable(const std::string& table_name) const

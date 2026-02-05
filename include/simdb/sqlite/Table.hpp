@@ -7,29 +7,24 @@
 #include "simdb/sqlite/ValueContainer.hpp"
 #include "simdb/utils/utf16.hpp"
 
-#include <sqlite3.h>
 #include <algorithm>
 #include <list>
+#include <sqlite3.h>
 
 namespace simdb {
 
 /*!
  * \class SqlTable
  *
- * \brief Helper class that is used under the hood for db_mgr.INSERT(SQL_TABLE("MyTable"), ...)
+ * \brief Helper class that is used under the hood for
+ * db_mgr.INSERT(SQL_TABLE("MyTable"), ...)
  */
 class SqlTable
 {
 public:
-    SqlTable(const std::string& table_name)
-        : table_name_(table_name)
-    {
-    }
+    SqlTable(const std::string& table_name) : table_name_(table_name) {}
 
-    const std::string& getName() const
-    {
-        return table_name_;
-    }
+    const std::string& getName() const { return table_name_; }
 
 private:
     std::string table_name_;
@@ -38,14 +33,13 @@ private:
 /*!
  * \class SqlTable
  *
- * \brief Helper class that is used under the hood for db_mgr.INSERT(..., SQL_COLUMNS("ColA", "ColB"), ...)
+ * \brief Helper class that is used under the hood for db_mgr.INSERT(...,
+ * SQL_COLUMNS("ColA", "ColB"), ...)
  */
 class SqlColumns
 {
 public:
-    template <typename... Rest>
-    SqlColumns(const char* col_name, Rest... rest)
-        : SqlColumns(std::forward<Rest>(rest)...)
+    template <typename... Rest> SqlColumns(const char* col_name, Rest... rest) : SqlColumns(std::forward<Rest>(rest)...)
     {
         col_names_.emplace_front(col_name);
     }
@@ -85,10 +79,7 @@ public:
         oss << ") ";
     }
 
-    const std::list<std::string>& getColNames() const
-    {
-        return col_names_;
-    }
+    const std::list<std::string>& getColNames() const { return col_names_; }
 
 private:
     std::list<std::string> col_names_;
@@ -103,36 +94,26 @@ private:
 class SqlValues
 {
 public:
-    template <typename T, typename... Rest>
-    SqlValues(T val, Rest... rest)
-        : SqlValues(std::forward<Rest>(rest)...)
+    template <typename T, typename... Rest> SqlValues(T val, Rest... rest) : SqlValues(std::forward<Rest>(rest)...)
     {
         col_vals_.emplace_front(createValueContainer<T>(val));
     }
 
     template <typename T, typename... Rest>
-    SqlValues(const std::vector<T>& val, Rest... rest)
-        : SqlValues(std::forward<Rest>(rest)...)
+    SqlValues(const std::vector<T>& val, Rest... rest) : SqlValues(std::forward<Rest>(rest)...)
     {
         col_vals_.emplace_front(createValueContainer(val));
     }
 
     template <typename T, typename... Rest>
-    SqlValues(std::vector<T>&& val, Rest... rest)
-        : SqlValues(std::forward<Rest>(rest)...)
+    SqlValues(std::vector<T>&& val, Rest... rest) : SqlValues(std::forward<Rest>(rest)...)
     {
         col_vals_.emplace_front(createValueContainer(std::move(val)));
     }
 
-    template <typename T> SqlValues(T val)
-    {
-        col_vals_.emplace_front(createValueContainer<T>(val));
-    }
+    template <typename T> SqlValues(T val) { col_vals_.emplace_front(createValueContainer<T>(val)); }
 
-    template <typename T> SqlValues(const std::vector<T>& val)
-    {
-        col_vals_.emplace_front(createValueContainer(val));
-    }
+    template <typename T> SqlValues(const std::vector<T>& val) { col_vals_.emplace_front(createValueContainer(val)); }
 
     template <typename T> SqlValues(std::vector<T>&& val)
     {
@@ -180,18 +161,12 @@ class SqlRecord
 {
 public:
     SqlRecord(const std::string& table_name, const int32_t db_id, sqlite3* db_conn, Transaction* transaction)
-        : table_name_(table_name)
-        , db_id_(db_id)
-        , db_conn_(db_conn)
-        , transaction_(transaction)
+        : table_name_(table_name), db_id_(db_id), db_conn_(db_conn), transaction_(transaction)
     {
     }
 
     /// Get the database ID (primary key) for this record.
-    int32_t getId() const
-    {
-        return db_id_;
-    }
+    int32_t getId() const { return db_id_; }
 
     /// SELECT the given column value (int32_t)
     int32_t getPropertyInt32(const char* col_name) const;
@@ -243,7 +218,8 @@ public:
     bool removeFromTable();
 
 private:
-    /// Create a prepared statement: UPDATE <table_name_> SET <col_name>=? WHERE Id=<db_id_>
+    /// Create a prepared statement: UPDATE <table_name_> SET <col_name>=? WHERE
+    /// Id=<db_id_>
     SQLitePreparedStatement createSetPropertyStmt_(const char* col_name) const
     {
         std::string cmd = "UPDATE " + table_name_;
@@ -257,14 +233,14 @@ private:
     /// \brief Step a prepared statement forward
     /// \param stmt Prepared statement
     /// \param ret_codes List of expected return codes from sqlite3_step()
-    /// \throws Throws an exception if sqlite3_step() returned a code that was not in <ret_codes>
+    /// \throws Throws an exception if sqlite3_step() returned a code that was
+    /// not in <ret_codes>
     void stepStatement_(sqlite3_stmt* stmt, const std::initializer_list<int>& ret_codes) const
     {
         auto rc = SQLiteReturnCode(sqlite3_step(stmt));
         if (std::find(ret_codes.begin(), ret_codes.end(), rc) == ret_codes.end())
         {
-            auto stringify_ret_codes = [&]()
-            {
+            auto stringify_ret_codes = [&]() {
                 std::ostringstream oss;
                 auto iter = ret_codes.begin();
                 for (size_t idx = 0; idx < ret_codes.size(); ++idx)
@@ -280,8 +256,7 @@ private:
             };
 
             throw DBException("Unexpected sqlite3_step() return code:\n")
-                << "\tActual: " << rc
-                << "\tExpected: " << stringify_ret_codes()
+                << "\tActual: " << rc << "\tExpected: " << stringify_ret_codes()
                 << "\tError: " << sqlite3_errmsg(db_conn_);
         }
     }
@@ -299,8 +274,8 @@ private:
     Transaction* const transaction_;
 };
 
-/// Run a query on the given table, column, and database ID, and return the property value.
-/// SELECT <col_name> FROM <table_name> WHERE Id=<db_id>
+/// Run a query on the given table, column, and database ID, and return the
+/// property value. SELECT <col_name> FROM <table_name> WHERE Id=<db_id>
 template <typename T>
 inline T queryPropertyValue(const char* table_name, const char* col_name, const int db_id, sqlite3* db_conn)
 {
@@ -357,134 +332,116 @@ template <typename T> inline std::vector<T> SqlRecord::getPropertyBlob(const cha
 
 inline void SqlRecord::setPropertyInt32(const char* col_name, const int32_t val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_int(stmt, 1, val)))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_int(stmt, 1, val)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 inline void SqlRecord::setPropertyUInt32(const char* col_name, const uint32_t val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(val))))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(val))))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 inline void SqlRecord::setPropertyInt64(const char* col_name, const int64_t val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_int64(stmt, 1, val)))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_int64(stmt, 1, val)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 inline void SqlRecord::setPropertyUInt64(const char* col_name, const uint64_t val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto utf16 = utils::uint64_to_utf16(val);
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_text16(stmt, 1, utf16.data(), 40, 0)))
         {
-            auto utf16 = utils::uint64_to_utf16(val);
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_text16(stmt, 1, utf16.data(), 40, 0)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 inline void SqlRecord::setPropertyDouble(const char* col_name, const double val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_double(stmt, 1, val)))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_double(stmt, 1, val)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
 
-            return true;
-        });
+        return true;
+    });
 }
 
 inline void SqlRecord::setPropertyString(const char* col_name, const std::string& val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_text(stmt, 1, val.c_str(), -1, 0)))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_text(stmt, 1, val.c_str(), -1, 0)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 template <typename T> inline void SqlRecord::setPropertyBlob(const char* col_name, const std::vector<T>& val) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_blob(stmt, 1, val.data(), val.size() * sizeof(T), 0)))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_blob(stmt, 1, val.data(), val.size() * sizeof(T), 0)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 inline void SqlRecord::setPropertyBlob(const char* col_name, const void* data, const size_t bytes) const
 {
-    transaction_->safeTransaction(
-        [&]()
+    transaction_->safeTransaction([&]() {
+        auto stmt = createSetPropertyStmt_(col_name);
+        if (SQLiteReturnCode(sqlite3_bind_blob(stmt, 1, data, bytes, 0)))
         {
-            auto stmt = createSetPropertyStmt_(col_name);
-            if (SQLiteReturnCode(sqlite3_bind_blob(stmt, 1, data, bytes, 0)))
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-            stepStatement_(stmt, {SQLITE_DONE});
-        });
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+        stepStatement_(stmt, {SQLITE_DONE});
+    });
 }
 
 inline bool SqlRecord::removeFromTable()
 {
-    transaction_->safeTransaction(
-        [&]()
-        {
-            std::ostringstream oss;
-            oss << "DELETE FROM " << table_name_ << " WHERE Id=" << db_id_;
-            const auto cmd = oss.str();
+    transaction_->safeTransaction([&]() {
+        std::ostringstream oss;
+        oss << "DELETE FROM " << table_name_ << " WHERE Id=" << db_id_;
+        const auto cmd = oss.str();
 
-            auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_, cmd.c_str(), nullptr, nullptr, nullptr));
-            if (rc)
-            {
-                throw DBException(sqlite3_errmsg(db_conn_));
-            }
-        });
+        auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_, cmd.c_str(), nullptr, nullptr, nullptr));
+        if (rc)
+        {
+            throw DBException(sqlite3_errmsg(db_conn_));
+        }
+    });
 
     return sqlite3_changes(db_conn_) == 1;
 }

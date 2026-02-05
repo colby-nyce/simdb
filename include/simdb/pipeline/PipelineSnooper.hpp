@@ -3,8 +3,8 @@
 #pragma once
 
 #include <functional>
-#include <vector>
 #include <set>
+#include <vector>
 
 #include "simdb/Exceptions.hpp"
 
@@ -12,17 +12,12 @@ namespace simdb::pipeline {
 
 class Stage;
 
-template <typename KeyType, typename SnoopedType>
-class PipelineSnooper
+template <typename KeyType, typename SnoopedType> class PipelineSnooper
 {
 public:
-    PipelineSnooper(PipelineManager* pipeline_mgr)
-        : pipeline_mgr_(pipeline_mgr)
-    {
-    }
+    PipelineSnooper(PipelineManager* pipeline_mgr) : pipeline_mgr_(pipeline_mgr) {}
 
-    template <typename StageType>
-    void addStage(StageType* stage)
+    template <typename StageType> void addStage(StageType* stage)
     {
         static_assert(std::is_base_of<Stage, StageType>::value);
         if (!snooped_stages_.insert(stage).second)

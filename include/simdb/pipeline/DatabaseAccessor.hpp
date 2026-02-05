@@ -11,17 +11,11 @@ namespace simdb::pipeline {
 class DatabaseAccessor
 {
 public:
-    DatabaseAccessor(DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
-    {}
+    DatabaseAccessor(DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
 
-    DatabaseManager* getDatabaseManager() const
-    {
-        return db_mgr_;
-    }
+    DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 
-    template <typename App>
-    PreparedINSERT* getTableInserter(const std::string& tbl_name)
+    template <typename App> PreparedINSERT* getTableInserter(const std::string& tbl_name)
     {
         auto& inserters = tbl_inserters_by_app_[App::NAME];
         if (inserters.empty())
@@ -47,8 +41,7 @@ public:
         auto& inserter = inserters[tbl_name];
         if (!inserter)
         {
-            throw DBException("Table does not exist in schema for app: ")
-                << App::NAME;
+            throw DBException("Table does not exist in schema for app: ") << App::NAME;
         }
 
         return inserter.get();

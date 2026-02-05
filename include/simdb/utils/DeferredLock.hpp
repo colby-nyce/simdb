@@ -2,8 +2,7 @@
 
 namespace simdb {
 
-template <typename Mutex>
-class DeferredLock
+template <typename Mutex> class DeferredLock
 {
 public:
     DeferredLock(Mutex& m) : mutex_(m) {}

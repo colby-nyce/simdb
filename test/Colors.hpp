@@ -73,8 +73,7 @@ static constexpr const char* ALL_COLORS[] = {
     SIMDB_UNMANAGED_COLOR_BG_MAGENTA,     SIMDB_UNMANAGED_COLOR_BG_CYAN};
 
 /// Define enums for accessing the different colors via a ColorScheme.
-enum class Color
-{
+enum class Color {
     Normal,
     Bold,
     Red,
@@ -97,19 +96,19 @@ enum class Color
     BgCyan
 };
 
-#define SIMDB_CMDLINE_COLOR_NORMAL "" // SIMDB_UNMANAGED_COLOR_NORMAL
-#define SIMDB_CMDLINE_COLOR_ERROR "" // SIMDB_UNMANAGED_COLOR_ERROR
+#define SIMDB_CMDLINE_COLOR_NORMAL ""  // SIMDB_UNMANAGED_COLOR_NORMAL
+#define SIMDB_CMDLINE_COLOR_ERROR ""   // SIMDB_UNMANAGED_COLOR_ERROR
 #define SIMDB_CMDLINE_COLOR_WARNING "" // SIMDB_UNMANAGED_COLOR_YELLOW
-#define SIMDB_CMDLINE_COLOR_GOOD "" // SIMDB_UNMANAGED_COLOR_GOOD
+#define SIMDB_CMDLINE_COLOR_GOOD ""    // SIMDB_UNMANAGED_COLOR_GOOD
 
 namespace simdb::color {
 
 /**
-     * \class ColorScheme
-     * \brief Accessor methods for obtaining color code strings.
-     * \details The idea behind ColorScheme is to have the ability
-     * to disable terminal colors in the module with a simple flag.
-     */
+ * \class ColorScheme
+ * \brief Accessor methods for obtaining color code strings.
+ * \details The idea behind ColorScheme is to have the ability
+ * to disable terminal colors in the module with a simple flag.
+ */
 class ColorScheme
 {
 public:
@@ -122,14 +121,11 @@ public:
     ~ColorScheme() = default;
 
     /**
-         * \brief Enable or disable colors.
-         * \param enabled Flag denoting whether colors are enabled for
-         * error reporting in SimDB.
-         */
-    void setIsEnabled(const bool enabled)
-    {
-        enabled_ = enabled;
-    }
+     * \brief Enable or disable colors.
+     * \param enabled Flag denoting whether colors are enabled for
+     * error reporting in SimDB.
+     */
+    void setIsEnabled(const bool enabled) { enabled_ = enabled; }
 
     /// The accessors that should always be used for colors.
     const char* color(const Color c) const

@@ -9,15 +9,13 @@
 namespace simdb {
 
 /// To keep SimDB collection as fast and small as possible, we serialize strings
-/// not as actual strings, but as ints. This class is used to map strings to ints,
-/// and is periodically serialized to a database table.
-template <bool MutexProtect = false>
-class TinyStrings
+/// not as actual strings, but as ints. This class is used to map strings to
+/// ints, and is periodically serialized to a database table.
+template <bool MutexProtect = false> class TinyStrings
 {
 public:
     TinyStrings(DatabaseManager* db_mgr, const std::string& table_name = "TinyStringIDs")
-        : db_mgr_(db_mgr)
-        , table_name_(table_name)
+        : db_mgr_(db_mgr), table_name_(table_name)
     {
         const auto& schema = db_mgr_->getSchema();
         if (!schema.hasTable(table_name_))
@@ -43,8 +41,7 @@ public:
         if (iter == map_->end())
         {
             return std::make_pair(getStringID_(s), true);
-        }
-        else
+        } else
         {
             return std::make_pair(getStringID_(s), false);
         }
@@ -64,24 +61,21 @@ public:
     /// Serialize the current string map to the database.
     void serialize()
     {
-        db_mgr_->safeTransaction(
-            [&]()
+        db_mgr_->safeTransaction([&]() {
+            DeferredLock<std::mutex> lock(mutex_);
+            if constexpr (MutexProtect)
             {
-                DeferredLock<std::mutex> lock(mutex_);
-                if constexpr (MutexProtect)
-                {
-                    lock.lock();
-                }
+                lock.lock();
+            }
 
-                for (const auto& [string_id, string_val] : unserialized_map_)
-                {
-                    db_mgr_->INSERT(SQL_TABLE(table_name_),
-                                    SQL_COLUMNS("StringValue", "StringID"),
-                                    SQL_VALUES(string_val, string_id));
-                }
+            for (const auto& [string_id, string_val] : unserialized_map_)
+            {
+                db_mgr_->INSERT(SQL_TABLE(table_name_), SQL_COLUMNS("StringValue", "StringID"),
+                                SQL_VALUES(string_val, string_id));
+            }
 
-                unserialized_map_.clear();
-            });
+            unserialized_map_.clear();
+        });
     }
 
 private:
@@ -94,8 +88,7 @@ private:
             map_->insert({s, id});
             unserialized_map_.insert({id, s});
             return id;
-        }
-        else
+        } else
         {
             return iter->second;
         }

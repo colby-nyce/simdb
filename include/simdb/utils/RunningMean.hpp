@@ -21,16 +21,10 @@ public:
     }
 
     /// Get the current running average
-    double mean() const
-    {
-        return mean_;
-    }
+    double mean() const { return mean_; }
 
     /// Get the number of values added
-    uint64_t count() const
-    {
-        return count_;
-    }
+    uint64_t count() const { return count_; }
 
 private:
     double mean_ = 0.0;

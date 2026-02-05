@@ -8,8 +8,7 @@
 
 namespace simdb {
 
-template <typename DataT, size_t BufferLen>
-class CircularBuffer
+template <typename DataT, size_t BufferLen> class CircularBuffer
 {
 public:
     // Add an element using move semantics
@@ -20,8 +19,7 @@ public:
     }
 
     // Emplace construct in-place
-    template <typename... Args>
-    void emplace(Args&&... args)
+    template <typename... Args> void emplace(Args&&... args)
     {
         array_[head_] = DataT(std::forward<Args>(args)...);
         advanceHead_();
@@ -42,16 +40,10 @@ public:
     }
 
     // Check if empty
-    bool empty() const
-    {
-        return !full_ && head_ == tail_;
-    }
+    bool empty() const { return !full_ && head_ == tail_; }
 
     // Check if full
-    bool full() const
-    {
-        return full_;
-    }
+    bool full() const { return full_; }
 
     // Get number of elements in buffer
     size_t size() const

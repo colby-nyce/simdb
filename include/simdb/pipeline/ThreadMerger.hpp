@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include "simdb/pipeline/PollingThread.hpp"
+#include "simdb/Exceptions.hpp"
 #include "simdb/pipeline/DatabaseThread.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
-#include "simdb/Exceptions.hpp"
+#include "simdb/pipeline/PollingThread.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -20,9 +20,7 @@ namespace simdb::pipeline {
 class ThreadMerger
 {
 public:
-    ThreadMerger(const std::vector<std::unique_ptr<Pipeline>>& pipelines)
-        : pipelines_(pipelines)
-    {}
+    ThreadMerger(const std::vector<std::unique_ptr<Pipeline>>& pipelines) : pipelines_(pipelines) {}
 
     void addAppForMerging(const App* app)
     {
@@ -33,7 +31,8 @@ public:
 
         if (merge_all_apps_)
         {
-            throw DBException("Can either call addAppForMerging() or mergeAllAppThreads(), not both");
+            throw DBException("Can either call addAppForMerging() or "
+                              "mergeAllAppThreads(), not both");
         }
 
         auto it = std::find(apps_to_merge_.begin(), apps_to_merge_.end(), app);
@@ -44,24 +43,19 @@ public:
         apps_to_merge_.push_back(app);
     }
 
-    void mergeAllAppThreads()
-    {
-        merge_all_apps_ = true;
-    }
+    void mergeAllAppThreads() { merge_all_apps_ = true; }
 
     void performMerge(std::vector<std::unique_ptr<PollingThread>>& polling_threads)
     {
         if (apps_to_merge_.empty() && !merge_all_apps_)
         {
             createThreadsWithoutMerging_(polling_threads);
-        }
-        else if (apps_to_merge_.empty() || apps_to_merge_.size() == pipelines_.size())
+        } else if (apps_to_merge_.empty() || apps_to_merge_.size() == pipelines_.size())
         {
-            // TODO cnyce: I think this logic breaks down for apps that have more
-            // than one pipeline.
+            // TODO cnyce: I think this logic breaks down for apps that have
+            // more than one pipeline.
             createThreadsAndMergeAll_(polling_threads);
-        }
-        else
+        } else
         {
             createThreadsAndMergeSpecificApps_(polling_threads);
         }
@@ -96,13 +90,14 @@ public:
         {
             if (threads.size() != 1)
             {
-                throw DBException("Internal error - assigned pipeline stage to more than one thread");
+                throw DBException("Internal error - assigned pipeline stage to "
+                                  "more than one thread");
             }
         }
 
-        // Reorder stages in polling threads to ensure that the relative ordering
-        // of stages is the same in the threads as they were originally defined
-        // in the app createPipeline() method.
+        // Reorder stages in polling threads to ensure that the relative
+        // ordering of stages is the same in the threads as they were originally
+        // defined in the app createPipeline() method.
         std::vector<Runnable*> ordered_runnables;
         for (auto& pipeline : pipelines_)
         {
@@ -149,7 +144,8 @@ private:
             pipelines_by_app[pipeline->getOwningApp()] = pipeline.get();
         }
 
-        // Verify that all non-database stages are using the same polling interval.
+        // Verify that all non-database stages are using the same polling
+        // interval.
         std::set<size_t> intervals;
         for (const auto& [app, app_polling_threads] : polling_threads_by_app)
         {
@@ -161,7 +157,8 @@ private:
 
         if (intervals.size() != 1)
         {
-            throw DBException("In order to merge threads, all must agree on their polling interval.");
+            throw DBException("In order to merge threads, all must agree on "
+                              "their polling interval.");
         }
 
         // Find the maximum number of polling threads needed for all apps.
@@ -177,8 +174,8 @@ private:
             polling_threads.emplace_back(std::make_unique<PollingThread>());
         }
 
-        // Reassign all the polling_threads_by_app stages (runnables) to the merged
-        // thread list in a round-robin fashion.
+        // Reassign all the polling_threads_by_app stages (runnables) to the
+        // merged thread list in a round-robin fashion.
         size_t thread_idx = 0;
         for (const auto& [app, app_polling_threads] : polling_threads_by_app)
         {
@@ -211,7 +208,8 @@ private:
 
     void createThreadsAndMergeSpecificApps_(std::vector<std::unique_ptr<PollingThread>>& polling_threads)
     {
-        // TODO cnyce: This logic is not tested well enough to enable this feature yet.
+        // TODO cnyce: This logic is not tested well enough to enable this
+        // feature yet.
         throw DBException("Method not yet supported");
 
         // Create all threads for each app before merge.
@@ -225,7 +223,8 @@ private:
             pipelines_by_app[pipeline->getOwningApp()] = pipeline.get();
         }
 
-        // Find the maximum number of polling threads needed for all merged apps.
+        // Find the maximum number of polling threads needed for all merged
+        // apps.
         size_t max_polling_threads_merged = 0;
         for (const auto& [app, app_polling_threads] : polling_threads_by_app)
         {
@@ -293,9 +292,9 @@ private:
                 // Instead of a blind round-robin, sort the polling threads such
                 // that the one with the fewest assigned stages gets the next
                 // stage.
-                std::sort(polling_threads.begin(), polling_threads.end(),
-                    [](const std::unique_ptr<PollingThread>& thread1, const std::unique_ptr<PollingThread>& thread2)
-                    {
+                std::sort(
+                    polling_threads.begin(), polling_threads.end(),
+                    [](const std::unique_ptr<PollingThread>& thread1, const std::unique_ptr<PollingThread>& thread2) {
                         return thread1->getNumRunnables() < thread2->getNumRunnables();
                     });
 

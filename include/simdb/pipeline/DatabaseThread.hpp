@@ -2,14 +2,15 @@
 
 #pragma once
 
-#include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
+#include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/utils/ConcurrentQueue.hpp"
 
 namespace simdb {
-    class AsyncDatabaseAccessor;
-    class DatabaseManager;
-}
+class AsyncDatabaseAccessor;
+class DatabaseManager;
+} // namespace simdb
 
 namespace simdb::pipeline {
 
@@ -22,17 +23,11 @@ namespace simdb::pipeline {
 class DatabaseThread : public PollingThread, private AsyncDatabaseAccessHandler
 {
 public:
-    DatabaseThread(DatabaseManager* db_mgr)
-        : db_mgr_(db_mgr)
-        , dormant_thread_(db_mgr)
-    {}
+    DatabaseThread(DatabaseManager* db_mgr) : db_mgr_(db_mgr), dormant_thread_(db_mgr) {}
 
     ~DatabaseThread() noexcept = default;
 
-    AsyncDatabaseAccessor* getAsyncDatabaseAccessor()
-    {
-        return &db_accessor_;
-    }
+    AsyncDatabaseAccessor* getAsyncDatabaseAccessor() { return &db_accessor_; }
 
 private:
     /// Overridden from AsyncDatabaseAccessHandler
@@ -48,38 +43,37 @@ private:
 
         // Put all runnables (AsyncDbWriters) in a BEGIN/COMMIT block
         // for fastest insert performance.
-        db_mgr_->safeTransaction(
-            [&]()
+        db_mgr_->safeTransaction([&]() {
+            bool continue_while;
+            do
             {
-                bool continue_while;
-                do
+                continue_while = false;
+                for (auto runnable : getRunnables())
                 {
-                    continue_while = false;
-                    for (auto runnable : getRunnables())
+                    if (!runnable->enabled())
                     {
-                        if (!runnable->enabled())
-                        {
-                            continue;
-                        }
-
-                        // We call processOne() here instead of processAll() to use a smaller
-                        // granularity of tasks to "inject" break statements more frequently
-                        // in the event of pending async DB access requests.
-                        if (runnable->processOne(force) == PipelineAction::PROCEED)
-                        {
-                            continue_while = true;
-                        }
-
-                        // Give as high priority as possible for async DB access
-                        if (dormant_thread_.hasTasks())
-                        {
-                            continue_while = false;
-                            break;
-                        }
+                        continue;
                     }
-                    did_work |= continue_while;
-                } while (continue_while);
-            });
+
+                    // We call processOne() here instead of processAll() to use
+                    // a smaller granularity of tasks to "inject" break
+                    // statements more frequently in the event of pending async
+                    // DB access requests.
+                    if (runnable->processOne(force) == PipelineAction::PROCEED)
+                    {
+                        continue_while = true;
+                    }
+
+                    // Give as high priority as possible for async DB access
+                    if (dormant_thread_.hasTasks())
+                    {
+                        continue_while = false;
+                        break;
+                    }
+                }
+                did_work |= continue_while;
+            } while (continue_while);
+        });
 
         return did_work;
     }
@@ -103,11 +97,7 @@ private:
     {
         bool did_work = false;
 
-        db_mgr_->safeTransaction(
-            [&]
-            {
-                did_work = PollingThread::flushRunnables();
-            });
+        db_mgr_->safeTransaction([&] { did_work = PollingThread::flushRunnables(); });
 
         return did_work;
     }
@@ -118,14 +108,9 @@ private:
     class DormantThread
     {
     public:
-        DormantThread(DatabaseManager* db_mgr)
-            : db_mgr_(db_mgr)
-        {}
+        DormantThread(DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
 
-        ~DormantThread() noexcept
-        {
-            close();
-        }
+        ~DormantThread() noexcept { close(); }
 
         void open()
         {
@@ -158,8 +143,8 @@ private:
         {
             if (stop_)
             {
-                // If we are already stopped, we cannot use std::future. We have to
-                // evaluate the task right here.
+                // If we are already stopped, we cannot use std::future. We have
+                // to evaluate the task right here.
                 db_mgr_->safeTransaction([&]() { task->func(db_mgr_); });
                 return;
             }
@@ -184,10 +169,7 @@ private:
             }
         }
 
-        bool hasTasks() const
-        {
-            return !pending_async_db_tasks_.empty();
-        }
+        bool hasTasks() const { return !pending_async_db_tasks_.empty(); }
 
     private:
         void loop_()
@@ -200,23 +182,20 @@ private:
                 // Assume we just woke up due to an async DB access request.
                 // Immediately start a transaction so the DB polling thread
                 // blocks until we are done responding to the requests.
-                db_mgr_->safeTransaction(
-                    [&]()
+                db_mgr_->safeTransaction([&]() {
+                    AsyncDatabaseTaskPtr async_task;
+                    while (pending_async_db_tasks_.try_pop(async_task))
                     {
-                        AsyncDatabaseTaskPtr async_task;
-                        while (pending_async_db_tasks_.try_pop(async_task))
+                        try
                         {
-                            try
-                            {
-                                async_task->func(db_mgr_);
-                                async_task->exception_reason.set_value("");
-                            }
-                            catch (const std::exception& ex)
-                            {
-                                async_task->exception_reason.set_value(ex.what());
-                            }
+                            async_task->func(db_mgr_);
+                            async_task->exception_reason.set_value("");
+                        } catch (const std::exception& ex)
+                        {
+                            async_task->exception_reason.set_value(ex.what());
                         }
-                    });
+                    }
+                });
 
                 if (stop_)
                 {

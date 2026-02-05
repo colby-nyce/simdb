@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/Exceptions.hpp"
+#include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <iostream>
 #include <memory>
@@ -17,8 +17,7 @@ class PipelineManager;
 class PollingThread;
 
 /// Various outcomes for each processOne/processAll calls to a runnable:
-enum PipelineAction
-{
+enum PipelineAction {
     // Return if the runnable (task) pushed any data to its output queue,
     // or otherwise should leave the pipeline tasks greedily executing
     // as normal.
@@ -39,16 +38,10 @@ public:
     virtual ~Runnable() = default;
 
     /// Get this runnable's description.
-    std::string getDescription() const
-    {
-        return !description_.empty() ? description_ : getDescription_();
-    }
+    std::string getDescription() const { return !description_.empty() ? description_ : getDescription_(); }
 
     /// Set/overwrite the this runnable's description.
-    void setDescription(const std::string& desc)
-    {
-        description_ = desc;
-    }
+    void setDescription(const std::string& desc) { description_ = desc; }
 
     /// Process one item from the input queue, returning true
     /// if this runnable did anything.
@@ -65,16 +58,10 @@ public:
     }
 
     /// Check if this runnable is enabled.
-    bool enabled() const
-    {
-        return enabled_;
-    }
+    bool enabled() const { return enabled_; }
 
     /// Disable/re-enable this runnable.
-    void enable(bool enable = true)
-    {
-        enabled_ = enable;
-    }
+    void enable(bool enable = true) { enabled_ = enable; }
 
 private:
     virtual std::string getDescription_() const = 0;
@@ -90,12 +77,10 @@ public:
     ~ScopedRunnableDisabler();
 
 private:
-    ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
-                           const std::vector<Runnable*>& runnables,
+    ScopedRunnableDisabler(PipelineManager* pipeline_mgr, const std::vector<Runnable*>& runnables,
                            const std::vector<PollingThread*>& polling_threads);
 
-    ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
-                           const std::vector<Runnable*>& runnables);
+    ScopedRunnableDisabler(PipelineManager* pipeline_mgr, const std::vector<Runnable*>& runnables);
 
     void notifyPipelineMgrReenabled_();
 

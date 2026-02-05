@@ -2,28 +2,28 @@
 
 #pragma once
 
+#include "simdb/pipeline/DatabaseThread.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/PipelineSnooper.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
-#include "simdb/pipeline/DatabaseThread.hpp"
 #include "simdb/pipeline/ThreadMerger.hpp"
 #include "simdb/utils/MTLogger.hpp"
 
 #include <iostream>
 
 namespace simdb {
-    class App;
+class App;
 }
 
 namespace simdb::pipeline {
 
-/// This class manages all pipelines and their threads for an AppManager (or unit test).
+/// This class manages all pipelines and their threads for an AppManager (or
+/// unit test).
 class PipelineManager
 {
 public:
     PipelineManager(DatabaseManager* db_mgr, const std::string& pipeline_log_file = "")
-        : db_mgr_(db_mgr)
-        , pipeline_logger_(pipeline_log_file)
+        : db_mgr_(db_mgr), pipeline_logger_(pipeline_log_file)
     {
     }
 
@@ -32,15 +32,13 @@ public:
         checkOpen_();
         if (!threads_opened_)
         {
-            throw DBException("Cannot access the AsyncDatabaseAccessor before calling openPipelines()");
+            throw DBException("Cannot access the AsyncDatabaseAccessor before "
+                              "calling openPipelines()");
         }
         return async_db_accessor_;
     }
 
-    utils::MTLogger* getPipelineLogger()
-    {
-        return &pipeline_logger_;
-    }
+    utils::MTLogger* getPipelineLogger() { return &pipeline_logger_; }
 
     Pipeline* createPipeline(const std::string& name, const App* app)
     {
@@ -88,8 +86,7 @@ public:
         thread_merger_->addAppForMerging(app);
     }
 
-    template <typename... Apps>
-    void minimizeThreads(const App* app, Apps&&... rest)
+    template <typename... Apps> void minimizeThreads(const App* app, Apps&&... rest)
     {
         if (!thread_merger_)
         {
@@ -109,8 +106,8 @@ public:
         }
         thread_merger_->performMerge(polling_threads_);
 
-        // Now that all threads are created, give the async DB accessor to all non-DB
-        // stages in all pipelines.
+        // Now that all threads are created, give the async DB accessor to all
+        // non-DB stages in all pipelines.
         for (auto& thread : polling_threads_)
         {
             if (auto db_thread = dynamic_cast<DatabaseThread*>(thread.get()))
@@ -166,8 +163,7 @@ public:
         if (disable_threads_too)
         {
             disabler.reset(new ScopedRunnableDisabler(this, disabler_runnables_, disabler_threads_));
-        }
-        else
+        } else
         {
             disabler.reset(new ScopedRunnableDisabler(this, disabler_runnables_));
         }
@@ -180,8 +176,7 @@ public:
     {
         checkOpen_();
 
-        auto close_thread = [&](PollingThread* thread)
-        {
+        auto close_thread = [&](PollingThread* thread) {
             thread->close();
 
             if (perf_report)
@@ -286,7 +281,8 @@ private:
         auto it = std::unique(disabler_runnables_.begin(), disabler_runnables_.end());
         if (it != disabler_runnables_.end())
         {
-            throw DBException("Internal error: duplicate runnables found in disabler_runnables_");
+            throw DBException("Internal error: duplicate runnables found in "
+                              "disabler_runnables_");
         }
     }
 
@@ -296,8 +292,8 @@ private:
     {
         if (!disabler_active_)
         {
-            throw DBException(
-                "Internal error: no disabler active in onDisablerDestruction_()");
+            throw DBException("Internal error: no disabler active in "
+                              "onDisablerDestruction_()");
         }
         disabler_active_ = false;
     }
@@ -323,11 +319,10 @@ inline void ScopedRunnableDisabler::notifyPipelineMgrReenabled_()
 
 /// Defined here so we can avoid circular includes
 template <typename KeyType, typename SnoopedType>
-bool PipelineSnooper<KeyType, SnoopedType>::snoopAllStages(
-    const KeyType& key, SnoopedType& snooped_obj, bool disable_pipeline)
+bool PipelineSnooper<KeyType, SnoopedType>::snoopAllStages(const KeyType& key, SnoopedType& snooped_obj,
+                                                           bool disable_pipeline)
 {
-    std::unique_ptr<ScopedRunnableDisabler> disabler = disable_pipeline ?
-        pipeline_mgr_->scopedDisableAll() : nullptr;
+    std::unique_ptr<ScopedRunnableDisabler> disabler = disable_pipeline ? pipeline_mgr_->scopedDisableAll() : nullptr;
 
     for (auto& cb : callbacks_)
     {

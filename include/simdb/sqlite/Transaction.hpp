@@ -4,11 +4,11 @@
 
 #include "simdb/Exceptions.hpp"
 
-#include <sqlite3.h>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <sqlite3.h>
 #include <thread>
 
 namespace simdb {
@@ -19,14 +19,13 @@ using TransactionFunc = std::function<void()>;
 
 /*!
  * \class SQLiteReturnCode
- * \brief This class wraps a return code and throws a SafeTransactionSilentException
- *        when it encounters a "SQL locked" return code.
+ * \brief This class wraps a return code and throws a
+ * SafeTransactionSilentException when it encounters a "SQL locked" return code.
  */
 class SQLiteReturnCode
 {
 public:
-    explicit SQLiteReturnCode(const int rc)
-        : rc_(rc)
+    explicit SQLiteReturnCode(const int rc) : rc_(rc)
     {
         if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED || rc == SQLITE_READONLY)
         {
@@ -34,25 +33,13 @@ public:
         }
     }
 
-    operator int() const
-    {
-        return rc_;
-    }
+    operator int() const { return rc_; }
 
-    operator bool() const
-    {
-        return rc_ != SQLITE_OK;
-    }
+    operator bool() const { return rc_ != SQLITE_OK; }
 
-    bool operator==(const int rc)
-    {
-        return rc_ == rc;
-    }
+    bool operator==(const int rc) { return rc_ == rc; }
 
-    bool operator!=(const int rc)
-    {
-        return rc_ != rc;
-    }
+    bool operator!=(const int rc) { return rc_ != rc; }
 
 private:
     const int rc_;
@@ -85,8 +72,7 @@ public:
         {
             sqlite3_finalize(stmt);
             throw SafeTransactionSilentException(rc);
-        }
-        else if (!stmt)
+        } else if (!stmt)
         {
             throw DBException("Invalid prepared statement for cmd: ") << cmd;
         }
@@ -94,16 +80,9 @@ public:
         stmt_ = stmt;
     }
 
-    SQLitePreparedStatement(sqlite3_stmt* stmt)
-        : stmt_(stmt)
-    {
-    }
+    SQLitePreparedStatement(sqlite3_stmt* stmt) : stmt_(stmt) {}
 
-    SQLitePreparedStatement(SQLitePreparedStatement&& other)
-        : stmt_(other.stmt_)
-    {
-        other.stmt_ = nullptr;
-    }
+    SQLitePreparedStatement(SQLitePreparedStatement&& other) : stmt_(other.stmt_) { other.stmt_ = nullptr; }
 
     SQLitePreparedStatement(const SQLitePreparedStatement& other) = delete;
 
@@ -115,10 +94,7 @@ public:
         }
     }
 
-    operator sqlite3_stmt*() const
-    {
-        return stmt_;
-    }
+    operator sqlite3_stmt*() const { return stmt_; }
 
     sqlite3_stmt* release()
     {
@@ -159,8 +135,7 @@ public:
                 if (in_transaction_flag_)
                 {
                     transaction();
-                }
-                else
+                } else
                 {
                     ScopedTransaction scoped_transaction(db_conn_, transaction, in_transaction_flag_);
                     (void)scoped_transaction;
@@ -169,8 +144,7 @@ public:
                 // We got this far without an exception, which means
                 // that the transaction is committed.
                 break;
-            }
-            catch (const SafeTransactionSilentException&)
+            } catch (const SafeTransactionSilentException&)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(25));
             }
@@ -178,10 +152,7 @@ public:
     }
 
     /// For debug purposes only.
-    bool isInTransaction() const
-    {
-        return in_transaction_flag_;
-    }
+    bool isInTransaction() const { return in_transaction_flag_; }
 
 protected:
     /// Underlying database connection
@@ -228,9 +199,7 @@ private:
     {
         /// Issues BEGIN TRANSACTION
         ScopedTransaction(sqlite3* db_conn, const TransactionFunc& transaction, bool& in_transaction_flag)
-            : db_conn_(db_conn)
-            , in_transaction_flag_(in_transaction_flag)
-            , transaction_(transaction)
+            : db_conn_(db_conn), in_transaction_flag_(in_transaction_flag), transaction_(transaction)
         {
             in_transaction_flag_ = true;
             executeCommand_("BEGIN TRANSACTION");
@@ -254,8 +223,7 @@ private:
             if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED || rc == SQLITE_READONLY)
             {
                 throw SafeTransactionSilentException(rc);
-            }
-            else if (rc)
+            } else if (rc)
             {
                 throw DBException(sqlite3_errmsg(db_conn_));
             }

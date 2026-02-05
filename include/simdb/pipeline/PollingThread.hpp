@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/pipeline/Runnable.hpp"
 #include "simdb/Exceptions.hpp"
+#include "simdb/pipeline/Runnable.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -25,17 +25,11 @@ public:
     /// Create a thread with an "interval" in milliseconds. This value says
     /// how long the thread should sleep if none of its Runnables had any
     /// work to do.
-    PollingThread(const size_t interval_milliseconds = 100)
-        : interval_ms_(interval_milliseconds)
-    {
-    }
+    PollingThread(const size_t interval_milliseconds = 100) : interval_ms_(interval_milliseconds) {}
 
     virtual ~PollingThread() noexcept = default;
 
-    size_t getIntervalMilliseconds() const
-    {
-        return interval_ms_;
-    }
+    size_t getIntervalMilliseconds() const { return interval_ms_; }
 
     void addRunnable(Runnable* runnable)
     {
@@ -46,15 +40,9 @@ public:
         runnables_.emplace_back(runnable);
     }
 
-    const std::vector<Runnable*>& getRunnables() const
-    {
-        return runnables_;
-    }
+    const std::vector<Runnable*>& getRunnables() const { return runnables_; }
 
-    size_t getNumRunnables() const
-    {
-        return runnables_.size();
-    }
+    size_t getNumRunnables() const { return runnables_.size(); }
 
     void ensureRelativeOrder(const std::vector<Runnable*>& runnables)
     {
@@ -149,10 +137,7 @@ public:
         paused_promise_.get_future().wait();
     }
 
-    bool paused()
-    {
-        return paused_;
-    }
+    bool paused() { return paused_; }
 
     void resume()
     {
@@ -227,26 +212,26 @@ private:
 
             if (!run_(false))
             {
-                // Sleep for a fixed amount of time before polling all runnables again
-                // but wake early if paused or stop is requested
+                // Sleep for a fixed amount of time before polling all runnables
+                // again but wake early if paused or stop is requested
                 auto sleep_start = std::chrono::high_resolution_clock::now();
                 std::unique_lock<std::mutex> lock(pause_mutex_);
-                pause_cv_.wait_for(lock, std::chrono::milliseconds(interval_ms_), [this] {
-                    return paused_ || stop_requested_;
-                });
+                pause_cv_.wait_for(lock, std::chrono::milliseconds(interval_ms_),
+                                   [this] { return paused_ || stop_requested_; });
 
                 auto sleep_end = std::chrono::high_resolution_clock::now();
                 auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(sleep_end - sleep_start);
                 total_sleep_seconds_ += duration_us.count() / 1'000'000.0;
-            }
-            else
+            } else
             {
                 ++num_times_run_;
             }
         }
 
         // Flush
-        while (run_(true)) {}
+        while (run_(true))
+        {
+        }
     }
 
     virtual bool run_(bool force)
@@ -296,10 +281,9 @@ private:
 };
 
 /// Defined here so we can avoid circular includes
-inline ScopedRunnableDisabler::ScopedRunnableDisabler(
-    PipelineManager* pipeline_mgr,
-    const std::vector<Runnable*>& runnables,
-    const std::vector<PollingThread*>& polling_threads)
+inline ScopedRunnableDisabler::ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
+                                                      const std::vector<Runnable*>& runnables,
+                                                      const std::vector<PollingThread*>& polling_threads)
     : pipeline_mgr_(pipeline_mgr)
 {
     // Disable runnables
@@ -324,9 +308,8 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(
 }
 
 /// Defined here so we can avoid circular includes
-inline ScopedRunnableDisabler::ScopedRunnableDisabler(
-    PipelineManager* pipeline_mgr,
-    const std::vector<Runnable*>& runnables)
+inline ScopedRunnableDisabler::ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
+                                                      const std::vector<Runnable*>& runnables)
     : pipeline_mgr_(pipeline_mgr)
 {
     // Disable runnables

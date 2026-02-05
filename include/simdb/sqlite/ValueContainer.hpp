@@ -5,9 +5,9 @@
 #include "simdb/schema/Blob.hpp"
 #include "simdb/utils/utf16.hpp"
 
-#include <sqlite3.h>
 #include <functional>
 #include <memory>
+#include <sqlite3.h>
 #include <vector>
 
 namespace simdb {
@@ -29,15 +29,9 @@ public:
 class Integral32ValueContainer : public ValueContainerBase
 {
 public:
-    Integral32ValueContainer(int32_t val)
-        : val_(val)
-    {
-    }
+    Integral32ValueContainer(int32_t val) : val_(val) {}
 
-    int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
-    {
-        return sqlite3_bind_int(stmt, col_idx, val_);
-    }
+    int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override { return sqlite3_bind_int(stmt, col_idx, val_); }
 
 private:
     int32_t val_;
@@ -47,10 +41,7 @@ private:
 class IntegralU32ValueContainer : public ValueContainerBase
 {
 public:
-    IntegralU32ValueContainer(uint32_t val)
-        : val_(val)
-    {
-    }
+    IntegralU32ValueContainer(uint32_t val) : val_(val) {}
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -65,15 +56,9 @@ private:
 class Integral64ValueContainer : public ValueContainerBase
 {
 public:
-    Integral64ValueContainer(int64_t val)
-        : val_(val)
-    {
-    }
+    Integral64ValueContainer(int64_t val) : val_(val) {}
 
-    int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
-    {
-        return sqlite3_bind_int64(stmt, col_idx, val_);
-    }
+    int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override { return sqlite3_bind_int64(stmt, col_idx, val_); }
 
 private:
     int64_t val_;
@@ -83,10 +68,7 @@ private:
 class IntegralU64ValueContainer : public ValueContainerBase
 {
 public:
-    IntegralU64ValueContainer(uint64_t val)
-        : u16_(utils::uint64_to_utf16(val))
-    {
-    }
+    IntegralU64ValueContainer(uint64_t val) : u16_(utils::uint64_to_utf16(val)) {}
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -101,10 +83,7 @@ private:
 class FloatingPointValueContainer : public ValueContainerBase
 {
 public:
-    FloatingPointValueContainer(double val)
-        : val_(val)
-    {
-    }
+    FloatingPointValueContainer(double val) : val_(val) {}
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -119,10 +98,7 @@ private:
 class StringValueContainer : public ValueContainerBase
 {
 public:
-    StringValueContainer(const std::string& val)
-        : val_(val)
-    {
-    }
+    StringValueContainer(const std::string& val) : val_(val) {}
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -137,10 +113,7 @@ private:
 class BlobValueContainer : public ValueContainerBase
 {
 public:
-    BlobValueContainer(const SqlBlob& val)
-        : val_(val)
-    {
-    }
+    BlobValueContainer(const SqlBlob& val) : val_(val) {}
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -155,15 +128,9 @@ private:
 template <typename T> class VectorValueContainer : public ValueContainerBase
 {
 public:
-    VectorValueContainer(const std::vector<T>& val)
-        : val_(val)
-    {
-    }
+    VectorValueContainer(const std::vector<T>& val) : val_(val) {}
 
-    VectorValueContainer(std::vector<T>&& val)
-        : val_(std::move(val))
-    {
-    }
+    VectorValueContainer(std::vector<T>&& val) : val_(std::move(val)) {}
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -176,55 +143,55 @@ private:
 
 using ValueContainerBasePtr = std::shared_ptr<ValueContainerBase>;
 
-template <typename T> inline
-typename std::enable_if<std::is_same_v<T, int32_t>, ValueContainerBasePtr>::type
-createValueContainer(T val)
+template <typename T>
+inline typename std::enable_if<std::is_same_v<T, int32_t>, ValueContainerBasePtr>::type createValueContainer(T val)
 {
     return ValueContainerBasePtr(new Integral32ValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same_v<T, uint32_t>, ValueContainerBasePtr>::type
-createValueContainer(T val)
+template <typename T>
+inline typename std::enable_if<std::is_same_v<T, uint32_t>, ValueContainerBasePtr>::type createValueContainer(T val)
 {
     return ValueContainerBasePtr(new IntegralU32ValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same_v<T, int64_t>, ValueContainerBasePtr>::type
-createValueContainer(T val)
+template <typename T>
+inline typename std::enable_if<std::is_same_v<T, int64_t>, ValueContainerBasePtr>::type createValueContainer(T val)
 {
     return ValueContainerBasePtr(new Integral64ValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same_v<T, uint64_t>, ValueContainerBasePtr>::type
-createValueContainer(T val)
+template <typename T>
+inline typename std::enable_if<std::is_same_v<T, uint64_t>, ValueContainerBasePtr>::type createValueContainer(T val)
 {
     return ValueContainerBasePtr(new IntegralU64ValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_floating_point<T>::value, ValueContainerBasePtr>::type createValueContainer(T val)
+template <typename T>
+inline typename std::enable_if<std::is_floating_point<T>::value, ValueContainerBasePtr>::type
+createValueContainer(T val)
 {
     return ValueContainerBasePtr(new FloatingPointValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same<typename std::decay<T>::type, const char*>::value, ValueContainerBasePtr>::type
-createValueContainer(T val)
+template <typename T>
+inline
+    typename std::enable_if<std::is_same<typename std::decay<T>::type, const char*>::value, ValueContainerBasePtr>::type
+    createValueContainer(T val)
 {
     return ValueContainerBasePtr(new StringValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same<T, std::string>::value, ValueContainerBasePtr>::type createValueContainer(const T& val)
+template <typename T>
+inline typename std::enable_if<std::is_same<T, std::string>::value, ValueContainerBasePtr>::type
+createValueContainer(const T& val)
 {
     return ValueContainerBasePtr(new StringValueContainer(val));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same<T, SqlBlob>::value, ValueContainerBasePtr>::type createValueContainer(const T& val)
+template <typename T>
+inline typename std::enable_if<std::is_same<T, SqlBlob>::value, ValueContainerBasePtr>::type
+createValueContainer(const T& val)
 {
     return ValueContainerBasePtr(new BlobValueContainer(val));
 }
@@ -239,17 +206,14 @@ template <typename T> inline ValueContainerBasePtr createValueContainer(std::vec
     return ValueContainerBasePtr(new VectorValueContainer<T>(std::move(val)));
 }
 
-template <typename T> inline
-typename std::enable_if<std::is_same<T, ValueContainerBasePtr>::value, ValueContainerBasePtr>::type createValueContainer(T val)
+template <typename T>
+inline typename std::enable_if<std::is_same<T, ValueContainerBasePtr>::value, ValueContainerBasePtr>::type
+createValueContainer(T val)
 {
     return val;
 }
 
-enum class ValueReaderTypes
-{
-    BACKPOINTER,
-    FUNCPOINTER
-};
+enum class ValueReaderTypes { BACKPOINTER, FUNCPOINTER };
 
 /*!
  * \class ScalarValueReader
@@ -275,7 +239,8 @@ public:
         reader_.getter_type = ValueReaderTypes::BACKPOINTER;
 
         static_assert(std::is_integral<T>::value || std::is_floating_point<T>::value,
-                      "ScalarValueReader only supports integral and floating-point types!");
+                      "ScalarValueReader only supports integral and "
+                      "floating-point types!");
     }
 
     /// Construct with a function pointer to get the data.
@@ -285,7 +250,8 @@ public:
         reader_.getter_type = ValueReaderTypes::FUNCPOINTER;
 
         static_assert(std::is_integral<T>::value || std::is_floating_point<T>::value,
-                      "ScalarValueReader only supports integral and floating-point types!");
+                      "ScalarValueReader only supports integral and "
+                      "floating-point types!");
     }
 
     /// Read the data value.
@@ -294,8 +260,7 @@ public:
         if (reader_.getter_type == ValueReaderTypes::BACKPOINTER)
         {
             return *reader_.backpointer;
-        }
-        else
+        } else
         {
             return reader_.funcpointer();
         }

@@ -16,21 +16,13 @@ public:
     DBException() = default;
 
     /// Construct a DBException object
-    DBException(const std::string& reason)
-    {
-        reason_ << reason;
-    }
+    DBException(const std::string& reason) { reason_ << reason; }
 
     /// Copy construct a DBException object
-    DBException(const DBException& rhs)
-    {
-        reason_ << rhs.reason_.str();
-    }
+    DBException(const DBException& rhs) { reason_ << rhs.reason_.str(); }
 
     /// Destroy!
-    virtual ~DBException() noexcept override
-    {
-    }
+    virtual ~DBException() noexcept override {}
 
     /**
      * \brief Overload from std::exception
@@ -69,12 +61,10 @@ class SafeTransactionSilentException : public std::exception
 public:
     explicit SafeTransactionSilentException(int rc)
         : msg_("The database is locked (return code " + std::to_string(rc) + ")")
-    {}
-
-    const char* what() const noexcept override
     {
-        return msg_.c_str();
     }
+
+    const char* what() const noexcept override { return msg_.c_str(); }
 
 private:
     const std::string msg_;
@@ -89,13 +79,11 @@ private:
 class InterruptException : public std::exception
 {
 public:
-    const char* what() const noexcept override
-    {
-        return "Infinite consumer loop has been interrupted";
-    }
+    const char* what() const noexcept override { return "Infinite consumer loop has been interrupted"; }
 
 private:
-    /// Private constructor. Not to be created by anyone but the WorkerInterrupt.
+    /// Private constructor. Not to be created by anyone but the
+    /// WorkerInterrupt.
     InterruptException() = default;
     friend class WorkerInterrupt;
 };

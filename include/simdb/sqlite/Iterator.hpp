@@ -5,9 +5,9 @@
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/utf16.hpp"
 
+#include <memory>
 #include <sqlite3.h>
 #include <string.h>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,16 +37,10 @@ public:
     ///
     /// Used when creating the query's prepared statement:
     /// SELECT ColA,ColB FROM Table WHERE Id=44 AND Name='foo'
-    const std::string& getColName() const
-    {
-        return col_name_;
-    }
+    const std::string& getColName() const { return col_name_; }
 
 protected:
-    ResultWriterBase(const char* col_name)
-        : col_name_(col_name)
-    {
-    }
+    ResultWriterBase(const char* col_name) : col_name_(col_name) {}
 
 private:
     std::string col_name_;
@@ -55,7 +49,7 @@ private:
 /*!
  * \class ResultWriterInt32
  *
- * \brief Responsible for writing int32 record values to the user's local 
+ * \brief Responsible for writing int32 record values to the user's local
  *        variables whenever a query's result set iterator is advanced.
  */
 class ResultWriterInt32 : public ResultWriterBase
@@ -63,12 +57,9 @@ class ResultWriterInt32 : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterInt32(const char* col_name, int32_t* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
-    {
-    }
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterInt32(const char* col_name, int32_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -78,10 +69,7 @@ public:
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterInt32(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterInt32(getColName().c_str(), user_var_); }
 
 private:
     int32_t* user_var_;
@@ -98,12 +86,9 @@ class ResultWriterUInt32 : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterUInt32(const char* col_name, uint32_t* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
-    {
-    }
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterUInt32(const char* col_name, uint32_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -111,7 +96,8 @@ public:
     {
         sqlite3_int64 tmp = sqlite3_column_int64(stmt, idx);
 
-        if (tmp < 0 || tmp > UINT32_MAX) {
+        if (tmp < 0 || tmp > UINT32_MAX)
+        {
             throw DBException("Value out of range for uint32_t");
         }
 
@@ -119,10 +105,7 @@ public:
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterUInt32(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterUInt32(getColName().c_str(), user_var_); }
 
 private:
     uint32_t* user_var_;
@@ -131,7 +114,7 @@ private:
 /*!
  * \class ResultWriterInt64
  *
- * \brief Responsible for writing int64 record values to the user's local 
+ * \brief Responsible for writing int64 record values to the user's local
  *        variables whenever a query's result set iterator is advanced.
  */
 class ResultWriterInt64 : public ResultWriterBase
@@ -139,12 +122,9 @@ class ResultWriterInt64 : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterInt64(const char* col_name, int64_t* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
-    {
-    }
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterInt64(const char* col_name, int64_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -154,10 +134,7 @@ public:
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterInt64(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterInt64(getColName().c_str(), user_var_); }
 
 private:
     int64_t* user_var_;
@@ -174,31 +151,27 @@ class ResultWriterUInt64 : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterUInt64(const char* col_name, uint64_t* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
-    {
-    }
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterUInt64(const char* col_name, uint64_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
     void writeToUserVar(sqlite3_stmt* stmt, const int idx) const override
     {
         const void* blob = sqlite3_column_text16(stmt, idx);
-        if (sqlite3_column_type(stmt, idx) == SQLITE_TEXT && blob != nullptr) {
+        if (sqlite3_column_type(stmt, idx) == SQLITE_TEXT && blob != nullptr)
+        {
             const char16_t* utf16str = static_cast<const char16_t*>(blob);
             *user_var_ = utils::utf16_to_uint64(utf16str, 20);
-        } else {
+        } else
+        {
             throw DBException("Invalid data / data type");
         }
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterUInt64(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterUInt64(getColName().c_str(), user_var_); }
 
 private:
     uint64_t* user_var_;
@@ -207,7 +180,7 @@ private:
 /*!
  * \class ResultWriterDouble
  *
- * \brief Responsible for writing double record values to the user's local 
+ * \brief Responsible for writing double record values to the user's local
  *        variables whenever a query's result set iterator is advanced.
  */
 class ResultWriterDouble : public ResultWriterBase
@@ -215,12 +188,9 @@ class ResultWriterDouble : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterDouble(const char* col_name, double* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
-    {
-    }
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterDouble(const char* col_name, double* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -230,10 +200,7 @@ public:
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterDouble(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterDouble(getColName().c_str(), user_var_); }
 
 private:
     double* user_var_;
@@ -242,7 +209,7 @@ private:
 /*!
  * \class ResultWriterString
  *
- * \brief Responsible for writing text record values to the user's local 
+ * \brief Responsible for writing text record values to the user's local
  *        variables whenever a query's result set iterator is advanced.
  */
 class ResultWriterString : public ResultWriterBase
@@ -250,12 +217,9 @@ class ResultWriterString : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterString(const char* col_name, std::string* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
-    {
-    }
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterString(const char* col_name, std::string* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -265,10 +229,7 @@ public:
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterString(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterString(getColName().c_str(), user_var_); }
 
 private:
     std::string* user_var_;
@@ -277,7 +238,7 @@ private:
 /*!
  * \class ResultWriterBlob<T>
  *
- * \brief Responsible for writing blob record values to the user's local 
+ * \brief Responsible for writing blob record values to the user's local
  *        variables whenever a query's result set iterator is advanced.
  */
 template <typename T> class ResultWriterBlob : public ResultWriterBase
@@ -285,10 +246,9 @@ template <typename T> class ResultWriterBlob : public ResultWriterBase
 public:
     /// \brief Construction
     /// \param col_name Name of the selected column
-    /// \param user_var Pointer to the local variable where result values are written to
-    ResultWriterBlob(const char* col_name, std::vector<T>* user_var)
-        : ResultWriterBase(col_name)
-        , user_var_(user_var)
+    /// \param user_var Pointer to the local variable where result values are
+    /// written to
+    ResultWriterBlob(const char* col_name, std::vector<T>* user_var) : ResultWriterBase(col_name), user_var_(user_var)
     {
     }
 
@@ -303,10 +263,7 @@ public:
     }
 
     /// Return a new copy of this writer.
-    ResultWriterBase* clone() const override
-    {
-        return new ResultWriterBlob(getColName().c_str(), user_var_);
-    }
+    ResultWriterBase* clone() const override { return new ResultWriterBlob(getColName().c_str(), user_var_); }
 
 private:
     std::vector<T>* user_var_;
@@ -321,11 +278,10 @@ private:
 class SqlResultIterator
 {
 public:
-    /// Construct with a prepared statement and the result writers that read column
-    /// values and write them into the user's local variables.
+    /// Construct with a prepared statement and the result writers that read
+    /// column values and write them into the user's local variables.
     SqlResultIterator(sqlite3_stmt* stmt, std::vector<std::shared_ptr<ResultWriterBase>>&& result_writers)
-        : stmt_(stmt)
-        , result_writers_(std::move(result_writers))
+        : stmt_(stmt), result_writers_(std::move(result_writers))
     {
     }
 
@@ -351,8 +307,7 @@ public:
                 result_writers_[idx]->writeToUserVar(stmt_, (int)idx);
             }
             return true;
-        }
-        else if (rc != SQLITE_DONE)
+        } else if (rc != SQLITE_DONE)
         {
             throw DBException(sqlite3_errmsg(sqlite3_db_handle(stmt_)));
         }
@@ -374,7 +329,8 @@ private:
     /// Prepared statement
     sqlite3_stmt* const stmt_;
 
-    /// Writers that read column values and write them into the user's local variables
+    /// Writers that read column values and write them into the user's local
+    /// variables
     std::vector<std::shared_ptr<ResultWriterBase>> result_writers_;
 };
 

@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/pipeline/Queue.hpp"
 #include "simdb/Exceptions.hpp"
+#include "simdb/pipeline/Queue.hpp"
 
 /// The classes in this file are used to create all the required
 /// simdb::ConcurrentQueue(s) needed for all apps' pipeline stages.
@@ -19,18 +19,18 @@ public:
     virtual bool hasQueue() const = 0;
 };
 
-template <typename T>
-class InputQueuePlaceholder : public QueuePlaceholder
+template <typename T> class InputQueuePlaceholder : public QueuePlaceholder
 {
 public:
-    /// Create placeholder with a backpointer to the stage's queue member variable.
-    /// We will assign the queue to the stage variable when the queue is created.
-    InputQueuePlaceholder(ConcurrentQueue<T>*& queue)
-        : queue_(queue)
+    /// Create placeholder with a backpointer to the stage's queue member
+    /// variable. We will assign the queue to the stage variable when the queue
+    /// is created.
+    InputQueuePlaceholder(ConcurrentQueue<T>*& queue) : queue_(queue)
     {
         if (queue_)
         {
-            throw DBException("Input queue placeholder cannot be initialized with non-null queue pointer.");
+            throw DBException("Input queue placeholder cannot be initialized "
+                              "with non-null queue pointer.");
         }
     }
 
@@ -51,32 +51,26 @@ public:
         queue_ = &typed_queue->get();
     }
 
-    bool hasQueue() const override
-    {
-        return queue_ != nullptr;
-    }
+    bool hasQueue() const override { return queue_ != nullptr; }
 
-    ConcurrentQueue<T>* getQueue()
-    {
-        return queue_;
-    }
+    ConcurrentQueue<T>* getQueue() { return queue_; }
 
 private:
     ConcurrentQueue<T>*& queue_;
 };
 
-template <typename T>
-class OutputQueuePlaceholder : public QueuePlaceholder
+template <typename T> class OutputQueuePlaceholder : public QueuePlaceholder
 {
 public:
-    /// Create placeholder with a backpointer to the stage's queue member variable.
-    /// We will assign the queue to the stage variable when the queue is created.
-    OutputQueuePlaceholder(ConcurrentQueue<T>*& queue)
-        : queue_(queue)
+    /// Create placeholder with a backpointer to the stage's queue member
+    /// variable. We will assign the queue to the stage variable when the queue
+    /// is created.
+    OutputQueuePlaceholder(ConcurrentQueue<T>*& queue) : queue_(queue)
     {
         if (queue_)
         {
-            throw DBException("Output queue placeholder cannot be initialized with non-null queue pointer.");
+            throw DBException("Output queue placeholder cannot be initialized "
+                              "with non-null queue pointer.");
         }
     }
 
@@ -97,15 +91,9 @@ public:
         queue_ = &typed_queue->get();
     }
 
-    bool hasQueue() const override
-    {
-        return queue_ != nullptr;
-    }
+    bool hasQueue() const override { return queue_ != nullptr; }
 
-    ConcurrentQueue<T>* getQueue()
-    {
-        return queue_;
-    }
+    ConcurrentQueue<T>* getQueue() { return queue_; }
 
 private:
     ConcurrentQueue<T>*& queue_;
@@ -114,9 +102,7 @@ private:
 class StageQueueRepo
 {
 public:
-    template <typename T>
-    void addInPortPlaceholder(const std::string& port_name,
-                              ConcurrentQueue<T>*& queue)
+    template <typename T> void addInPortPlaceholder(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {
         if (!stage_name_.empty())
         {
@@ -131,9 +117,7 @@ public:
         placeholder = std::make_unique<InputQueuePlaceholder<T>>(queue);
     }
 
-    template <typename T>
-    void addOutPortPlaceholder(const std::string& port_name,
-                               ConcurrentQueue<T>*& queue)
+    template <typename T> void addOutPortPlaceholder(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {
         if (!stage_name_.empty())
         {
@@ -152,8 +136,8 @@ public:
     {
         if (stage_name_ != stage_name && !stage_name_.empty())
         {
-            throw DBException("Cannot rename StageQueueRepo stage name from '" + stage_name_ +
-                              "' to '" + stage_name + "'. Can only set the stage name once.");
+            throw DBException("Cannot rename StageQueueRepo stage name from '" + stage_name_ + "' to '" + stage_name +
+                              "'. Can only set the stage name once.");
         }
         stage_name_ = stage_name;
 
@@ -198,7 +182,8 @@ public:
     {
         if (state_ != RepoState::ACCEPTING_STAGES)
         {
-            throw DBException("Cannot merge StageQueueRepo; PipelineQueueRepo not accepting stages.");
+            throw DBException("Cannot merge StageQueueRepo; PipelineQueueRepo "
+                              "not accepting stages.");
         }
 
         for (auto& [key, placeholder] : other.input_placeholders_)
@@ -227,13 +212,13 @@ public:
     {
         if (state_ != RepoState::ACCEPTING_STAGES)
         {
-            throw DBException("Cannot finalize stages; PipelineQueueRepo not accepting stages.");
+            throw DBException("Cannot finalize stages; PipelineQueueRepo not "
+                              "accepting stages.");
         }
         state_ = RepoState::ACCEPTING_BINDINGS;
     }
 
-    void bind(const std::string& output_port_full_name,
-              const std::string& input_port_full_name)
+    void bind(const std::string& output_port_full_name, const std::string& input_port_full_name)
     {
         if (state_ != RepoState::ACCEPTING_BINDINGS)
         {
@@ -246,7 +231,8 @@ public:
     {
         if (state_ != RepoState::ACCEPTING_BINDINGS)
         {
-            throw DBException("Cannot finalize bindings; PipelineQueueRepo not accepting bindings.");
+            throw DBException("Cannot finalize bindings; PipelineQueueRepo not "
+                              "accepting bindings.");
         }
 
         for (const auto& [out_port, in_port] : port_bindings_)
@@ -290,12 +276,12 @@ public:
         state_ = RepoState::BINDINGS_COMPLETE;
     }
 
-    template <typename T>
-    ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
+    template <typename T> ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
         if (state_ != RepoState::BINDINGS_COMPLETE)
         {
-            throw DBException("Cannot access port queues until finalizeBindings() is called.");
+            throw DBException("Cannot access port queues until "
+                              "finalizeBindings() is called.");
         }
 
         auto it = input_placeholders_.find(port_full_name);
@@ -312,12 +298,12 @@ public:
         return typed_placeholder->getQueue();
     }
 
-    template <typename T>
-    ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
+    template <typename T> ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
     {
         if (state_ != RepoState::BINDINGS_COMPLETE)
         {
-            throw DBException("Cannot access port queues until finalizeBindings() is called.");
+            throw DBException("Cannot access port queues until "
+                              "finalizeBindings() is called.");
         }
 
         auto it = output_placeholders_.find(port_full_name);
@@ -349,7 +335,8 @@ public:
 
         if (!unbound_output_queues_.empty())
         {
-            oss << "The following output queues are not attached to anything:\n";
+            oss << "The following output queues are not attached to "
+                   "anything:\n";
             for (const auto& name : unbound_output_queues_)
             {
                 oss << "    " << name << "\n";
@@ -371,12 +358,7 @@ private:
     std::set<std::string> unbound_output_queues_;
     std::vector<std::unique_ptr<QueueBase>> queues_;
 
-    enum class RepoState
-    {
-        ACCEPTING_STAGES,
-        ACCEPTING_BINDINGS,
-        BINDINGS_COMPLETE
-    };
+    enum class RepoState { ACCEPTING_STAGES, ACCEPTING_BINDINGS, BINDINGS_COMPLETE };
 
     RepoState state_ = RepoState::ACCEPTING_STAGES;
 };

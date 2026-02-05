@@ -8,11 +8,10 @@
 #include <string>
 #include <vector>
 
-namespace simdb
-{
+namespace simdb {
 
-/// This class is used to build a tree structure from a list of string locations.
-/// For example, given the three locations:
+/// This class is used to build a tree structure from a list of string
+/// locations. For example, given the three locations:
 ///
 ///     "top.mid1.bottom1"
 ///     "top.mid1.bottom2"
@@ -41,11 +40,7 @@ struct TreeNode
     int clk_id = 0;
     bool is_collectable = false;
 
-    TreeNode(const std::string& name, const TreeNode* parent = nullptr)
-        : name(name)
-        , parent(parent)
-    {
-    }
+    TreeNode(const std::string& name, const TreeNode* parent = nullptr) : name(name), parent(parent) {}
 
     std::string getLocation() const
     {

@@ -182,22 +182,19 @@ template <typename T> struct is_contiguous<std::vector<T>> : std::true_type
 {
 };
 
-template <typename T, size_t N> struct is_contiguous<std::array<T,N>> : std::true_type
+template <typename T, size_t N> struct is_contiguous<std::array<T, N>> : std::true_type
 {
 };
 
 // TypeAt<N, Ts...> gets the N-th type in the parameter pack Ts...
-template <std::size_t N, typename... Ts>
-struct TypeAt;
+template <std::size_t N, typename... Ts> struct TypeAt;
 
-template <typename T, typename... Ts>
-struct TypeAt<0, T, Ts...>
+template <typename T, typename... Ts> struct TypeAt<0, T, Ts...>
 {
     using type = T;
 };
 
-template <std::size_t N, typename T, typename... Ts>
-struct TypeAt<N, T, Ts...>
+template <std::size_t N, typename T, typename... Ts> struct TypeAt<N, T, Ts...>
 {
     static_assert(N < sizeof...(Ts) + 1, "Index out of bounds");
     using type = typename TypeAt<N - 1, Ts...>::type;
