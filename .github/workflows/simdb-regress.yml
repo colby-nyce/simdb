@@ -8,7 +8,25 @@ env:
 
 name: Regress SimDB on Ubuntu
 jobs:
+  clang_format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Clone SimDB
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update --fix-missing
+          sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: |
+          ./.github/actions/clang-format-check.sh
+
   build_test_job:
+    needs: clang_format
     strategy:
       matrix:
         os: [ubuntu-24.04]
