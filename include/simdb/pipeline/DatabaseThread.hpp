@@ -5,6 +5,7 @@
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/utils/ConcurrentQueue.hpp"
 
 namespace simdb {
 class AsyncDatabaseAccessor;
