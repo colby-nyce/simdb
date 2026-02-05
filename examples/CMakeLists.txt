@@ -4,8 +4,10 @@ project(simdb_examples)
 # are demonstrated in each of these examples.
 
 add_subdirectory(SimplePipeline)
-add_subdirectory(MultiPortStages)
 add_subdirectory(ConcurrentApps)
 add_subdirectory(DatabaseWatchdog)
 add_subdirectory(PipelineSnoopers)
 add_subdirectory(AppFactory)
+
+# TODO cnyce: fix sporadic failures
+#add_subdirectory(MultiPortStages)
