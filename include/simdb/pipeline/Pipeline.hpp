@@ -9,7 +9,7 @@
 namespace simdb {
 class App;
 class DatabaseManager;
-}
+} // namespace simdb
 
 namespace simdb::pipeline {
 
