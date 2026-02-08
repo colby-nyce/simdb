@@ -59,8 +59,8 @@ private:
 class SafeTransactionSilentException : public std::exception
 {
 public:
-    explicit SafeTransactionSilentException(int rc)
-        : msg_("The database is locked (return code " + std::to_string(rc) + ")")
+    explicit SafeTransactionSilentException(int rc) :
+        msg_("The database is locked (return code " + std::to_string(rc) + ")")
     {
     }
 

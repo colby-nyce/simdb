@@ -20,7 +20,10 @@ namespace simdb::pipeline {
 class ThreadMerger
 {
 public:
-    ThreadMerger(const std::vector<std::unique_ptr<Pipeline>>& pipelines) : pipelines_(pipelines) {}
+    ThreadMerger(const std::vector<std::unique_ptr<Pipeline>>& pipelines) :
+        pipelines_(pipelines)
+    {
+    }
 
     void addAppForMerging(const App* app)
     {

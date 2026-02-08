@@ -22,8 +22,9 @@ namespace simdb::pipeline {
 class PipelineManager
 {
 public:
-    PipelineManager(DatabaseManager* db_mgr, const std::string& pipeline_log_file = "")
-        : db_mgr_(db_mgr), pipeline_logger_(pipeline_log_file)
+    PipelineManager(DatabaseManager* db_mgr, const std::string& pipeline_log_file = "") :
+        db_mgr_(db_mgr),
+        pipeline_logger_(pipeline_log_file)
     {
     }
 

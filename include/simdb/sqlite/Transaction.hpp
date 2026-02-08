@@ -25,7 +25,8 @@ using TransactionFunc = std::function<void()>;
 class SQLiteReturnCode
 {
 public:
-    explicit SQLiteReturnCode(const int rc) : rc_(rc)
+    explicit SQLiteReturnCode(const int rc) :
+        rc_(rc)
     {
         if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED || rc == SQLITE_READONLY)
         {
@@ -80,9 +81,16 @@ public:
         stmt_ = stmt;
     }
 
-    SQLitePreparedStatement(sqlite3_stmt* stmt) : stmt_(stmt) {}
+    SQLitePreparedStatement(sqlite3_stmt* stmt) :
+        stmt_(stmt)
+    {
+    }
 
-    SQLitePreparedStatement(SQLitePreparedStatement&& other) : stmt_(other.stmt_) { other.stmt_ = nullptr; }
+    SQLitePreparedStatement(SQLitePreparedStatement&& other) :
+        stmt_(other.stmt_)
+    {
+        other.stmt_ = nullptr;
+    }
 
     SQLitePreparedStatement(const SQLitePreparedStatement& other) = delete;
 
@@ -198,8 +206,10 @@ private:
     struct ScopedTransaction
     {
         /// Issues BEGIN TRANSACTION
-        ScopedTransaction(sqlite3* db_conn, const TransactionFunc& transaction, bool& in_transaction_flag)
-            : db_conn_(db_conn), in_transaction_flag_(in_transaction_flag), transaction_(transaction)
+        ScopedTransaction(sqlite3* db_conn, const TransactionFunc& transaction, bool& in_transaction_flag) :
+            db_conn_(db_conn),
+            in_transaction_flag_(in_transaction_flag),
+            transaction_(transaction)
         {
             in_transaction_flag_ = true;
             executeCommand_("BEGIN TRANSACTION");

@@ -20,8 +20,10 @@ namespace simdb::pipeline {
 class Pipeline
 {
 public:
-    Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app)
-        : db_mgr_(db_mgr), pipeline_name_(name), app_(app)
+    Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app) :
+        db_mgr_(db_mgr),
+        pipeline_name_(name),
+        app_(app)
     {
     }
 

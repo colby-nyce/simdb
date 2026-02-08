@@ -346,7 +346,12 @@ public:
 
 private:
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr) : db_mgr_(db_mgr), msg_log_(&std::cout), err_log_(&std::cerr) {}
+    AppManager(DatabaseManager* db_mgr) :
+        db_mgr_(db_mgr),
+        msg_log_(&std::cout),
+        err_log_(&std::cerr)
+    {
+    }
 
     /// AppManager only to be instantiated by simdb::AppManagers
     friend class AppManagers;
@@ -643,8 +648,10 @@ private:
     class ScopedTimer
     {
     public:
-        ScopedTimer(const DatabaseManager* db_mgr, const std::string& block_name, std::ostream* msg_out = &std::cout)
-            : start_(std::chrono::high_resolution_clock::now()), block_name_(block_name), msg_out_(msg_out)
+        ScopedTimer(const DatabaseManager* db_mgr, const std::string& block_name, std::ostream* msg_out = &std::cout) :
+            start_(std::chrono::high_resolution_clock::now()),
+            block_name_(block_name),
+            msg_out_(msg_out)
         {
             if (msg_out_)
             {
@@ -691,7 +698,10 @@ private:
     class Logger
     {
     public:
-        Logger(std::ostream* out) : out_(out) {}
+        Logger(std::ostream* out) :
+            out_(out)
+        {
+        }
 
         template <typename T> Logger& operator<<(const T& msg)
         {

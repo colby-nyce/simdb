@@ -16,7 +16,10 @@ public:
     class LogLine
     {
     public:
-        LogLine(std::mutex& m, uint64_t id, std::ostream& out) : mutex_(m), id_(id), out_(out)
+        LogLine(std::mutex& m, uint64_t id, std::ostream& out) :
+            mutex_(m),
+            id_(id),
+            out_(out)
         {
             // Capture thread id as string
             std::ostringstream oss;
@@ -55,12 +58,15 @@ public:
     };
 
     /// Constructor (std::cout)
-    MTLogger() : out_(std::cout) {}
+    MTLogger() :
+        out_(std::cout)
+    {
+    }
 
     /// Constructor (file - std::cout if empty)
-    MTLogger(const std::string& filename)
-        : fout_(!filename.empty() ? std::make_unique<std::ofstream>(filename) : nullptr),
-          out_(fout_ ? *fout_ : std::cout)
+    MTLogger(const std::string& filename) :
+        fout_(!filename.empty() ? std::make_unique<std::ofstream>(filename) : nullptr),
+        out_(fout_ ? *fout_ : std::cout)
     {
     }
 

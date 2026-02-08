@@ -23,7 +23,8 @@ namespace simdb {
 class CollectionBuffer
 {
 public:
-    CollectionBuffer(std::vector<char>& buffer) : buffer_(buffer)
+    CollectionBuffer(std::vector<char>& buffer) :
+        buffer_(buffer)
     {
         buffer_.clear();
         buffer_.reserve(buffer_.capacity());
@@ -32,7 +33,8 @@ public:
     /// Note that the elem_id corresponds to a database record's primary key,
     /// and thus typically will not be zero. Passing in elem_id=0 means "do not
     /// write elem_id to the buffer".
-    CollectionBuffer(std::vector<char>& buffer, uint16_t elem_id) : CollectionBuffer(buffer)
+    CollectionBuffer(std::vector<char>& buffer, uint16_t elem_id) :
+        CollectionBuffer(buffer)
     {
         if (elem_id != 0)
         {

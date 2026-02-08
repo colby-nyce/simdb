@@ -5,7 +5,9 @@ namespace simdb {
 template <typename Mutex> class ConditionalLock
 {
 public:
-    ConditionalLock(Mutex& m, bool lock = true) : mutex_(m), locked_(lock)
+    ConditionalLock(Mutex& m, bool lock = true) :
+        mutex_(m),
+        locked_(lock)
     {
         if (locked_)
         {

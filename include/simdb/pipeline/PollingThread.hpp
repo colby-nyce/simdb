@@ -25,7 +25,10 @@ public:
     /// Create a thread with an "interval" in milliseconds. This value says
     /// how long the thread should sleep if none of its Runnables had any
     /// work to do.
-    PollingThread(const size_t interval_milliseconds = 100) : interval_ms_(interval_milliseconds) {}
+    PollingThread(const size_t interval_milliseconds = 100) :
+        interval_ms_(interval_milliseconds)
+    {
+    }
 
     virtual ~PollingThread() noexcept = default;
 
@@ -283,8 +286,8 @@ private:
 /// Defined here so we can avoid circular includes
 inline ScopedRunnableDisabler::ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
                                                       const std::vector<Runnable*>& runnables,
-                                                      const std::vector<PollingThread*>& polling_threads)
-    : pipeline_mgr_(pipeline_mgr)
+                                                      const std::vector<PollingThread*>& polling_threads) :
+    pipeline_mgr_(pipeline_mgr)
 {
     // Disable runnables
     for (auto r : runnables)
@@ -309,8 +312,8 @@ inline ScopedRunnableDisabler::ScopedRunnableDisabler(PipelineManager* pipeline_
 
 /// Defined here so we can avoid circular includes
 inline ScopedRunnableDisabler::ScopedRunnableDisabler(PipelineManager* pipeline_mgr,
-                                                      const std::vector<Runnable*>& runnables)
-    : pipeline_mgr_(pipeline_mgr)
+                                                      const std::vector<Runnable*>& runnables) :
+    pipeline_mgr_(pipeline_mgr)
 {
     // Disable runnables
     for (auto r : runnables)

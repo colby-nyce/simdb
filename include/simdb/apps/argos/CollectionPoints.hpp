@@ -23,7 +23,10 @@ struct ArgosRecord
     bool write_elem_id = true;
     std::vector<char> data;
 
-    ArgosRecord(uint16_t elem_id) : elem_id(elem_id) {}
+    ArgosRecord(uint16_t elem_id) :
+        elem_id(elem_id)
+    {
+    }
 
     void reset()
     {
@@ -43,8 +46,12 @@ public:
 class CollectionPointBase
 {
 public:
-    CollectionPointBase(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype)
-        : argos_record_(elem_id), elem_id_(elem_id), clk_id_(clk_id), heartbeat_(heartbeat), dtype_(dtype)
+    CollectionPointBase(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype) :
+        argos_record_(elem_id),
+        elem_id_(elem_id),
+        clk_id_(clk_id),
+        heartbeat_(heartbeat),
+        dtype_(dtype)
     {
     }
 
@@ -153,7 +160,11 @@ public:
     /// (WRITE) or say that the value hasn't changed (CARRY).
     enum class Action : uint8_t { WRITE, CARRY };
 
-    template <typename... Args> CollectionPoint(Args&&... args) : CollectionPointBase(std::forward<Args>(args)...) {}
+    template <typename... Args>
+    CollectionPoint(Args&&... args) :
+        CollectionPointBase(std::forward<Args>(args)...)
+    {
+    }
 
     /// Put this collectable in the black box for consumption until deactivate()
     /// is called. NOTE: There is no reason to call deactivate() on your own if
@@ -315,8 +326,10 @@ public:
     enum class Action : uint8_t { ARRIVE, DEPART, BOOKENDS, CHANGE, CARRY, FULL };
 
     ContigIterableCollectionPoint(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype,
-                                  size_t capacity)
-        : CollectionPointBase(elem_id, clk_id, heartbeat, dtype), curr_snapshot_(capacity), prev_snapshot_(capacity)
+                                  size_t capacity) :
+        CollectionPointBase(elem_id, clk_id, heartbeat, dtype),
+        curr_snapshot_(capacity),
+        prev_snapshot_(capacity)
     {
     }
 
@@ -352,7 +365,10 @@ private:
     class IterableSnapshot
     {
     public:
-        IterableSnapshot(size_t expected_capacity) : bytes_by_bin_(expected_capacity) {}
+        IterableSnapshot(size_t expected_capacity) :
+            bytes_by_bin_(expected_capacity)
+        {
+        }
 
         uint16_t size() const
         {
@@ -645,8 +661,9 @@ class SparseIterableCollectionPoint : public CollectionPointBase
 {
 public:
     SparseIterableCollectionPoint(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype,
-                                  size_t capacity)
-        : CollectionPointBase(elem_id, clk_id, heartbeat, dtype), expected_capacity_(capacity)
+                                  size_t capacity) :
+        CollectionPointBase(elem_id, clk_id, heartbeat, dtype),
+        expected_capacity_(capacity)
     {
         prev_data_by_bin_.resize(capacity);
         num_carry_overs_by_bin_.resize(capacity, 0);

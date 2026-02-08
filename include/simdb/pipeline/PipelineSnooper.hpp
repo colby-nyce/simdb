@@ -15,7 +15,10 @@ class Stage;
 template <typename KeyType, typename SnoopedType> class PipelineSnooper
 {
 public:
-    PipelineSnooper(PipelineManager* pipeline_mgr) : pipeline_mgr_(pipeline_mgr) {}
+    PipelineSnooper(PipelineManager* pipeline_mgr) :
+        pipeline_mgr_(pipeline_mgr)
+    {
+    }
 
     template <typename StageType> void addStage(StageType* stage)
     {

@@ -12,7 +12,8 @@ namespace simdb::pipeline {
 class Flusher
 {
 protected:
-    Flusher(const std::vector<Stage*>& stages) : stages_(stages)
+    Flusher(const std::vector<Stage*>& stages) :
+        stages_(stages)
     {
         if (stages_.empty())
         {
@@ -58,8 +59,9 @@ private:
 class FlusherWithTransaction : public Flusher
 {
 private:
-    FlusherWithTransaction(const std::vector<Stage*>& stages, DatabaseManager* db_mgr)
-        : Flusher(stages), db_mgr_(db_mgr)
+    FlusherWithTransaction(const std::vector<Stage*>& stages, DatabaseManager* db_mgr) :
+        Flusher(stages),
+        db_mgr_(db_mgr)
     {
         bool has_db_stage = false;
         for (auto stage : stages)

@@ -14,8 +14,11 @@ class PreparedINSERT
 {
 public:
     PreparedINSERT(SQLitePreparedStatement&& stmt, const std::vector<SqlDataType>& col_dtypes,
-                   std::shared_ptr<Connection> db_conn)
-        : prepared_stmt_(std::move(stmt)), stmt_(prepared_stmt_), col_dtypes_(col_dtypes), db_conn_(db_conn)
+                   std::shared_ptr<Connection> db_conn) :
+        prepared_stmt_(std::move(stmt)),
+        stmt_(prepared_stmt_),
+        col_dtypes_(col_dtypes),
+        db_conn_(db_conn)
     {
     }
 

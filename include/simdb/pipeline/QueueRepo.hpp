@@ -25,7 +25,8 @@ public:
     /// Create placeholder with a backpointer to the stage's queue member
     /// variable. We will assign the queue to the stage variable when the queue
     /// is created.
-    InputQueuePlaceholder(ConcurrentQueue<T>*& queue) : queue_(queue)
+    InputQueuePlaceholder(ConcurrentQueue<T>*& queue) :
+        queue_(queue)
     {
         if (queue_)
         {
@@ -65,7 +66,8 @@ public:
     /// Create placeholder with a backpointer to the stage's queue member
     /// variable. We will assign the queue to the stage variable when the queue
     /// is created.
-    OutputQueuePlaceholder(ConcurrentQueue<T>*& queue) : queue_(queue)
+    OutputQueuePlaceholder(ConcurrentQueue<T>*& queue) :
+        queue_(queue)
     {
         if (queue_)
         {

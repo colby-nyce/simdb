@@ -22,7 +22,10 @@ protected:
     /// non-database stages. If you intend to call
     /// AppManager::minimizeThreads(), then all non-database stages must agree
     /// on the interval for their shared PollingThread.
-    Stage(size_t interval_milliseconds = 100) : interval_milliseconds_(interval_milliseconds) {}
+    Stage(size_t interval_milliseconds = 100) :
+        interval_milliseconds_(interval_milliseconds)
+    {
+    }
 
     template <typename T> void addInPort_(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {

@@ -14,8 +14,9 @@ namespace simdb {
 template <bool MutexProtect = false> class TinyStrings
 {
 public:
-    TinyStrings(DatabaseManager* db_mgr, const std::string& table_name = "TinyStringIDs")
-        : db_mgr_(db_mgr), table_name_(table_name)
+    TinyStrings(DatabaseManager* db_mgr, const std::string& table_name = "TinyStringIDs") :
+        db_mgr_(db_mgr),
+        table_name_(table_name)
     {
         const auto& schema = db_mgr_->getSchema();
         if (!schema.hasTable(table_name_))

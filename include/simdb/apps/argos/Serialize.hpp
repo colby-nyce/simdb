@@ -271,8 +271,10 @@ private:
 class FieldBase
 {
 public:
-    FieldBase(const std::string& name, const StructFields type, const Format format = Format::none)
-        : name_(name), dtype_(type), format_(format)
+    FieldBase(const std::string& name, const StructFields type, const Format format = Format::none) :
+        name_(name),
+        dtype_(type),
+        format_(format)
     {
     }
 
@@ -316,9 +318,10 @@ private:
 template <typename EnumT> class EnumField : public FieldBase
 {
 public:
-    EnumField(const char* name)
-        : FieldBase(name, getFieldDTypeEnum<typename EnumMap<EnumT>::enum_int_t>()),
-          map_(EnumMap<EnumT>::instance()->getMap()), enum_name_(EnumMap<EnumT>::instance()->getEnumName())
+    EnumField(const char* name) :
+        FieldBase(name, getFieldDTypeEnum<typename EnumMap<EnumT>::enum_int_t>()),
+        map_(EnumMap<EnumT>::instance()->getMap()),
+        enum_name_(EnumMap<EnumT>::instance()->getEnumName())
     {
     }
 
@@ -334,7 +337,10 @@ private:
 class StringField : public FieldBase
 {
 public:
-    StringField(const char* name) : FieldBase(name, StructFields::string_t) {}
+    StringField(const char* name) :
+        FieldBase(name, StructFields::string_t)
+    {
+    }
 
     size_t getNumBytes() const override { return getDTypeNumBytes(StructFields::uint32_t); }
 };
@@ -375,8 +381,9 @@ template <typename StructT> void writeStructFields(const StructT* s, StructField
 template <typename StructT> class StructFieldSerializer
 {
 public:
-    StructFieldSerializer(const std::vector<std::unique_ptr<FieldBase>>& fields, CollectionBuffer& buffer)
-        : fields_(fields), buffer_(buffer)
+    StructFieldSerializer(const std::vector<std::unique_ptr<FieldBase>>& fields, CollectionBuffer& buffer) :
+        fields_(fields),
+        buffer_(buffer)
     {
     }
 
