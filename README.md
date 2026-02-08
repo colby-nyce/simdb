@@ -287,7 +287,6 @@ See test/sqlite/Query/main.cpp
 
 SimDB is a header-only library with minimal dependencies. You will need the following:
 
-
 ```
 sudo apt-get update
 sudo apt-get install -y \
