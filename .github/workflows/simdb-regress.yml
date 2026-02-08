@@ -8,8 +8,8 @@ env:
 
 name: Regress SimDB on Ubuntu
 jobs:
-  clang_format:
-    name: clang-format
+  clang-format:
+    name: Ensure clang-format was run
     runs-on: ubuntu-24.04
 
     steps:
@@ -25,8 +25,46 @@ jobs:
         run: |
           ./.github/actions/clang-format-check.sh
 
+  self-contained-headers:
+    name: Ensure headers are self-contained
+    runs-on: ubuntu-24.04
+    needs: clang-format
+
+    strategy:
+      matrix:
+        compiler: [gcc,clang]
+        build_type: [Debug,Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@v4
+
+      - name: Install compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            sudo apt-get install -y g++ 
+          else
+            sudo apt-get install -y clang
+          fi
+
+      - name: Gather headers
+        run: |
+          mkdir -p build/selfcheck
+          find include -name '*.hpp' > build/selfcheck/header_list.txt
+
+      - name: Compiler headers individually
+        run: |
+          mkdir -p build/selfcheck
+          for hdr in $(cat build/selfcheck/header_list.txt); do
+            echo "Testing $hdr..."
+            # Compile with both C++20, no linking
+            ${{ matrix.compiler }} -std=c++20 -Iinclude -c $hdr -o /dev/null
+          done
+
   build_test_job:
-    needs: clang_format
+    needs: self-contained-headers
     strategy:
       matrix:
         os: [ubuntu-24.04]

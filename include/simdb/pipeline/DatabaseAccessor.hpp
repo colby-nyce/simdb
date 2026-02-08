@@ -3,6 +3,9 @@
 #pragma once
 
 #include "simdb/pipeline/AsyncDatabaseAccessor.hpp"
+#include "simdb/sqlite/PreparedINSERT.hpp"
+#include "simdb/sqlite/Table.hpp"
+#include "simdb/sqlite/DatabaseManager.hpp"
 
 namespace simdb::pipeline {
 
