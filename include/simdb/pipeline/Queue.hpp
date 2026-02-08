@@ -5,6 +5,7 @@
 #include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/Demangle.hpp"
 #include <functional>
+#include <memory>
 
 namespace simdb::pipeline {
 

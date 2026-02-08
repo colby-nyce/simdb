@@ -5,6 +5,7 @@
 #include "simdb/sqlite/Constraints.hpp"
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/FloatCompare.hpp"
+#include "simdb/schema/SchemaDef.hpp"
 
 #include <fstream>
 #include <memory>

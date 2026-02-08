@@ -7,6 +7,7 @@
 #include <map>
 
 namespace simdb {
+class App;
 class DatabaseManager;
 }
 

@@ -4,6 +4,7 @@
 
 #include "simdb/Exceptions.hpp"
 #include "simdb/pipeline/Queue.hpp"
+#include <set>
 
 /// The classes in this file are used to create all the required
 /// simdb::ConcurrentQueue(s) needed for all apps' pipeline stages.
