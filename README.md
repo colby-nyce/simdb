@@ -283,11 +283,36 @@ See test/sqlite/Query/main.cpp
 
 ---
 
+## Requirements
+
+SimDB is a header-only library with minimal dependencies. You will need the following:
+
+
+```
+sudo apt-get update
+sudo apt-get install -y \
+    cmake \
+    libsqlite3-dev \
+    zlib1g-dev \
+    build-essential
+```
+
+Note that zlib is used for tests/examples only.
+
+---
+
 ## Regression Tests
 
 ```
-mkdir build
-cd build
-cmake ..
-make -j simdb_regress
+# Release
+mkdir release
+cd release
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make simdb_regress
+
+# Debug
+mkdir debug
+cd debug
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make simdb_regress
 ```
