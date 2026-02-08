@@ -36,32 +36,8 @@ jobs:
         build_type: [Debug,Release]
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup CMake
-        uses: lukka/get-cmake@v3
-
-      - name: Install compiler
-        run: |
-          if [ "${{ matrix.compiler }}" = "gcc" ]; then
-            sudo apt-get install -y g++ 
-          else
-            sudo apt-get install -y clang
-          fi
-
-      - name: Gather headers
-        run: |
-          mkdir -p build/selfcheck
-          find include -name '*.hpp' > build/selfcheck/header_list.txt
-
-      - name: Compiler headers individually
-        run: |
-          mkdir -p build/selfcheck
-          for hdr in $(cat build/selfcheck/header_list.txt); do
-            echo "Testing $hdr..."
-            # Compile with both C++20, no linking
-            ${{ matrix.compiler }} -std=c++20 -Iinclude -c $hdr -o /dev/null
-          done
+      - run: |
+          ./.github/actions/check_headers.sh ${{ matrix.compiler }} ${{ matrix.build_type }} include
 
   build_test_job:
     needs: self-contained-headers
