@@ -293,6 +293,7 @@ sudo apt-get install -y \
     cmake \
     libsqlite3-dev \
     zlib1g-dev \
+    clang-format-17 \
     build-essential
 ```
 
@@ -315,3 +316,12 @@ cd debug
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 make simdb_regress
 ```
+
+---
+
+## Submission Guidelines
+
+In order to merge your PR, your changes will have to pass regression tests as well as the clang-format check. Before opening a PR:
+
+- Run `make simdb_regress` for release and/or debug builds. GitHub will test both on Linux & MacOS.
+- Format your code changes: `clang-format-17 -i $(git ls-files '*.cpp' '*.hpp')`
