@@ -22,7 +22,10 @@ namespace simdb {
 class SqlTable
 {
 public:
-    SqlTable(const std::string& table_name) : table_name_(table_name) {}
+    SqlTable(const std::string& table_name) :
+        table_name_(table_name)
+    {
+    }
 
     const std::string& getName() const { return table_name_; }
 
@@ -39,7 +42,9 @@ private:
 class SqlColumns
 {
 public:
-    template <typename... Rest> SqlColumns(const char* col_name, Rest... rest) : SqlColumns(std::forward<Rest>(rest)...)
+    template <typename... Rest>
+    SqlColumns(const char* col_name, Rest... rest) :
+        SqlColumns(std::forward<Rest>(rest)...)
     {
         col_names_.emplace_front(col_name);
     }
@@ -94,19 +99,23 @@ private:
 class SqlValues
 {
 public:
-    template <typename T, typename... Rest> SqlValues(T val, Rest... rest) : SqlValues(std::forward<Rest>(rest)...)
+    template <typename T, typename... Rest>
+    SqlValues(T val, Rest... rest) :
+        SqlValues(std::forward<Rest>(rest)...)
     {
         col_vals_.emplace_front(createValueContainer<T>(val));
     }
 
     template <typename T, typename... Rest>
-    SqlValues(const std::vector<T>& val, Rest... rest) : SqlValues(std::forward<Rest>(rest)...)
+    SqlValues(const std::vector<T>& val, Rest... rest) :
+        SqlValues(std::forward<Rest>(rest)...)
     {
         col_vals_.emplace_front(createValueContainer(val));
     }
 
     template <typename T, typename... Rest>
-    SqlValues(std::vector<T>&& val, Rest... rest) : SqlValues(std::forward<Rest>(rest)...)
+    SqlValues(std::vector<T>&& val, Rest... rest) :
+        SqlValues(std::forward<Rest>(rest)...)
     {
         col_vals_.emplace_front(createValueContainer(std::move(val)));
     }
@@ -160,8 +169,11 @@ private:
 class SqlRecord
 {
 public:
-    SqlRecord(const std::string& table_name, const int32_t db_id, sqlite3* db_conn, Transaction* transaction)
-        : table_name_(table_name), db_id_(db_id), db_conn_(db_conn), transaction_(transaction)
+    SqlRecord(const std::string& table_name, const int32_t db_id, sqlite3* db_conn, Transaction* transaction) :
+        table_name_(table_name),
+        db_id_(db_id),
+        db_conn_(db_conn),
+        transaction_(transaction)
     {
     }
 

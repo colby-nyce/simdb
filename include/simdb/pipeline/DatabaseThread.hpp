@@ -23,7 +23,11 @@ namespace simdb::pipeline {
 class DatabaseThread : public PollingThread, private AsyncDatabaseAccessHandler
 {
 public:
-    DatabaseThread(DatabaseManager* db_mgr) : db_mgr_(db_mgr), dormant_thread_(db_mgr) {}
+    DatabaseThread(DatabaseManager* db_mgr) :
+        db_mgr_(db_mgr),
+        dormant_thread_(db_mgr)
+    {
+    }
 
     ~DatabaseThread() noexcept = default;
 
@@ -108,7 +112,10 @@ private:
     class DormantThread
     {
     public:
-        DormantThread(DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
+        DormantThread(DatabaseManager* db_mgr) :
+            db_mgr_(db_mgr)
+        {
+        }
 
         ~DormantThread() noexcept { close(); }
 

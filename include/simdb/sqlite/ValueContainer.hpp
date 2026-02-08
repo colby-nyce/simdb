@@ -29,7 +29,10 @@ public:
 class Integral32ValueContainer : public ValueContainerBase
 {
 public:
-    Integral32ValueContainer(int32_t val) : val_(val) {}
+    Integral32ValueContainer(int32_t val) :
+        val_(val)
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override { return sqlite3_bind_int(stmt, col_idx, val_); }
 
@@ -41,7 +44,10 @@ private:
 class IntegralU32ValueContainer : public ValueContainerBase
 {
 public:
-    IntegralU32ValueContainer(uint32_t val) : val_(val) {}
+    IntegralU32ValueContainer(uint32_t val) :
+        val_(val)
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -56,7 +62,10 @@ private:
 class Integral64ValueContainer : public ValueContainerBase
 {
 public:
-    Integral64ValueContainer(int64_t val) : val_(val) {}
+    Integral64ValueContainer(int64_t val) :
+        val_(val)
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override { return sqlite3_bind_int64(stmt, col_idx, val_); }
 
@@ -68,7 +77,10 @@ private:
 class IntegralU64ValueContainer : public ValueContainerBase
 {
 public:
-    IntegralU64ValueContainer(uint64_t val) : u16_(utils::uint64_to_utf16(val)) {}
+    IntegralU64ValueContainer(uint64_t val) :
+        u16_(utils::uint64_to_utf16(val))
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -83,7 +95,10 @@ private:
 class FloatingPointValueContainer : public ValueContainerBase
 {
 public:
-    FloatingPointValueContainer(double val) : val_(val) {}
+    FloatingPointValueContainer(double val) :
+        val_(val)
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -98,7 +113,10 @@ private:
 class StringValueContainer : public ValueContainerBase
 {
 public:
-    StringValueContainer(const std::string& val) : val_(val) {}
+    StringValueContainer(const std::string& val) :
+        val_(val)
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -113,7 +131,10 @@ private:
 class BlobValueContainer : public ValueContainerBase
 {
 public:
-    BlobValueContainer(const SqlBlob& val) : val_(val) {}
+    BlobValueContainer(const SqlBlob& val) :
+        val_(val)
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {
@@ -128,9 +149,15 @@ private:
 template <typename T> class VectorValueContainer : public ValueContainerBase
 {
 public:
-    VectorValueContainer(const std::vector<T>& val) : val_(val) {}
+    VectorValueContainer(const std::vector<T>& val) :
+        val_(val)
+    {
+    }
 
-    VectorValueContainer(std::vector<T>&& val) : val_(std::move(val)) {}
+    VectorValueContainer(std::vector<T>&& val) :
+        val_(std::move(val))
+    {
+    }
 
     int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const override
     {

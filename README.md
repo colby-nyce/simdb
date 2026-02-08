@@ -283,11 +283,45 @@ See test/sqlite/Query/main.cpp
 
 ---
 
+## Requirements
+
+SimDB is a header-only library with minimal dependencies. You will need the following:
+
+```
+sudo apt-get update
+sudo apt-get install -y \
+    cmake \
+    libsqlite3-dev \
+    zlib1g-dev \
+    clang-format-17 \
+    build-essential
+```
+
+Note that zlib is used for tests/examples only.
+
+---
+
 ## Regression Tests
 
 ```
-mkdir build
-cd build
-cmake ..
-make -j simdb_regress
+# Release
+mkdir release
+cd release
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make simdb_regress
+
+# Debug
+mkdir debug
+cd debug
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make simdb_regress
 ```
+
+---
+
+## Submission Guidelines
+
+In order to merge your PR, your changes will have to pass regression tests as well as the clang-format check. Before opening a PR:
+
+- Run `make simdb_regress` for release and/or debug builds. GitHub will test both on Linux & MacOS.
+- Format your code changes: `clang-format-17 -i $(git ls-files '*.cpp' '*.hpp')`

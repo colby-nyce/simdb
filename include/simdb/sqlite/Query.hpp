@@ -39,7 +39,11 @@ inline std::ostream& operator<<(std::ostream& os, const QueryOrder order)
 class SqlQuery
 {
 public:
-    SqlQuery(const char* table_name, sqlite3* db_conn) : table_name_(table_name), db_conn_(db_conn) {}
+    SqlQuery(const char* table_name, sqlite3* db_conn) :
+        table_name_(table_name),
+        db_conn_(db_conn)
+    {
+    }
 
     /// Query for at most N matching records.
     void setLimit(uint32_t limit) { limit_ = limit; }
@@ -613,7 +617,11 @@ private:
         std::string col_name;
         QueryOrder order;
 
-        QueryOrderClause(const char* col_name, const QueryOrder order) : col_name(col_name), order(order) {}
+        QueryOrderClause(const char* col_name, const QueryOrder order) :
+            col_name(col_name),
+            order(order)
+        {
+        }
     };
 
     /// SELECT ColA,ColB FROM <table_name_> WHERE ...

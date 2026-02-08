@@ -40,7 +40,11 @@ struct TreeNode
     int clk_id = 0;
     bool is_collectable = false;
 
-    TreeNode(const std::string& name, const TreeNode* parent = nullptr) : name(name), parent(parent) {}
+    TreeNode(const std::string& name, const TreeNode* parent = nullptr) :
+        name(name),
+        parent(parent)
+    {
+    }
 
     std::string getLocation() const
     {

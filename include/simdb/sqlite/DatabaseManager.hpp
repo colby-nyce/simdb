@@ -61,8 +61,8 @@ public:
     ///                       schema is fixed.
     /// \param pragmas Pragmas to set on the database as soon as it is opened.
     DatabaseManager(const std::string& db_file = "sim.db", const bool force_new_file = false,
-                    const PragmaPairs& pragmas = {})
-        : db_file_(db_file)
+                    const PragmaPairs& pragmas = {}) :
+        db_file_(db_file)
     {
         if (std::filesystem::exists(db_file))
         {

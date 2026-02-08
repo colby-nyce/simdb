@@ -60,7 +60,11 @@ class Column
 {
 public:
     /// Construct with the column name and data type.
-    Column(const std::string& column_name, const SqlDataType dt) : name_(column_name), dt_(dt) {}
+    Column(const std::string& column_name, const SqlDataType dt) :
+        name_(column_name),
+        dt_(dt)
+    {
+    }
 
     /// Equivalence is defined as having the same name and data type.
     bool operator==(const Column& rhs) const { return name_ == rhs.name_ && dt_ == rhs.dt_; }
@@ -183,7 +187,10 @@ class Table
 {
 public:
     /// Construct with a name.
-    Table(const std::string& table_name) : name_(table_name) {}
+    Table(const std::string& table_name) :
+        name_(table_name)
+    {
+    }
 
     /// Get the name of this table.
     const std::string& getName() const { return name_; }

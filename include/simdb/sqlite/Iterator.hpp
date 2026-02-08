@@ -40,7 +40,10 @@ public:
     const std::string& getColName() const { return col_name_; }
 
 protected:
-    ResultWriterBase(const char* col_name) : col_name_(col_name) {}
+    ResultWriterBase(const char* col_name) :
+        col_name_(col_name)
+    {
+    }
 
 private:
     std::string col_name_;
@@ -59,7 +62,11 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterInt32(const char* col_name, int32_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
+    ResultWriterInt32(const char* col_name, int32_t* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
+    {
+    }
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -88,7 +95,11 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterUInt32(const char* col_name, uint32_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
+    ResultWriterUInt32(const char* col_name, uint32_t* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
+    {
+    }
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -124,7 +135,11 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterInt64(const char* col_name, int64_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
+    ResultWriterInt64(const char* col_name, int64_t* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
+    {
+    }
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -153,7 +168,11 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterUInt64(const char* col_name, uint64_t* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
+    ResultWriterUInt64(const char* col_name, uint64_t* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
+    {
+    }
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -190,7 +209,11 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterDouble(const char* col_name, double* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
+    ResultWriterDouble(const char* col_name, double* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
+    {
+    }
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -219,7 +242,11 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterString(const char* col_name, std::string* user_var) : ResultWriterBase(col_name), user_var_(user_var) {}
+    ResultWriterString(const char* col_name, std::string* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
+    {
+    }
 
     /// Read the value for the prepared statement at the given column index
     /// and copy it to the user's local variable.
@@ -248,7 +275,9 @@ public:
     /// \param col_name Name of the selected column
     /// \param user_var Pointer to the local variable where result values are
     /// written to
-    ResultWriterBlob(const char* col_name, std::vector<T>* user_var) : ResultWriterBase(col_name), user_var_(user_var)
+    ResultWriterBlob(const char* col_name, std::vector<T>* user_var) :
+        ResultWriterBase(col_name),
+        user_var_(user_var)
     {
     }
 
@@ -280,8 +309,9 @@ class SqlResultIterator
 public:
     /// Construct with a prepared statement and the result writers that read
     /// column values and write them into the user's local variables.
-    SqlResultIterator(sqlite3_stmt* stmt, std::vector<std::shared_ptr<ResultWriterBase>>&& result_writers)
-        : stmt_(stmt), result_writers_(std::move(result_writers))
+    SqlResultIterator(sqlite3_stmt* stmt, std::vector<std::shared_ptr<ResultWriterBase>>&& result_writers) :
+        stmt_(stmt),
+        result_writers_(std::move(result_writers))
     {
     }
 

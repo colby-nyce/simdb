@@ -16,7 +16,9 @@ struct SqlBlob
     size_t num_bytes = 0;
 
     template <typename T>
-    SqlBlob(const std::vector<T>& vals) : data_ptr(vals.data()), num_bytes(vals.size() * sizeof(T))
+    SqlBlob(const std::vector<T>& vals) :
+        data_ptr(vals.data()),
+        num_bytes(vals.size() * sizeof(T))
     {
     }
 

@@ -24,7 +24,10 @@ struct AsyncDatabaseTask
     AsyncDbAccessFunc func;
     std::promise<std::string> exception_reason;
 
-    AsyncDatabaseTask(AsyncDbAccessFunc func) : func(func) {}
+    AsyncDatabaseTask(AsyncDbAccessFunc func) :
+        func(func)
+    {
+    }
     AsyncDatabaseTask() = default;
 };
 
@@ -65,7 +68,10 @@ public:
     }
 
 private:
-    AsyncDatabaseAccessor(AsyncDatabaseAccessHandler* db_access_handler) : db_access_handler_(db_access_handler) {}
+    AsyncDatabaseAccessor(AsyncDatabaseAccessHandler* db_access_handler) :
+        db_access_handler_(db_access_handler)
+    {
+    }
 
     AsyncDatabaseAccessHandler* db_access_handler_ = nullptr;
     friend class DatabaseThread;

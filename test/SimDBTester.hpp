@@ -95,7 +95,10 @@ template <typename T> inline std::ostream& operator<<(std::ostream& os, const st
 class SimDBTester
 {
 public:
-    SimDBTester() : SimDBTester(0, std::cerr) {}
+    SimDBTester() :
+        SimDBTester(0, std::cerr)
+    {
+    }
 
     bool expectAllReached(const uint32_t expected_reached, const uint32_t line, const char* file)
     {
@@ -506,8 +509,10 @@ public:
     static SimDBTester* inst;
 
 private:
-    SimDBTester(const uint32_t num_errors, std::ostream& cerr)
-        : num_errors_(num_errors), methods_reached_(), cerr_(cerr)
+    SimDBTester(const uint32_t num_errors, std::ostream& cerr) :
+        num_errors_(num_errors),
+        methods_reached_(),
+        cerr_(cerr)
     {
     }
 

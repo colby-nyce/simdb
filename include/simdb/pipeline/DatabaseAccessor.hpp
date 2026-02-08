@@ -11,7 +11,10 @@ namespace simdb::pipeline {
 class DatabaseAccessor
 {
 public:
-    DatabaseAccessor(DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
+    DatabaseAccessor(DatabaseManager* db_mgr) :
+        db_mgr_(db_mgr)
+    {
+    }
 
     DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 

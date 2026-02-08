@@ -17,3 +17,6 @@ AlignEscapedNewlines: Left
 MacroBlockBegin: ''
 MacroBlockEnd: ''
 FixNamespaceComments: true
+BreakConstructorInitializers: AfterColon
+ConstructorInitializerIndentWidth: 4
+PackConstructorInitializers: Never

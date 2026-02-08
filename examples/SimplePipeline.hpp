@@ -19,7 +19,10 @@ class SimplePipeline : public simdb::App
 public:
     static constexpr auto NAME = "simple-pipeline";
 
-    SimplePipeline(simdb::DatabaseManager* db_mgr) : db_mgr_(db_mgr) {}
+    SimplePipeline(simdb::DatabaseManager* db_mgr) :
+        db_mgr_(db_mgr)
+    {
+    }
 
     ~SimplePipeline() noexcept = default;
 
@@ -101,7 +104,8 @@ private:
     class DatabaseStage : public simdb::pipeline::DatabaseStage<SimplePipeline>
     {
     public:
-        DatabaseStage(size_t app_instance_num) : app_instance_num_(app_instance_num)
+        DatabaseStage(size_t app_instance_num) :
+            app_instance_num_(app_instance_num)
         {
             addInPort_<std::vector<char>>("data_to_write", input_queue_);
         }

@@ -57,7 +57,11 @@ public:
     class MethodTimer
     {
     public:
-        MethodTimer(const char* method_name) : method_name_(method_name), start_time_(now_()) {}
+        MethodTimer(const char* method_name) :
+            method_name_(method_name),
+            start_time_(now_())
+        {
+        }
 
         ~MethodTimer()
         {
