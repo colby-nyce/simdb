@@ -773,7 +773,7 @@ public:
     /// exist, throws an exception.
     ///
     /// Throws if an AppManager for this database already exists.
-    AppManager& createAppManager(const std::string& db_file, bool new_db=true)
+    AppManager& createAppManager(const std::string& db_file, bool new_db = true)
     {
         if (app_mgrs_by_db_file_.find(db_file) != app_mgrs_by_db_file_.end())
         {
