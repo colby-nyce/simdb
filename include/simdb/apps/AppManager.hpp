@@ -780,6 +780,15 @@ public:
             throw DBException("AppManager already exists for database: ") << db_file;
         }
 
+        if (!new_db)
+        {
+            std::ifstream fin(db_file);
+            if (!fin.good())
+            {
+                throw DBException("Cannot reuse database since it doesn't exist: ") << db_file;
+            }
+        }
+
         std::shared_ptr<DatabaseManager> db_mgr(new DatabaseManager(db_file, new_db));
         std::shared_ptr<AppManager> app_mgr(new AppManager(db_mgr.get()));
 
