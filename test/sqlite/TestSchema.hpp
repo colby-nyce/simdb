@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simdb/schema/SchemaDef.hpp"
+#include "sqlite/TestData.hpp"
 
 namespace test::utils {
 

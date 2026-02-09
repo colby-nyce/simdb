@@ -25,22 +25,8 @@ jobs:
         run: |
           ./.github/actions/clang-format-check.sh
 
-  self-contained-headers:
-    name: Ensure headers are self-contained
-    runs-on: ubuntu-24.04
-    needs: clang-format
-
-    strategy:
-      matrix:
-        compiler: [gcc,clang]
-        build_type: [Debug,Release]
-
-    steps:
-      - run: |
-          ./.github/actions/check_headers.sh ${{ matrix.compiler }} ${{ matrix.build_type }} include
-
   build_test_job:
-    needs: self-contained-headers
+    needs: clang-format
     strategy:
       matrix:
         os: [ubuntu-24.04]

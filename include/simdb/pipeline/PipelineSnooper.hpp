@@ -10,6 +10,7 @@
 
 namespace simdb::pipeline {
 
+class PipelineManager;
 class Stage;
 
 template <typename KeyType, typename SnoopedType> class PipelineSnooper

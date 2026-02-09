@@ -5,6 +5,7 @@
 #include "SimDBTester.hpp"
 #include "simdb/apps/App.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
+#include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/Compress.hpp"
 
