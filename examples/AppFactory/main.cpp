@@ -118,7 +118,7 @@ TEST_INIT;
 int main()
 {
     simdb::AppManagers app_mgrs;
-    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
 
     // Quick negative test: try to parameterize an unregistered app
     EXPECT_THROW(app_mgr.parameterizeAppFactory<UnregisteredApp>());
@@ -157,8 +157,8 @@ int main()
 
     // Create two MyApp instances, each one going to a different database
     app_mgrs.destroyAll();
-    auto& app_mgr1 = app_mgrs.getAppManager("test1.db", true /*new file*/);
-    auto& app_mgr2 = app_mgrs.getAppManager("test2.db", true /*new file*/);
+    auto& app_mgr1 = app_mgrs.createAppManager("test1.db");
+    auto& app_mgr2 = app_mgrs.createAppManager("test2.db");
 
     // Send one MyApp to each database
     app_mgr1.enableApp(MyApp::NAME);

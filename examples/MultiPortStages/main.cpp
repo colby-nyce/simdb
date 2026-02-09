@@ -259,7 +259,7 @@ int main()
     std::srand(std::time(nullptr));
 
     simdb::AppManagers app_mgrs;
-    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
     auto& db_mgr = app_mgrs.getDatabaseManager();
 
     // Setup...

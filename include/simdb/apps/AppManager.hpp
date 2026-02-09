@@ -766,37 +766,41 @@ private:
 class AppManagers
 {
 public:
-    /// Get (or create) a new AppManager with a database filename / filepath
-    AppManager& getAppManager(const std::string& db_file, bool create_if_needed = true)
+    /// Create a new AppManager with a new database.
+    ///
+    /// Pass in new_db=true to overwrite existing database, or new_db=false to use
+    /// the existing database on disk. If new_db=false and the db_file does not
+    /// exist, throws an exception.
+    ///
+    /// Throws if an AppManager for this database already exists.
+    AppManager& createAppManager(const std::string& db_file, bool new_db=true)
     {
-        auto& app_mgr = app_mgrs_by_db_file_[db_file];
-        if (!app_mgr && !create_if_needed)
+        if (app_mgrs_by_db_file_.find(db_file) != app_mgrs_by_db_file_.end())
         {
-            app_mgrs_by_db_file_.erase(db_file);
-            throw DBException("AppManager does not exist for DB: ") << db_file;
-        } else if (!app_mgr)
-        {
-            // Sanity check
-            assert(db_mgrs_by_db_file_.find(db_file) == db_mgrs_by_db_file_.end());
-
-            // Create a new DatabaseManager (if needed)
-            std::shared_ptr<DatabaseManager> db_mgr;
-            if (auto it = db_mgrs_by_db_file_.find(db_file); it != db_mgrs_by_db_file_.end())
-            {
-                db_mgr = it->second;
-            } else
-            {
-                db_mgr = std::make_shared<DatabaseManager>(db_file, true /*new file*/);
-            }
-
-            // Create a new AppManager for this database
-            app_mgr.reset(new AppManager(db_mgr.get()));
-
-            db_mgrs_by_db_file_[db_file] = db_mgr;
-            app_mgrs_by_db_mgr_[db_mgr.get()] = app_mgr;
-            db_mgrs_by_app_mgr_[app_mgr.get()] = db_mgr;
+            throw DBException("AppManager already exists for database: ") << db_file;
         }
-        return *app_mgr;
+
+        std::shared_ptr<DatabaseManager> db_mgr(new DatabaseManager(db_file, new_db));
+        std::shared_ptr<AppManager> app_mgr(new AppManager(db_mgr.get()));
+
+        db_mgrs_by_db_file_[db_file] = db_mgr;
+        app_mgrs_by_db_file_[db_file] = app_mgr;
+
+        app_mgrs_by_db_mgr_[db_mgr.get()] = app_mgr;
+        db_mgrs_by_app_mgr_[app_mgr.get()] = db_mgr;
+
+        return *app_mgrs_by_db_file_[db_file];
+    }
+
+    /// Get an existing AppManager with a database filename / filepath.
+    /// Throws if createAppManager() was never called with this database.
+    AppManager& getAppManager(const std::string& db_file)
+    {
+        if (app_mgrs_by_db_file_.find(db_file) == app_mgrs_by_db_file_.end())
+        {
+            throw DBException("AppManager does not exist for this database: ") << db_file;
+        }
+        return *app_mgrs_by_db_file_[db_file];
     }
 
     /// If there is only one AppManager, return it. Otherwise throw.
