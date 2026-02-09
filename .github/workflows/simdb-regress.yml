@@ -26,8 +26,13 @@ jobs:
           ./.github/actions/clang-format-check.sh
 
   check-headers:
-    name: Self-contained header check
+    name: Self-contained header check (${{ matrix.BUILD_TYPE }}-${{matrix.COMPILER}})
     runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
 
     steps:
       - name: Clone SimDB
