@@ -6,6 +6,7 @@ on:
 env:
   CACHE_VERSION: v1
 
+name: SimDB checks
 jobs:
   clang-format:
     name: Ensure clang-format was run
