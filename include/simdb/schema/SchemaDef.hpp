@@ -338,7 +338,7 @@ public:
         for (const auto& cmd : index_creation_strs_)
         {
             // Command is something like:
-            //   CREATE INDEX <index_name] ON <table_name> (Foo,Bar)
+            //   CREATE INDEX <index_name> ON <table_name> (Foo,Bar)
             auto lparen = cmd.rfind("(");
             assert(lparen != std::string::npos);
 
