@@ -11,6 +11,10 @@ STD = "c++17"                          # C++ standard
 EXTRA_FLAGS = []                       # e.g., ["-DNDEBUG"] for Release
 GIT_FILE_EXTENSIONS = ("*.hpp", "*.h")
 
+CONDA_PREFIX = os.environ.get("CONDA_PREFIX")
+if CONDA_PREFIX:
+    EXTRA_FLAGS.append(f"-I{CONDA_PREFIX}/include")
+
 # ----------------------------
 # Helper functions
 # ----------------------------

@@ -6,7 +6,7 @@ on:
 env:
   CACHE_VERSION: v1
 
-name: Regress SimDB on Ubuntu
+name: SimDB checks
 jobs:
   clang-format:
     name: Ensure clang-format was run
@@ -25,15 +25,35 @@ jobs:
         run: |
           ./.github/actions/clang-format-check.sh
 
+  check-headers:
+    name: Self-contained header check (${{ matrix.BUILD_TYPE }}-${{matrix.COMPILER}})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Clone SimDB
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Run self-contained header check
+        run: python3 scripts/check-headers.py
+
   build_test_job:
-    needs: clang-format
     strategy:
       matrix:
         os: [ubuntu-24.04]
         BUILD_TYPE: [Debug,Release]
         COMPILER: [gcc,clang]
 
-    name: Ubuntu-${{ matrix.BUILD_TYPE }}-${{matrix.COMPILER}}
+    name: Regress SimDB on Ubuntu (${{ matrix.BUILD_TYPE }}-${{matrix.COMPILER}})
     runs-on: ${{ matrix.os }}
 
     # Set up a global environment variable for build scripts

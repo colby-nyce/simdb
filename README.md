@@ -325,3 +325,4 @@ In order to merge your PR, your changes will have to pass regression tests as we
 
 - Run `make simdb_regress` for release and/or debug builds. GitHub will test both on Linux & MacOS.
 - Format your code changes: `clang-format-17 -i $(git ls-files '*.cpp' '*.hpp')`
+- Ensure self-contained headers: `python3 scripts/check-headers.py`
