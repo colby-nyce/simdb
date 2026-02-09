@@ -15,14 +15,14 @@ int main(int argc, char** argv)
     simdb::AppManagers app_mgrs;
 
     // Test misuse of getAppManager(db_file, create_if_needed)
-    EXPECT_THROW(app_mgrs.getAppManager("test.db", false));
+    EXPECT_THROW(app_mgrs.getAppManager("test.db"));
 
     // Test misuse of getAppManager() / getDatabaseManager() APIs
     EXPECT_THROW(app_mgrs.getAppManager());
     EXPECT_THROW(app_mgrs.getDatabaseManager());
 
     // Create the app/db managers
-    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
     auto& db_mgr = app_mgrs.getDatabaseManager();
 
     // Get coverage for getAppManager() overload

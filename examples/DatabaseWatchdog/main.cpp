@@ -174,7 +174,7 @@ TEST_INIT;
 int main()
 {
     simdb::AppManagers app_mgrs;
-    auto& app_mgr = app_mgrs.getAppManager("test.db");
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
 
     app_mgr.disableMessageLog();
     app_mgr.disableErrorLog();
