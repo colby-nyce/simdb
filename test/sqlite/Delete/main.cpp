@@ -19,7 +19,7 @@ int main()
     tbl.addColumn("EndTick", dt::uint64_t);
 
     simdb::DatabaseManager db_mgr("test.db", true);
-    EXPECT_TRUE(db_mgr.appendSchema(schema));
+    db_mgr.appendSchema(schema);
 
     // Build this table of tick ranges:
     //

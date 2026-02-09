@@ -15,7 +15,7 @@ int main()
     test::utils::defineTestSchema(schema);
 
     simdb::DatabaseManager db_mgr("test.db", true);
-    EXPECT_TRUE(db_mgr.appendSchema(schema));
+    db_mgr.appendSchema(schema);
 
     // Verify INSERT for integer types
     auto record1 = db_mgr.INSERT(
@@ -153,6 +153,13 @@ int main()
     EXPECT_EQUAL(high_volume_record2->getPropertyUInt32("StartTick"), UINT32_MAX / 2 + 1);
     EXPECT_EQUAL(high_volume_record2->getPropertyUInt32("EndTick"), UINT32_MAX);
     EXPECT_EQUAL(high_volume_record2->getPropertyBlob<int>("DataBlob"), data_vec);
+
+    // Verify that we cannot write to an internal table.
+    EXPECT_TRUE(db_mgr.getSchema().hasTable("internal$SchemaTables"));
+    EXPECT_THROW(db_mgr.INSERT(SQL_TABLE("internal$SchemaTables")));
+    EXPECT_THROW(db_mgr.INSERT(SQL_TABLE("internal$SchemaTables"), SQL_COLUMNS("TableName"), SQL_VALUES("blah")));
+    EXPECT_THROW(db_mgr.prepareINSERT(SQL_TABLE("internal$SchemaTables"), SQL_COLUMNS("TableName")));
+    EXPECT_THROW(db_mgr.EXECUTE("INSERT INTO internal$SchemaTables (TableName) VALUES (\"blah\")"));
 
     REPORT_ERROR;
     return ERROR_CODE;

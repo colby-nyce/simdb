@@ -71,18 +71,32 @@ public:
                 const auto cmd = "rm -f " + db_file;
                 auto rc = system(cmd.c_str());
                 (void)rc;
-            } else
+
+                db_conn_.reset(new Connection);
+                createDatabaseFile_(pragmas);
+
+                using dt = SqlDataType;
+                Schema schema;
+
+                auto& schema_tables = schema.addTable("internal$SchemaTables");
+                schema_tables.addColumn("TableName", dt::string_t);
+                schema_tables.addColumn("IndexedColumns", dt::string_t);
+                schema_tables.addColumn("UsingPKey", dt::int32_t);
+                schema_tables.setColumnDefaultValue("UsingPKey", 1);
+
+                auto& schema_columns = schema.addTable("internal$SchemaColumns");
+                schema_columns.addColumn("TableName", dt::string_t);
+                schema_columns.addColumn("ColumnName", dt::string_t);
+                schema_columns.addColumn("ColumnDType", dt::string_t);
+                schema_columns.addColumn("ColumnDefaultVal", dt::string_t);
+                schema_columns.createIndexOn("TableName");
+
+                appendSchema(schema);
+            } else if (!connectToExistingDatabase_(db_file))
             {
-                if (!connectToExistingDatabase_(db_file))
-                {
-                    throw DBException("Unable to connect to database file: ") << db_file;
-                }
-                append_schema_allowed_ = false;
+                throw DBException("Unable to connect to database file: ") << db_file;
             }
         }
-
-        db_conn_.reset(new Connection);
-        createDatabaseFile_(pragmas);
     }
 
     /// \brief   Add one or more tables to the existing schema.
@@ -92,17 +106,11 @@ public:
     ///          existing file.
     ///
     /// \return  Returns true if successful, false otherwise.
-    bool appendSchema(const Schema& schema)
+    void appendSchema(const Schema& schema)
     {
-        if (!append_schema_allowed_)
-        {
-            throw DBException("Cannot alter schema if you created a "
-                              "DatabaseManager with an existing file.");
-        }
-
-        db_conn_->realizeSchema(schema);
         schema_.appendSchema(schema);
-        return true;
+        db_conn_->realizeSchema(schema);
+        serializeSchema_();
     }
 
     /// Get the schema for this database.
@@ -130,101 +138,54 @@ public:
     /// \return SqlRecord which wraps the table and the ID of its record.
     std::unique_ptr<SqlRecord> INSERT(SqlTable&& table, SqlColumns&& cols, SqlValues&& vals)
     {
-        std::unique_ptr<SqlRecord> record;
-
-        db_conn_->safeTransaction([&]() {
-            std::ostringstream oss;
-            oss << "INSERT INTO " << table.getName();
-            cols.writeColsForINSERT(oss);
-            vals.writeValsForINSERT(oss);
-
-            std::string cmd = oss.str();
-            auto stmt = db_conn_->prepareStatement(cmd);
-            vals.bindValsForINSERT(stmt);
-
-            auto rc = SQLiteReturnCode(sqlite3_step(stmt));
-            if (rc != SQLITE_DONE)
-            {
-                throw DBException("Could not perform INSERT. Error: ") << sqlite3_errmsg(db_conn_->getDatabase());
-            }
-
-            auto db_id = db_conn_->getLastInsertRowId();
-            record.reset(new SqlRecord(table.getName(), db_id, db_conn_->getDatabase(), db_conn_.get()));
-        });
-
-        return record;
+        if (table.getName().find("internal$") == 0)
+        {
+            throw DBException("Cannot perform INSERT. This is an internal table.");
+        }
+        return INSERT_(std::move(table), std::move(cols), std::move(vals));
     }
 
     /// This INSERT() overload is to be used for tables that were defined with
     /// at least one default value for its column(s).
     std::unique_ptr<SqlRecord> INSERT(SqlTable&& table)
     {
-        std::unique_ptr<SqlRecord> record;
-
-        db_conn_->safeTransaction([&]() {
-            const std::string cmd = "INSERT INTO " + table.getName() + " DEFAULT VALUES";
-            auto stmt = db_conn_->prepareStatement(cmd);
-
-            auto rc = SQLiteReturnCode(sqlite3_step(stmt));
-            if (rc != SQLITE_DONE)
-            {
-                throw DBException("Could not perform INSERT. Error: ") << sqlite3_errmsg(db_conn_->getDatabase());
-            }
-
-            auto db_id = db_conn_->getLastInsertRowId();
-            record.reset(new SqlRecord(table.getName(), db_id, db_conn_->getDatabase(), db_conn_.get()));
-        });
-
-        return record;
+        if (table.getName().find("internal$") == 0)
+        {
+            throw DBException("Cannot perform INSERT. This is an internal table.");
+        }
+        return INSERT_(std::move(table));
     }
 
     /// \brief Create a prepared statement for faster record creation
     ///        when you are creating many of the same table records.
     std::unique_ptr<PreparedINSERT> prepareINSERT(SqlTable&& table, SqlColumns&& cols)
     {
-        const std::set<std::string> col_names(cols.getColNames().begin(), cols.getColNames().end());
-
-        std::vector<SqlDataType> col_dtypes;
-        for (const auto& col : schema_.getTable(table.getName()).getColumns())
+        if (table.getName().find("internal$") == 0)
         {
-            if (col_names.count(col->getName()))
-            {
-                col_dtypes.push_back(col->getDataType());
-            }
+            throw DBException("Cannot perform INSERT. This is an internal table.");
         }
-
-        std::ostringstream oss;
-        oss << "INSERT INTO " << table.getName() << " (";
-
-        auto it = cols.getColNames().begin();
-        while (true)
-        {
-            oss << *it;
-            if (++it != cols.getColNames().end())
-            {
-                oss << ",";
-            } else
-            {
-                break;
-            }
-        }
-
-        oss << ") VALUES (";
-        for (size_t i = 0; i < col_dtypes.size(); ++i)
-        {
-            oss << "?" << (i != col_dtypes.size() - 1 ? "," : "");
-        }
-        oss << ")";
-
-        std::string cmd = oss.str();
-        auto stmt = db_conn_->prepareStatement(cmd);
-
-        return std::make_unique<PreparedINSERT>(std::move(stmt), col_dtypes, db_conn_);
+        return prepareINSERT_(std::move(table), std::move(cols));
     }
 
     /// \brief Execute an arbitrary SQL command on this database.
     void EXECUTE(const std::string& sql_cmd, bool in_transaction = true)
     {
+        std::vector<std::string> args;
+        boost::split(args, sql_cmd, boost::is_any_of(" "));
+        if (args.size() >= 3)
+        {
+            std::transform(args[0].begin(), args[0].end(), args[0].begin(),
+                           [](unsigned char ch) { return std::tolower(ch); });
+
+            std::transform(args[1].begin(), args[1].end(), args[1].begin(),
+                           [](unsigned char ch) { return std::tolower(ch); });
+
+            if (args[0] == "insert" && args[1] == "into" && args[2].find("internal$") == 0)
+            {
+                throw DBException("Invalid command. Cannot write to internal tables. Command: ") << sql_cmd;
+            }
+        }
+
         if (in_transaction)
         {
             db_conn_->safeTransaction([&]() {
@@ -357,12 +318,89 @@ private:
             return false;
         }
 
-        // TODO cnyce: Reconstitute the Schema member variable
-        // and remove the append_schema_allowed_ flag.
-
+        reconstituteSchema_();
         db_filepath_ = db_conn_->getDatabaseFilePath();
-        append_schema_allowed_ = false;
         return true;
+    }
+
+    /// \brief Regenerate the Schema object when attaching to an existing database file.
+    void reconstituteSchema_()
+    {
+        assert(schema_.getTables().empty());
+
+        auto tbl_query = createQuery("internal$SchemaTables");
+
+        std::string table_name, indexed_columns;
+        tbl_query->select("TableName", table_name);
+        tbl_query->select("IndexedColumns", indexed_columns);
+
+        int using_pkey;
+        tbl_query->select("UsingPKey", using_pkey);
+
+        auto tbl_results = tbl_query->getResultSet();
+        while (tbl_results.getNextRecord())
+        {
+            auto& tbl = schema_.addTable(table_name);
+
+            auto col_query = createQuery("internal$SchemaColumns");
+            col_query->addConstraintForString("TableName", Constraints::EQUAL, table_name);
+
+            std::string col_name, dtype_str, default_val_str;
+            col_query->select("ColumnName", col_name);
+            col_query->select("ColumnDType", dtype_str);
+            col_query->select("ColumnDefaultVal", default_val_str);
+
+            auto col_results = col_query->getResultSet();
+            while (col_results.getNextRecord())
+            {
+                using dt = SqlDataType;
+                static std::unordered_map<std::string, dt> dtypes;
+                if (dtypes.empty())
+                {
+                    dtypes["int32_t"] = dt::int32_t;
+                    dtypes["uint32_t"] = dt::uint32_t;
+                    dtypes["int64_t"] = dt::int64_t;
+                    dtypes["uint64_t"] = dt::uint64_t;
+                    dtypes["double_t"] = dt::double_t;
+                    dtypes["string_t"] = dt::string_t;
+                    dtypes["blob_t"] = dt::blob_t;
+                }
+
+                tbl.addColumn(col_name, dtypes.at(dtype_str));
+                if (!default_val_str.empty())
+                {
+                    tbl.getColumn_(col_name).setDefaultValueStr_(default_val_str);
+                }
+            }
+
+            // Indexed columns could be:
+            //   foo,bar|biz
+            // Which means:
+            //   tbl.createCompoundIndexOn({"foo","bar"});
+            //   tbl.createIndexOn("biz");
+            if (!indexed_columns.empty())
+            {
+                std::vector<std::string> index_strs;
+                boost::split(index_strs, indexed_columns, boost::is_any_of("|"));
+                for (const auto& index_str : index_strs)
+                {
+                    std::vector<std::string> index_cols;
+                    boost::split(index_cols, index_str, boost::is_any_of(","));
+                    if (index_cols.size() == 1)
+                    {
+                        tbl.createIndexOn(index_cols[0]);
+                    } else
+                    {
+                        tbl.createCompoundIndexOn(index_cols);
+                    }
+                }
+            }
+
+            if (!using_pkey)
+            {
+                tbl.disableAutoIncPrimaryKey();
+            }
+        }
     }
 
     /// Open the given database file.
@@ -389,6 +427,178 @@ private:
         }
 
         return false;
+    }
+
+    /// Serialize everything we know about the schema to the database.
+    void serializeSchema_()
+    {
+        safeTransaction([&]() {
+            removeAllRecordsFromTable("internal$SchemaTables");
+            removeAllRecordsFromTable("internal$SchemaColumns");
+
+            auto tbls_inserter = prepareINSERT_(SQL_TABLE("internal$SchemaTables"),
+                                                SQL_COLUMNS("TableName", "IndexedColumns", "UsingPKey"));
+
+            auto cols_inserter =
+                prepareINSERT_(SQL_TABLE("internal$SchemaColumns"),
+                               SQL_COLUMNS("TableName", "ColumnName", "ColumnDType", "ColumnDefaultVal"));
+
+            auto commaSepStringList = [](const std::vector<std::string>& strings) {
+                std::ostringstream oss;
+                for (size_t i = 0; i < strings.size(); ++i)
+                {
+                    oss << strings[i];
+                    if (i != strings.size() - 1)
+                    {
+                        oss << ",";
+                    }
+                }
+                return oss.str();
+            };
+
+            for (const auto& table : schema_.getTables())
+            {
+                const auto& table_name = table.getName();
+
+                std::ostringstream indexes_oss;
+                for (const auto& index_cols : table.getTableIndexes())
+                {
+                    indexes_oss << commaSepStringList(index_cols) << "|";
+                }
+
+                auto indexed_cols = indexes_oss.str();
+                if (!indexed_cols.empty())
+                {
+                    indexed_cols.pop_back();
+                }
+
+                int using_pkey = !table.autoIncPrimaryKeyDisabled();
+
+                tbls_inserter->setColumnValue(0, table_name);
+                tbls_inserter->setColumnValue(1, indexed_cols);
+                tbls_inserter->setColumnValue(2, using_pkey);
+                tbls_inserter->createRecord();
+
+                for (const auto& column : table.getColumns())
+                {
+                    using dt = SqlDataType;
+                    static std::unordered_map<dt, std::string> dtype_strs;
+                    if (dtype_strs.empty())
+                    {
+                        dtype_strs[dt::int32_t] = "int32_t";
+                        dtype_strs[dt::uint32_t] = "uint32_t";
+                        dtype_strs[dt::int64_t] = "int64_t";
+                        dtype_strs[dt::uint64_t] = "uint64_t";
+                        dtype_strs[dt::double_t] = "double_t";
+                        dtype_strs[dt::string_t] = "string_t";
+                        dtype_strs[dt::blob_t] = "blob_t";
+                    }
+
+                    const auto& column_name = column->getName();
+                    const auto column_dtype_str = dtype_strs.at(column->getDataType());
+                    const auto column_default_str = column->getDefaultValueAsString();
+
+                    cols_inserter->setColumnValue(0, table_name);
+                    cols_inserter->setColumnValue(1, column_name);
+                    cols_inserter->setColumnValue(2, column_dtype_str);
+                    cols_inserter->setColumnValue(3, column_default_str);
+                    cols_inserter->createRecord();
+                }
+            }
+        });
+    }
+
+    /// \see See public INSERT() method for details on how to call this method.
+    std::unique_ptr<SqlRecord> INSERT_(SqlTable&& table, SqlColumns&& cols, SqlValues&& vals)
+    {
+        std::unique_ptr<SqlRecord> record;
+
+        db_conn_->safeTransaction([&]() {
+            std::ostringstream oss;
+            oss << "INSERT INTO " << table.getName();
+            cols.writeColsForINSERT(oss);
+            vals.writeValsForINSERT(oss);
+
+            std::string cmd = oss.str();
+            auto stmt = db_conn_->prepareStatement(cmd);
+            vals.bindValsForINSERT(stmt);
+
+            auto rc = SQLiteReturnCode(sqlite3_step(stmt));
+            if (rc != SQLITE_DONE)
+            {
+                throw DBException("Could not perform INSERT. Error: ") << sqlite3_errmsg(db_conn_->getDatabase());
+            }
+
+            auto db_id = db_conn_->getLastInsertRowId();
+            record.reset(new SqlRecord(table.getName(), db_id, db_conn_->getDatabase(), db_conn_.get()));
+        });
+
+        return record;
+    }
+
+    /// \see See public INSERT() method for details on how to call this method.
+    std::unique_ptr<SqlRecord> INSERT_(SqlTable&& table)
+    {
+        std::unique_ptr<SqlRecord> record;
+
+        db_conn_->safeTransaction([&]() {
+            const std::string cmd = "INSERT INTO " + table.getName() + " DEFAULT VALUES";
+            auto stmt = db_conn_->prepareStatement(cmd);
+
+            auto rc = SQLiteReturnCode(sqlite3_step(stmt));
+            if (rc != SQLITE_DONE)
+            {
+                throw DBException("Could not perform INSERT. Error: ") << sqlite3_errmsg(db_conn_->getDatabase());
+            }
+
+            auto db_id = db_conn_->getLastInsertRowId();
+            record.reset(new SqlRecord(table.getName(), db_id, db_conn_->getDatabase(), db_conn_.get()));
+        });
+
+        return record;
+    }
+
+    /// \see See public prepareINSERT() method for details on how to call this method.
+    std::unique_ptr<PreparedINSERT> prepareINSERT_(SqlTable&& table, SqlColumns&& cols)
+    {
+        const std::set<std::string> col_names(cols.getColNames().begin(), cols.getColNames().end());
+
+        std::vector<SqlDataType> col_dtypes;
+        for (const auto& col : schema_.getTable(table.getName()).getColumns())
+        {
+            if (col_names.count(col->getName()))
+            {
+                col_dtypes.push_back(col->getDataType());
+            }
+        }
+
+        std::ostringstream oss;
+        oss << "INSERT INTO " << table.getName() << " (";
+
+        auto it = cols.getColNames().begin();
+        while (true)
+        {
+            oss << *it;
+            if (++it != cols.getColNames().end())
+            {
+                oss << ",";
+            } else
+            {
+                break;
+            }
+        }
+
+        oss << ") VALUES (";
+        for (size_t i = 0; i < col_dtypes.size(); ++i)
+        {
+            oss << "?" << (i != col_dtypes.size() - 1 ? "," : "");
+        }
+        oss << ")";
+
+        std::string cmd = oss.str();
+        auto stmt = db_conn_->prepareStatement(cmd);
+
+        return std::make_unique<PreparedINSERT>(std::move(stmt), col_dtypes, db_conn_);
     }
 
     /// Get a SqlRecord from a database ID for the given table.
@@ -429,11 +639,6 @@ private:
     /// Full database file name, including the database path
     /// and file extension
     std::string db_filepath_;
-
-    /// Flag saying whether or not the schema can be altered.
-    /// We do not allow schemas to be altered for DatabaseManager's
-    /// that were initialized with a previously existing file.
-    bool append_schema_allowed_ = true;
 };
 
 } // namespace simdb
