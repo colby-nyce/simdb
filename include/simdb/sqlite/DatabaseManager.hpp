@@ -80,8 +80,8 @@ public:
             auto err_msg = connectToExistingDatabase_();
             if (!err_msg.empty())
             {
-                throw DBException("Unable to connect to database file: ") << db_file
-                    << "\n  *** error message: " << err_msg;
+                throw DBException("Unable to connect to database file: ")
+                    << db_file << "\n  *** error message: " << err_msg;
             }
         }
 
@@ -323,8 +323,7 @@ private:
             reconstituteSchema_();
             db_filepath_ = db_conn_->getDatabaseFilePath();
             return "";
-        }
-        catch(const std::exception& ex)
+        } catch (const std::exception& ex)
         {
             return ex.what();
         }
