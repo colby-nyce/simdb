@@ -325,6 +325,24 @@ conda activate simdb
 
 ---
 
+## Installing SimDB
+
+### System Install
+
+```
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/ ..
+sudo make install
+```
+
+### Conda Install
+
+```
+conda activate <your-env-name>
+cmake --install . --prefix $CONDA_PREFIX
+```
+
+---
+
 ## Regression Tests
 
 ```
