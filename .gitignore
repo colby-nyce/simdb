@@ -1,6 +1,10 @@
 compile_commands.json
 release/**
 debug/**
+relwithdebinfo/**
+Release/**
+Debug/**
+RelWithDebInfo/**
 .vscode
 build.log
 .editorconfig
