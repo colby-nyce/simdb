@@ -64,38 +64,43 @@ public:
                     const PragmaPairs& pragmas = {}) :
         db_file_(db_file)
     {
-        if (std::filesystem::exists(db_file))
+        auto db_file_exists = std::filesystem::exists(db_file);
+        if (db_file_exists && force_new_file)
         {
-            if (force_new_file)
-            {
-                const auto cmd = "rm -f " + db_file;
-                auto rc = system(cmd.c_str());
-                (void)rc;
+            const auto cmd = "rm -f " + db_file;
+            auto rc = system(cmd.c_str());
+            (void)rc;
 
-                db_conn_.reset(new Connection);
-                createDatabaseFile_(pragmas);
+            db_conn_.reset(new Connection);
+            openDatabaseFile_(pragmas);
+        } else if (db_file_exists && !connectToExistingDatabase_(db_file))
+        {
+            throw DBException("Unable to connect to database file: ") << db_file;
+        } else if (!db_conn_)
+        {
+            db_conn_.reset(new Connection);
+            openDatabaseFile_(pragmas);
+        }
 
-                using dt = SqlDataType;
-                Schema schema;
+        if (!schema_.hasTable("internal$SchemaTables"))
+        {
+            using dt = SqlDataType;
+            Schema schema;
 
-                auto& schema_tables = schema.addTable("internal$SchemaTables");
-                schema_tables.addColumn("TableName", dt::string_t);
-                schema_tables.addColumn("IndexedColumns", dt::string_t);
-                schema_tables.addColumn("UsingPKey", dt::int32_t);
-                schema_tables.setColumnDefaultValue("UsingPKey", 1);
+            auto& schema_tables = schema.addTable("internal$SchemaTables");
+            schema_tables.addColumn("TableName", dt::string_t);
+            schema_tables.addColumn("IndexedColumns", dt::string_t);
+            schema_tables.addColumn("UsingPKey", dt::int32_t);
+            schema_tables.setColumnDefaultValue("UsingPKey", 1);
 
-                auto& schema_columns = schema.addTable("internal$SchemaColumns");
-                schema_columns.addColumn("TableName", dt::string_t);
-                schema_columns.addColumn("ColumnName", dt::string_t);
-                schema_columns.addColumn("ColumnDType", dt::string_t);
-                schema_columns.addColumn("ColumnDefaultVal", dt::string_t);
-                schema_columns.createIndexOn("TableName");
+            auto& schema_columns = schema.addTable("internal$SchemaColumns");
+            schema_columns.addColumn("TableName", dt::string_t);
+            schema_columns.addColumn("ColumnName", dt::string_t);
+            schema_columns.addColumn("ColumnDType", dt::string_t);
+            schema_columns.addColumn("ColumnDefaultVal", dt::string_t);
+            schema_columns.createIndexOn("TableName");
 
-                appendSchema(schema);
-            } else if (!connectToExistingDatabase_(db_file))
-            {
-                throw DBException("Unable to connect to database file: ") << db_file;
-            }
+            appendSchema(schema);
         }
     }
 
@@ -404,7 +409,7 @@ private:
     }
 
     /// Open the given database file.
-    bool createDatabaseFile_(const PragmaPairs& pragmas)
+    bool openDatabaseFile_(const PragmaPairs& pragmas)
     {
         if (!db_conn_)
         {
