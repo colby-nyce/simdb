@@ -285,7 +285,9 @@ See test/sqlite/Query/main.cpp
 
 ## Requirements
 
-SimDB is a header-only library with minimal dependencies. You will need the following:
+SimDB is a header-only library with minimal dependencies. You will need the following packages:
+
+### System packages (Ubuntu / Debian)
 
 ```
 sudo apt-get update
@@ -297,7 +299,29 @@ sudo apt-get install -y \
     build-essential
 ```
 
-Note that zlib is used for tests/examples only.
+### Conda Installation (existing environment)
+
+```
+conda activate <your-env-name>
+conda install -y \
+    cmake \
+    sqlite \
+    zlib \
+    clang-format \
+    compilers
+```
+
+### Conda Installation (new environment)
+
+```
+conda create -n simdb -y \
+    cmake \
+    sqlite \
+    zlib \
+    clang-format \
+    compilers
+conda activate simdb
+```
 
 ---
 
@@ -321,8 +345,10 @@ make simdb_regress
 
 ## Submission Guidelines
 
-In order to merge your PR, your changes will have to pass regression tests as well as the clang-format check. Before opening a PR:
+Before opening a PR:
 
-- Run `make simdb_regress` for release and/or debug builds. GitHub will test both on Linux & MacOS.
+- Run `make simdb_regress` for release and/or debug builds (Linux, MacOS)
 - Format your code changes: `clang-format-17 -i $(git ls-files '*.cpp' '*.hpp')`
 - Ensure self-contained headers: `python3 scripts/check-headers.py`
+
+GitHub will run these checks too, and all must pass before merging your PR.

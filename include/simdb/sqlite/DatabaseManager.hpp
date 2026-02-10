@@ -70,16 +70,21 @@ public:
             const auto cmd = "rm -f " + db_file;
             auto rc = system(cmd.c_str());
             (void)rc;
+        }
 
-            db_conn_.reset(new Connection);
-            openDatabaseFile_(pragmas);
-        } else if (db_file_exists && !connectToExistingDatabase_(db_file))
+        db_conn_.reset(new Connection);
+        openDatabaseFile_(pragmas);
+
+        if (db_file_exists && !force_new_file)
         {
-            throw DBException("Unable to connect to database file: ") << db_file;
-        } else if (!db_conn_)
-        {
-            db_conn_.reset(new Connection);
-            openDatabaseFile_(pragmas);
+            try
+            {
+                connectToExistingDatabase_();
+            } catch (const std::exception& ex)
+            {
+                throw DBException("Unable to connect to database file: ")
+                    << db_file << "\n  *** error message: " << ex.what();
+            }
         }
 
         if (!schema_.hasTable("internal$SchemaTables"))
@@ -90,8 +95,8 @@ public:
             auto& schema_tables = schema.addTable("internal$SchemaTables");
             schema_tables.addColumn("TableName", dt::string_t);
             schema_tables.addColumn("IndexedColumns", dt::string_t);
-            schema_tables.addColumn("UsingPKey", dt::int32_t);
-            schema_tables.setColumnDefaultValue("UsingPKey", 1);
+            schema_tables.addColumn("PrimaryKey", dt::string_t);
+            schema_tables.setColumnDefaultValue("PrimaryKey", "Id");
 
             auto& schema_columns = schema.addTable("internal$SchemaColumns");
             schema_columns.addColumn("TableName", dt::string_t);
@@ -311,21 +316,12 @@ private:
     /// \note   The 'db_fpath' is typically one that was given to us
     ///         from a previous call to getDatabaseFilePath()
     ///
-    /// \return Returns true if successful, false otherwise.
-    bool connectToExistingDatabase_(const std::string& db_fpath)
+    /// \return Returns error message if failed to connect
+    void connectToExistingDatabase_()
     {
-        db_conn_.reset(new Connection);
-
-        if (db_conn_->openDbFile_(db_fpath).empty())
-        {
-            db_conn_.reset();
-            db_filepath_.clear();
-            return false;
-        }
-
+        assert(db_conn_ != nullptr);
         reconstituteSchema_();
         db_filepath_ = db_conn_->getDatabaseFilePath();
-        return true;
     }
 
     /// \brief Regenerate the Schema object when attaching to an existing database file.
@@ -335,12 +331,10 @@ private:
 
         auto tbl_query = createQuery("internal$SchemaTables");
 
-        std::string table_name, indexed_columns;
+        std::string table_name, indexed_columns, primary_key;
         tbl_query->select("TableName", table_name);
         tbl_query->select("IndexedColumns", indexed_columns);
-
-        int using_pkey;
-        tbl_query->select("UsingPKey", using_pkey);
+        tbl_query->select("PrimaryKey", primary_key);
 
         auto tbl_results = tbl_query->getResultSet();
         while (tbl_results.getNextRecord())
@@ -401,10 +395,7 @@ private:
                 }
             }
 
-            if (!using_pkey)
-            {
-                tbl.disableAutoIncPrimaryKey();
-            }
+            tbl.setPrimaryKey(primary_key);
         }
     }
 
@@ -442,7 +433,7 @@ private:
             removeAllRecordsFromTable("internal$SchemaColumns");
 
             auto tbls_inserter = prepareINSERT_(SQL_TABLE("internal$SchemaTables"),
-                                                SQL_COLUMNS("TableName", "IndexedColumns", "UsingPKey"));
+                                                SQL_COLUMNS("TableName", "IndexedColumns", "PrimaryKey"));
 
             auto cols_inserter =
                 prepareINSERT_(SQL_TABLE("internal$SchemaColumns"),
@@ -477,11 +468,11 @@ private:
                     indexed_cols.pop_back();
                 }
 
-                int using_pkey = !table.autoIncPrimaryKeyDisabled();
+                auto primary_key = table.getPrimaryKey();
 
                 tbls_inserter->setColumnValue(0, table_name);
                 tbls_inserter->setColumnValue(1, indexed_cols);
-                tbls_inserter->setColumnValue(2, using_pkey);
+                tbls_inserter->setColumnValue(2, primary_key);
                 tbls_inserter->createRecord();
 
                 for (const auto& column : table.getColumns())

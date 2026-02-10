@@ -121,26 +121,13 @@ public:
                 std::ostringstream oss;
                 oss << "CREATE TABLE IF NOT EXISTS " << table.getName() << "(";
 
-                // All tables have an auto-incrementing primary key
-                if (table.use_auto_inc_primary_key_)
-                {
-                    oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
-                }
-
-                // Fill in the rest of the CREATE TABLE command:
-                // CREATE TABLE Id INTEGER PRIMARY KEY AUTOINCREMENT First TEXT,
-                // ...
-                //                                                   ---------------
+                // Fill in the rest of the CREATE TABLE command
                 oss << getColumnsSqlCommand_(table) << ");";
 
                 // Create the table in the database
                 executeCommand(oss.str());
 
-                // Now create any table indexes, for example:
-                //     CREATE INDEX customer_fullname ON Customers (First,Last)
-                //     CREATE INDEX county_population ON Counties
-                //     (CountyName,Population)
-                //     ...
+                // Now create any table indexes
                 for (const auto& cmd : table.index_creation_strs_)
                 {
                     executeCommand(cmd);
@@ -224,12 +211,25 @@ private:
     std::string getColumnsSqlCommand_(const Table& table) const
     {
         std::ostringstream oss;
-        const auto& columns = table.getColumns();
 
+        // If the table's primary key is "Id", then add that to the schema
+        // as the first column.
+        const auto& pkey = table.getPrimaryKey();
+        if (pkey == "Id")
+        {
+            oss << "Id INTEGER PRIMARY KEY AUTOINCREMENT, ";
+        }
+
+        const auto& columns = table.getColumns();
         for (size_t idx = 0; idx < columns.size(); ++idx)
         {
             auto column = columns[idx];
             oss << column->getName() << " " << column->getDataType();
+            if (column->getName() == pkey)
+            {
+                assert(pkey != "Id");
+                oss << " PRIMARY KEY";
+            }
             if (column->hasDefaultValue())
             {
                 oss << " DEFAULT " << column->getDefaultValueAsString();
