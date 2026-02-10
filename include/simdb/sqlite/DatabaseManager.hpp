@@ -77,11 +77,13 @@ public:
 
         if (db_file_exists && !force_new_file)
         {
-            auto err_msg = connectToExistingDatabase_();
-            if (!err_msg.empty())
+            try
+            {
+                connectToExistingDatabase_();
+            } catch (const std::exception& ex)
             {
                 throw DBException("Unable to connect to database file: ")
-                    << db_file << "\n  *** error message: " << err_msg;
+                    << db_file << "\n  *** error message: " << ex.what();
             }
         }
 
@@ -315,18 +317,11 @@ private:
     ///         from a previous call to getDatabaseFilePath()
     ///
     /// \return Returns error message if failed to connect
-    std::string connectToExistingDatabase_()
+    void connectToExistingDatabase_()
     {
         assert(db_conn_ != nullptr);
-        try
-        {
-            reconstituteSchema_();
-            db_filepath_ = db_conn_->getDatabaseFilePath();
-            return "";
-        } catch (const std::exception& ex)
-        {
-            return ex.what();
-        }
+        reconstituteSchema_();
+        db_filepath_ = db_conn_->getDatabaseFilePath();
     }
 
     /// \brief Regenerate the Schema object when attaching to an existing database file.
