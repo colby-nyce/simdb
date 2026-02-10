@@ -84,13 +84,50 @@ int main()
     // Verify that all three schemas got past their negative tests
     // and can individually be used to instantiate databases.
     simdb::DatabaseManager db_mgr("test1.db", true);
-    EXPECT_TRUE(db_mgr.appendSchema(schema));
+    EXPECT_NOTHROW(db_mgr.appendSchema(schema));
 
     simdb::DatabaseManager db_mgr2("test2.db", true);
-    EXPECT_TRUE(db_mgr2.appendSchema(schema2));
+    EXPECT_NOTHROW(db_mgr2.appendSchema(schema2));
 
     simdb::DatabaseManager db_mgr3("test3.db", true);
-    EXPECT_TRUE(db_mgr3.appendSchema(schema3));
+    EXPECT_NOTHROW(db_mgr3.appendSchema(schema3));
+
+    // Verify the Schema recreation when attaching a DatabaseManager to an
+    // existing database file.
+    simdb::Schema schema4;
+    auto& all_dtypes_tbl = schema4.addTable("AllDataTypes");
+    all_dtypes_tbl.addColumn("TheInt32", dt::int32_t);
+    all_dtypes_tbl.addColumn("TheUInt32", dt::uint32_t);
+    all_dtypes_tbl.addColumn("TheInt64", dt::int64_t);
+    all_dtypes_tbl.addColumn("TheUInt64", dt::uint64_t);
+    all_dtypes_tbl.addColumn("TheDouble", dt::double_t);
+    all_dtypes_tbl.addColumn("TheString", dt::string_t);
+    all_dtypes_tbl.addColumn("TheBlob", dt::blob_t);
+    all_dtypes_tbl.setColumnDefaultValue("TheString", "HelloWorld");
+    all_dtypes_tbl.setColumnDefaultValue("TheUInt64", 0xdeadbeef);
+    all_dtypes_tbl.createIndexOn("TheInt64");
+    all_dtypes_tbl.createCompoundIndexOn({"TheDouble", "TheString"});
+
+    simdb::DatabaseManager db_mgr4("test5.db", true /*new db*/);
+    EXPECT_NOTHROW(db_mgr4.appendSchema(schema4));
+
+    simdb::DatabaseManager db_mgr5("test5.db", false /*connect to test5.db*/);
+    EXPECT_TRUE(db_mgr5.getSchema() == db_mgr4.getSchema());
+
+    // Create a record on the database with the reconstituted schema.
+    // Start with the INSERT() method.
+    auto all_dtypes_record = db_mgr4.INSERT(
+        SQL_TABLE("AllDataTypes"),
+        SQL_COLUMNS("TheInt32", "TheUInt32", "TheInt64", "TheUInt64", "TheDouble", "TheString", "TheBlob"),
+        SQL_VALUES(INT32_MAX, UINT32_MAX, INT64_MAX, UINT64_MAX, 3.14, "blah", std::vector<int>{1,2,3}));
+
+    EXPECT_EQUAL(all_dtypes_record->getPropertyInt32("TheInt32"), INT32_MAX);
+    EXPECT_EQUAL(all_dtypes_record->getPropertyUInt32("TheUInt32"), UINT32_MAX);
+    EXPECT_EQUAL(all_dtypes_record->getPropertyInt64("TheInt64"), INT64_MAX);
+    EXPECT_EQUAL(all_dtypes_record->getPropertyUInt64("TheUInt64"), UINT64_MAX);
+    EXPECT_EQUAL(all_dtypes_record->getPropertyDouble("TheDouble"), 3.14);
+    EXPECT_EQUAL(all_dtypes_record->getPropertyString("TheString"), "blah");
+    EXPECT_EQUAL(all_dtypes_record->getPropertyBlob<int>("TheBlob"), std::vector<int>({1,2,3}));
 
     REPORT_ERROR;
     return ERROR_CODE;

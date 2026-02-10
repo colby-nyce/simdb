@@ -2,6 +2,7 @@
 import subprocess
 import os, sys
 from pathlib import Path
+from multiprocessing import Pool, cpu_count
 
 # ----------------------------
 # Configurable parameters
@@ -29,14 +30,13 @@ def get_git_headers():
             check=True
         )
         headers = result.stdout.strip().split("\n")
-        # Filter out empty lines
         return [hdr for hdr in headers if hdr and 'argos' not in os.path.abspath(hdr).split(os.path.sep)]
     except subprocess.CalledProcessError as e:
         print("Error running git ls-files:", e.stderr, file=sys.stderr)
         sys.exit(1)
 
 def compile_header(header_path):
-    """Compile a single header and return (success, output)."""
+    """Compile a single header and return (header_path, success, output)."""
     cmd = [
         COMPILER,
         f"-std={STD}",
@@ -59,7 +59,7 @@ def compile_header(header_path):
         )
         success = result.returncode == 0
         output = result.stderr.strip()
-        return success, output
+        return header_path, success, output
     except FileNotFoundError:
         print(f"Compiler '{COMPILER}' not found!", file=sys.stderr)
         sys.exit(1)
@@ -75,14 +75,15 @@ def main():
 
     found_issues = False
 
-    for hdr in headers:
-        print(f"Checking header: {hdr}")
-        success, output = compile_header(hdr)
-        if not success:
-            found_issues = True
-            print(f'Found issues in header "{hdr}":')
-            for line in output.splitlines():
-                print(f"    {line}")
+    # Use a multiprocessing Pool with streaming results
+    with Pool(processes=cpu_count()) as pool:
+        for hdr, success, output in pool.imap_unordered(compile_header, headers):
+            print(f"Checking header: {hdr}")
+            if not success:
+                found_issues = True
+                print(f'Found issues in header "{hdr}":')
+                for line in output.splitlines():
+                    print(f"    {line}")
 
     if found_issues:
         print("\nSome headers failed the self-contained check.")

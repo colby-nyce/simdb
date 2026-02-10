@@ -21,7 +21,7 @@ int main()
     tbl.addColumn("DataWindow", dt::blob_t);
 
     simdb::DatabaseManager db_mgr("test.db", true);
-    EXPECT_TRUE(db_mgr.appendSchema(schema));
+    db_mgr.appendSchema(schema);
 
     auto insert_record = [&db_mgr](const std::pair<uint64_t, uint64_t>& range, const std::vector<int>& data)
     {

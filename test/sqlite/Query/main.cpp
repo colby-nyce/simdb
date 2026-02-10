@@ -16,7 +16,7 @@ int main()
     using dt = simdb::SqlDataType;
 
     simdb::DatabaseManager db_mgr("test.db", true);
-    EXPECT_TRUE(db_mgr.appendSchema(schema));
+    db_mgr.appendSchema(schema);
 
     // To get ready for testing the SqlQuery class, first create some new records.
     // Note that we don't test uint64_t here since there is already an exhaustive
@@ -659,15 +659,6 @@ int main()
     // created by another DatabaseManager.
     simdb::DatabaseManager db_mgr2(db_mgr.getDatabaseFilePath());
 
-    // Verify that we cannot alter the schema since this second DatabaseManager
-    // did not instantiate the schema in the first place.
-    simdb::Schema schema2;
-
-    schema2.addTable("SomeTable")
-        .addColumn("SomeColumn", dt::string_t);
-
-    EXPECT_THROW(db_mgr2.appendSchema(schema2));
-
     int id;
     query7->select("Id", id);
     query7->select("SomeInt32", i32);
@@ -685,11 +676,11 @@ int main()
     EXPECT_EQUAL(record12->getPropertyString("SomeString"), str);
 
     // Ensure that we can append tables to an existing database schema.
-    simdb::Schema schema3;
+    simdb::Schema schema2;
 
-    schema3.addTable("AppendedTable").addColumn("SomeInt32", dt::int32_t);
+    schema2.addTable("AppendedTable").addColumn("SomeInt32", dt::int32_t);
 
-    db_mgr.appendSchema(schema3);
+    db_mgr.appendSchema(schema2);
 
     db_mgr.INSERT(SQL_TABLE("AppendedTable"), SQL_COLUMNS("SomeInt32"), SQL_VALUES(101));
     db_mgr.INSERT(SQL_TABLE("AppendedTable"), SQL_COLUMNS("SomeInt32"), SQL_VALUES(101));
@@ -733,11 +724,11 @@ int main()
     EXPECT_THROW(simdb::DatabaseManager db_mgr3(__FILE__));
 
     // Test what happens when we delete records from a table using WHERE contraints.
-    simdb::Schema schema4;
-    auto& alphanum_tbl = schema4.addTable("AlphaNumbers");
+    simdb::Schema schema3;
+    auto& alphanum_tbl = schema3.addTable("AlphaNumbers");
     alphanum_tbl.addColumn("Alpha", dt::string_t);
     alphanum_tbl.addColumn("Number", dt::int32_t);
-    db_mgr.appendSchema(schema4);
+    db_mgr.appendSchema(schema3);
 
     for (int i = 1; i <= 26; ++i)
     {
@@ -791,13 +782,13 @@ int main()
     // that does not use auto-incrementing primary keys. This
     // verifies that a query "ORDER BY Id" bug is fixed (cannot
     // just assume that the Id column is there).
-    simdb::Schema schema5;
-    auto& customers_tbl = schema5.addTable("Customers");
+    simdb::Schema schema4;
+    auto& customers_tbl = schema4.addTable("Customers");
     customers_tbl.addColumn("FirstName", dt::string_t);
     customers_tbl.addColumn("LastName", dt::string_t);
     customers_tbl.disableAutoIncPrimaryKey();
 
-    db_mgr.appendSchema(schema5);
+    db_mgr.appendSchema(schema4);
 
     db_mgr.INSERT(
         SQL_TABLE("Customers"),

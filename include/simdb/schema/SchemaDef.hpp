@@ -10,9 +10,14 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+#include <boost/algorithm/string.hpp>
+
 namespace simdb {
+
+class DatabaseManager;
 
 /// Data types supported by SimDB schemas
 enum class SqlDataType { int32_t, uint32_t, int64_t, uint64_t, double_t, string_t, blob_t };
@@ -67,7 +72,10 @@ public:
     }
 
     /// Equivalence is defined as having the same name and data type.
-    bool operator==(const Column& rhs) const { return name_ == rhs.name_ && dt_ == rhs.dt_; }
+    bool operator==(const Column& rhs) const
+    {
+        return name_ == rhs.name_ && dt_ == rhs.dt_ && default_val_string_ == rhs.default_val_string_;
+    }
 
     /// Equivalence is defined as having the same name and data type.
     bool operator!=(const Column& rhs) const { return !(*this == rhs); }
@@ -115,7 +123,7 @@ public:
 
         std::ostringstream ss;
         writeDefaultValue_(ss, val);
-        default_val_string_ = ss.str();
+        setDefaultValueStr_(ss.str());
 
         if (default_val_string_.empty())
         {
@@ -131,7 +139,7 @@ public:
             throw DBException("Unable to set default value string (data type mismatch)");
         }
 
-        default_val_string_ = val;
+        setDefaultValueStr_(val);
     }
 
     /// Check if this column has a default value set or not.
@@ -167,6 +175,12 @@ private:
     {
         throw DBException("Only INT/REAL/TEXT columns support default values");
     }
+
+    /// Set the default-value-as-string.
+    void setDefaultValueStr_(const std::string& val) { default_val_string_ = val; }
+
+    /// DatabaseManager needs setDefaultValueStr_
+    friend class DatabaseManager;
 
     /// Column name
     std::string name_;
@@ -260,6 +274,12 @@ public:
     /// CREATE INDEX IndexName ON TableName(ColA,ColB,ColC)
     Table& createCompoundIndexOn(const std::initializer_list<std::string>& col_names)
     {
+        return createCompoundIndexOn(std::vector<std::string>(col_names.begin(), col_names.end()));
+    }
+
+    /// See std::initializer_list overload
+    Table& createCompoundIndexOn(const std::vector<std::string>& col_names)
+    {
         for (const auto& col_name : col_names)
         {
             if (columns_by_name_.find(col_name) == columns_by_name_.end())
@@ -289,12 +309,64 @@ public:
         return *this;
     }
 
+    /// Get a list of table indexes. Say we created the table like this:
+    ///
+    ///   using dt = SqlDataType;
+    ///   Schema schema;
+    ///   auto& tbl = schema.addTable("MyTable");
+    ///   tbl.addColumn("Foo", dt::int32_t);
+    ///   tbl.addColumn("Bar", dt::int32_t);
+    ///   tbl.addColumn("Fiz", dt::int32_t);
+    ///   tbl.addColumn("Buz", dt::int32_t);
+    ///
+    /// Then added these indexes:
+    ///
+    ///   tbl.createIndexOn("Foo");
+    ///   tbl.createIndexOn("Bar");
+    ///   tbl.createCompoundIndexOn({"Fiz", "Buz"});
+    ///
+    /// Calling getTableIndexes() will return:
+    ///
+    ///   [
+    ///     ["Foo"],
+    ///     ["Bar"],
+    ///     ["Fiz", "Buz"]
+    ///   ]
+    std::vector<std::vector<std::string>> getTableIndexes() const
+    {
+        std::vector<std::vector<std::string>> indexes;
+        for (const auto& cmd : index_creation_strs_)
+        {
+            // Command is something like:
+            //   CREATE INDEX <index_name> ON <table_name> (Foo,Bar)
+            auto lparen = cmd.rfind("(");
+            assert(lparen != std::string::npos);
+
+            auto rparen = cmd.rfind(")");
+            assert(rparen != std::string::npos);
+            assert(rparen > lparen);
+
+            auto idx_cols = cmd.substr(lparen + 1, rparen - lparen - 1);
+            indexes.emplace_back();
+            boost::split(indexes.back(), idx_cols, boost::is_any_of(","));
+
+            for (auto& s : indexes.back())
+            {
+                boost::trim(s);
+            }
+        }
+        return indexes;
+    }
+
     /// Disable the auto-incrementing primary key for this table.
     Table& disableAutoIncPrimaryKey()
     {
         use_auto_inc_primary_key_ = false;
         return *this;
     }
+
+    /// See if this table uses the auto-incrementing primary key.
+    bool autoIncPrimaryKeyDisabled() const { return !use_auto_inc_primary_key_; }
 
     /// Read-only access to this table's columns.
     const std::vector<std::shared_ptr<Column>>& getColumns() const { return columns_; }
@@ -320,6 +392,16 @@ public:
             }
         }
 
+        if (getTableIndexes() != rhs.getTableIndexes())
+        {
+            return false;
+        }
+
+        if (use_auto_inc_primary_key_ != rhs.use_auto_inc_primary_key_)
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -327,6 +409,18 @@ public:
     bool operator!=(const Table& rhs) const { return !(*this == rhs); }
 
 private:
+    /// Get a column by its name. Throws if not found.
+    Column& getColumn_(const std::string& col_name)
+    {
+        auto iter = columns_by_name_.find(col_name);
+        if (iter == columns_by_name_.end())
+        {
+            throw DBException("No column named ") << col_name << " in table " << name_;
+        }
+
+        return *(iter->second);
+    }
+
     /// Name of this table
     std::string name_;
 
@@ -348,6 +442,9 @@ private:
     bool use_auto_inc_primary_key_ = true;
 
     friend class Connection;
+
+    /// DatabaseManager needs getColumn_
+    friend class DatabaseManager;
 };
 
 /*!
@@ -427,6 +524,38 @@ public:
         }
 
         return false;
+    }
+
+    /// Equivalency check.
+    bool operator==(const Schema& rhs) const
+    {
+        auto getTableNames = [](const Schema& schema) {
+            std::unordered_set<std::string> table_names;
+            for (const auto& tbl : schema.getTables())
+            {
+                table_names.insert(tbl.getName());
+            }
+            return table_names;
+        };
+
+        auto my_table_names = getTableNames(*this);
+        auto their_table_names = getTableNames(rhs);
+        if (my_table_names != their_table_names)
+        {
+            return false;
+        }
+
+        for (const auto& table_name : my_table_names)
+        {
+            const auto& my_table = getTable(table_name);
+            const auto& their_table = getTable(table_name);
+            if (my_table != their_table)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 private:
