@@ -70,16 +70,19 @@ public:
             const auto cmd = "rm -f " + db_file;
             auto rc = system(cmd.c_str());
             (void)rc;
+        }
 
-            db_conn_.reset(new Connection);
-            openDatabaseFile_(pragmas);
-        } else if (db_file_exists && !connectToExistingDatabase_(db_file))
+        db_conn_.reset(new Connection);
+        openDatabaseFile_(pragmas);
+
+        if (db_file_exists && !force_new_file)
         {
-            throw DBException("Unable to connect to database file: ") << db_file;
-        } else if (!db_conn_)
-        {
-            db_conn_.reset(new Connection);
-            openDatabaseFile_(pragmas);
+            auto err_msg = connectToExistingDatabase_();
+            if (!err_msg.empty())
+            {
+                throw DBException("Unable to connect to database file: ") << db_file
+                    << "\n  *** error message: " << err_msg;
+            }
         }
 
         if (!schema_.hasTable("internal$SchemaTables"))
@@ -311,21 +314,20 @@ private:
     /// \note   The 'db_fpath' is typically one that was given to us
     ///         from a previous call to getDatabaseFilePath()
     ///
-    /// \return Returns true if successful, false otherwise.
-    bool connectToExistingDatabase_(const std::string& db_fpath)
+    /// \return Returns error message if failed to connect
+    std::string connectToExistingDatabase_()
     {
-        db_conn_.reset(new Connection);
-
-        if (db_conn_->openDbFile_(db_fpath).empty())
+        assert(db_conn_ != nullptr);
+        try
         {
-            db_conn_.reset();
-            db_filepath_.clear();
-            return false;
+            reconstituteSchema_();
+            db_filepath_ = db_conn_->getDatabaseFilePath();
+            return "";
         }
-
-        reconstituteSchema_();
-        db_filepath_ = db_conn_->getDatabaseFilePath();
-        return true;
+        catch(const std::exception& ex)
+        {
+            return ex.what();
+        }
     }
 
     /// \brief Regenerate the Schema object when attaching to an existing database file.
