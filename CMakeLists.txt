@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_DEBUG "-U_FORTIFY_SOURCE -O0 -g3")
 
 project(simdb LANGUAGES CXX VERSION 4.0.0)
-add_library(simdb INTERFACE)
+add_library(simdb src/AppManager.cpp)
 add_library(SimDB::simdb ALIAS simdb)
 
 find_package(SQLite3 3.19 REQUIRED)
@@ -19,13 +19,15 @@ set(SIMDB_BASE ${CMAKE_CURRENT_SOURCE_DIR})
 option(SIMDB_PEDANTIC "Enable build with -Wall -Wextra -Werror" ON)
 
 if(SIMDB_PEDANTIC)
-    target_compile_options(simdb INTERFACE
+    target_compile_options(simdb PUBLIC
         $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Werror>
         $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Werror>
     )
 endif()
 
-target_include_directories(simdb INTERFACE
+target_compile_options(simdb PRIVATE -fPIC)
+
+target_include_directories(simdb PUBLIC
     $<BUILD_INTERFACE:${SIMDB_BASE}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -75,6 +77,12 @@ install(
         ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfig.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/SimDBConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SimDB
+)
+
+install(
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/libsimdb.a
+    DESTINATION lib
 )
 
 install(
