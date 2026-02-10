@@ -1,8 +1,6 @@
 # SimDB — High-Performance Simulation Database
 
-SimDB is a high-performance module that unifies **concurrent data pipelines** with **SQLite** to power scalable simulation data engines, analysis tooling, and UI backends. It provides a clean, modular foundation suitable for both simple and complex features in large simulation codebases.
-
-SimDB is a header-only C++17 module whose only required dependency is sqlite3.
+SimDB is a high-performance, header-only C++17 module that unifies **concurrent data pipelines** with **SQLite** to power scalable simulation data engines, analysis tooling, and UI backends. It provides a clean, modular foundation suitable for both simple and complex features in large simulation codebases.
 
 ---
 
