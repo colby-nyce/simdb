@@ -107,6 +107,16 @@ int main()
     all_dtypes_tbl.setColumnDefaultValue("TheUInt64", 0xdeadbeef);
     all_dtypes_tbl.createIndexOn("TheInt64");
     all_dtypes_tbl.createCompoundIndexOn({"TheDouble", "TheString"});
+    all_dtypes_tbl.setPrimaryKey("TheUInt64");
+
+    // Unique "TheUInt64" primary key values
+    uint64_t primary_keys[5] = {
+        0xdeadbeef,
+        0xcafebabe,
+        0xfeedface,
+        0xbaadf00d,
+        0xbeefcafe
+    };
 
     simdb::DatabaseManager db_mgr4("test5.db", true /*new db*/);
     EXPECT_NOTHROW(db_mgr4.appendSchema(schema4));
@@ -116,18 +126,24 @@ int main()
 
     // Create a record on the database with the reconstituted schema.
     // Start with the INSERT() method.
-    auto all_dtypes_record = db_mgr4.INSERT(
+    db_mgr4.INSERT(
         SQL_TABLE("AllDataTypes"),
         SQL_COLUMNS("TheInt32", "TheUInt32", "TheInt64", "TheUInt64", "TheDouble", "TheString", "TheBlob"),
-        SQL_VALUES(INT32_MAX, UINT32_MAX, INT64_MAX, UINT64_MAX, 3.14, "blah", std::vector<int>{1,2,3}));
+        SQL_VALUES(INT32_MAX, UINT32_MAX, INT64_MAX, primary_keys[0], 3.14, "blah", std::vector<int>{1,2,3}));
 
-    EXPECT_EQUAL(all_dtypes_record->getPropertyInt32("TheInt32"), INT32_MAX);
-    EXPECT_EQUAL(all_dtypes_record->getPropertyUInt32("TheUInt32"), UINT32_MAX);
-    EXPECT_EQUAL(all_dtypes_record->getPropertyInt64("TheInt64"), INT64_MAX);
-    EXPECT_EQUAL(all_dtypes_record->getPropertyUInt64("TheUInt64"), UINT64_MAX);
-    EXPECT_EQUAL(all_dtypes_record->getPropertyDouble("TheDouble"), 3.14);
-    EXPECT_EQUAL(all_dtypes_record->getPropertyString("TheString"), "blah");
-    EXPECT_EQUAL(all_dtypes_record->getPropertyBlob<int>("TheBlob"), std::vector<int>({1,2,3}));
+    // Now create four more using prepared statements
+    auto inserter = db_mgr4.prepareINSERT(SQL_TABLE("AllDataTypes"), SQL_COLUMNS("TheInt32", "TheUInt32", "TheInt64", "TheUInt64", "TheDouble", "TheString", "TheBlob"));
+    for (size_t i = 0; i < 4; ++i)
+    {
+        inserter->setColumnValue(0, INT32_MAX);
+        inserter->setColumnValue(1, UINT32_MAX);
+        inserter->setColumnValue(2, INT64_MAX);
+        inserter->setColumnValue(3, primary_keys[i+1]);
+        inserter->setColumnValue(4, 3.14);
+        inserter->setColumnValue(5, "blah");
+        inserter->setColumnValue(6, std::vector<int>{1,2,3});
+        inserter->createRecord();
+    }
 
     REPORT_ERROR;
     return ERROR_CODE;

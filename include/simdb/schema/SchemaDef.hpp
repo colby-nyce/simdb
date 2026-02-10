@@ -216,6 +216,10 @@ public:
         {
             throw DBException("Table already has a column named ") << name;
         }
+        if (name == "Id")
+        {
+            throw DBException("Cannot explicitly create the Id column; call Table::setPrimaryKey(\"Id\")");
+        }
 
         columns_.emplace_back(new Column(name, dt));
         columns_by_name_[name] = columns_.back();
@@ -358,15 +362,31 @@ public:
         return indexes;
     }
 
-    /// Disable the auto-incrementing primary key for this table.
-    Table& disableAutoIncPrimaryKey()
+    /// Set this table's primary key. Defaults to "Id".
+    Table& setPrimaryKey(const std::string& pkey_column)
     {
-        use_auto_inc_primary_key_ = false;
+        if (pkey_column.empty())
+        {
+            return unsetPrimaryKey();
+        }
+
+        if (!hasColumn(pkey_column) && pkey_column != "Id")
+        {
+            throw DBException("Primary key column does not exist: ") << pkey_column;
+        }
+        primary_key_column_ = pkey_column;
         return *this;
     }
 
-    /// See if this table uses the auto-incrementing primary key.
-    bool autoIncPrimaryKeyDisabled() const { return !use_auto_inc_primary_key_; }
+    /// Do not use a primary key for this table.
+    Table& unsetPrimaryKey()
+    {
+        primary_key_column_.clear();
+        return *this;
+    }
+
+    /// Get the primary key column for this table. Defaults to "Id".
+    const std::string& getPrimaryKey() const { return primary_key_column_; }
 
     /// Read-only access to this table's columns.
     const std::vector<std::shared_ptr<Column>>& getColumns() const { return columns_; }
@@ -397,7 +417,7 @@ public:
             return false;
         }
 
-        if (use_auto_inc_primary_key_ != rhs.use_auto_inc_primary_key_)
+        if (primary_key_column_ != rhs.primary_key_column_)
         {
             return false;
         }
@@ -438,8 +458,8 @@ private:
     ///      .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
     std::vector<std::string> index_creation_strs_;
 
-    /// Use an auto-incrementing primary key for this table by default.
-    bool use_auto_inc_primary_key_ = true;
+    /// Use an auto-incrementing primary key "Id" for this table by default.
+    std::string primary_key_column_ = "Id";
 
     friend class Connection;
 

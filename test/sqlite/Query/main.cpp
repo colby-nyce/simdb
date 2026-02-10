@@ -786,7 +786,7 @@ int main()
     auto& customers_tbl = schema4.addTable("Customers");
     customers_tbl.addColumn("FirstName", dt::string_t);
     customers_tbl.addColumn("LastName", dt::string_t);
-    customers_tbl.disableAutoIncPrimaryKey();
+    customers_tbl.unsetPrimaryKey();
 
     db_mgr.appendSchema(schema4);
 
