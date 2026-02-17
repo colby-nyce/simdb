@@ -631,7 +631,7 @@ private:
     /// Enabled apps (may or may not be instantiated).
     /// Key is the App's NAME static member.
     /// Value is the number of instances to create.
-    static std::map<std::string, size_t> & getEnabledApps_();
+    static std::map<std::string, size_t>& getEnabledApps_();
 
     /// Associated database.
     DatabaseManager* db_mgr_ = nullptr;
