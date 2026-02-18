@@ -24,7 +24,23 @@ template <typename T> struct has_nested_factory<T, std::void_t<typename T::AppFa
 };
 } // namespace utils
 
+class AppManager;
 class AppManagers;
+
+class AppRegistrationBase
+{
+public:
+    virtual ~AppRegistrationBase() = default;
+    virtual void registerApp(AppManager* app_manager) const = 0;
+};
+
+template <typename AppT> class AppRegistration : public AppRegistrationBase
+{
+private:
+    AppRegistration() = default;
+    void registerApp(AppManager* app_manager) const override;
+    friend class AppManagers;
+};
 
 /// This class is responsible for registering, enabling, instantiating,
 /// and managing the lifecycle of all SimDB applications running in a
@@ -32,38 +48,6 @@ class AppManagers;
 class AppManager
 {
 public:
-    /// Register an app as early as possible (doesn't create it yet).
-    /// Register your app by adding this macro to your source file:
-    ///
-    ///   class MyApp : public simdb::App { ... };     <<< header
-    ///   REGISTER_SIMDB_APPLICATION(MyApp);           <<< source
-    template <typename AppT> static void registerApp()
-    {
-        if constexpr (utils::has_nested_factory<AppT>::value)
-        {
-            // We don't need to create the nested factory object now.
-            // When apps provide a nested factory, they are supposed
-            // to call parameterizeApp<T>() / parameterizeAppInstance<T>()
-            // before calling createEnabledApps().
-            //
-            // If they forget to parameterize their own custom-factory app,
-            // we will know it since we won't have the factory. These factories
-            // are created in the parameterize*() calls.
-            return;
-        } else
-        {
-            auto& app_factories = getDefaultAppFactories_();
-            if (app_factories.find(AppT::NAME) != app_factories.end())
-            {
-                throw DBException("App already registered: ") << AppT::NAME;
-            }
-
-            constexpr size_t global_instance_num = 0;
-            auto& factory = app_factories[AppT::NAME][global_instance_num];
-            factory = std::make_shared<AppFactory<AppT>>();
-        }
-    }
-
     /// Get our associated DatabaseManager.
     DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 
@@ -226,27 +210,27 @@ public:
     }
 
     /// Check if your app is enabled (might not be instantiated yet).
-    bool enabled(const std::string& app_name)
+    bool enabled(const std::string& app_name) const
     {
         const auto& enabled_apps = getEnabledApps_();
         return enabled_apps.find(app_name) != enabled_apps.end();
     }
 
     /// Check if your app is enabled (might not be instantiated yet).
-    template <typename AppT> bool enabled()
+    template <typename AppT> bool enabled() const
     {
         static_assert(std::is_base_of<App, AppT>::value, "AppT must derive from App");
         return enabled(AppT::NAME);
     }
 
     /// See how many instances of a particular app are enabled.
-    size_t getEnabledAppInstances(const std::string& app_name)
+    size_t getEnabledAppInstances(const std::string& app_name) const
     {
         return enabled(app_name) ? getEnabledApps_().at(app_name) : 0;
     }
 
     /// See how many instances of a particular app are enabled.
-    template <typename AppT> size_t getEnabledAppInstances() { return getEnabledAppInstances(AppT::NAME); }
+    template <typename AppT> size_t getEnabledAppInstances() const { return getEnabledAppInstances(AppT::NAME); }
 
     /// Get an instantiated app. You may only call this method if AppT had
     /// exactly one instance configured:
@@ -355,6 +339,37 @@ private:
 
     /// AppManager only to be instantiated by simdb::AppManagers
     friend class AppManagers;
+
+    /// App registration only to be done by simdb::AppRegistration<AppT>
+    template <typename AppT> friend class AppRegistration;
+
+    /// Register an app as early as possible (doesn't create it yet).
+    template <typename AppT> void registerApp_()
+    {
+        if constexpr (utils::has_nested_factory<AppT>::value)
+        {
+            // We don't need to create the nested factory object now.
+            // When apps provide a nested factory, they are supposed
+            // to call parameterizeApp<T>() / parameterizeAppInstance<T>()
+            // before calling createEnabledApps().
+            //
+            // If they forget to parameterize their own custom-factory app,
+            // we will know it since we won't have the factory. These factories
+            // are created in the parameterize*() calls.
+            return;
+        } else
+        {
+            auto& app_factories = getDefaultAppFactories_();
+            if (app_factories.find(AppT::NAME) != app_factories.end())
+            {
+                throw DBException("App already registered: ") << AppT::NAME;
+            }
+
+            constexpr size_t global_instance_num = 0;
+            auto& factory = app_factories[AppT::NAME][global_instance_num];
+            factory = std::make_shared<AppFactory<AppT>>();
+        }
+    }
 
     /// Get all Apps that belong to the given database.
     std::vector<App*> getApps_()
@@ -508,15 +523,16 @@ private:
                                      std::map<size_t,                            // App instance
                                               std::shared_ptr<AppFactoryBase>>>; // Factory
 
-    /// Get a static map for all registered app factories.
-    static app_factories_t& getDefaultAppFactories_()
-    {
-        static app_factories_t app_factories;
-        return app_factories;
-    }
+    /// Get a map for all registered app factories.
+    app_factories_t& getDefaultAppFactories_() { return default_app_factories_; }
 
-    /// Non-static app factories created by this AppManager.
-    /// Specific to apps that have a nested AppFactory class.
+    /// Get a map for all registered app factories.
+    const app_factories_t& getDefaultAppFactories_() const { return default_app_factories_; }
+
+    /// Factories for apps with default constructors.
+    app_factories_t default_app_factories_;
+
+    /// Factories for apps that have a nested AppFactory class.
     app_factories_t nested_app_factories_;
 
     /// Access an app factory.
@@ -631,11 +647,15 @@ private:
     /// Enabled apps (may or may not be instantiated).
     /// Key is the App's NAME static member.
     /// Value is the number of instances to create.
-    static std::map<std::string, size_t>& getEnabledApps_()
-    {
-        static std::map<std::string, size_t> enabled_apps;
-        return enabled_apps;
-    }
+    std::map<std::string, size_t>& getEnabledApps_() { return enabled_apps_; }
+
+    /// Enabled apps (may or may not be instantiated).
+    /// Key is the App's NAME static member.
+    /// Value is the number of instances to create.
+    const std::map<std::string, size_t>& getEnabledApps_() const { return enabled_apps_; }
+
+    /// Enabled apps and their app instance count.
+    std::map<std::string, size_t> enabled_apps_;
 
     /// Associated database.
     DatabaseManager* db_mgr_ = nullptr;
@@ -762,10 +782,29 @@ private:
     Logger err_log_;
 };
 
+template <typename AppT> void AppRegistration<AppT>::registerApp(AppManager* app_manager) const
+{
+    app_manager->registerApp_<AppT>();
+}
+
 /// This class holds onto all DatabaseManagers and their AppManagers.
 class AppManagers
 {
 public:
+    /// Register an app as early as possible (doesn't create it yet).
+    /// You need to call this method for all apps you might end up
+    /// creating **before** calling createAppManager(). As soon as
+    /// createAppManager() is called the first time, you can no
+    /// longer call registerApp().
+    template <typename AppT> void registerApp()
+    {
+        if (app_registration_locked_)
+        {
+            throw DBException("No more apps can be registered since createAppManager() ") << "has already been called.";
+        }
+        app_registrations_.emplace_back(new AppRegistration<AppT>());
+    }
+
     /// Create a new AppManager with a new database.
     ///
     /// Pass in new_db=true to overwrite existing database, or new_db=false to use
@@ -798,6 +837,11 @@ public:
         app_mgrs_by_db_mgr_[db_mgr.get()] = app_mgr;
         db_mgrs_by_app_mgr_[app_mgr.get()] = db_mgr;
 
+        for (const auto& app_reg : app_registrations_)
+        {
+            app_reg->registerApp(app_mgr.get());
+        }
+        app_registration_locked_ = true;
         return *app_mgrs_by_db_file_[db_file];
     }
 
@@ -956,10 +1000,28 @@ private:
         }
     }
 
+    std::vector<std::unique_ptr<AppRegistrationBase>> app_registrations_;
+    bool app_registration_locked_ = false;
+
     std::map<std::string, std::shared_ptr<DatabaseManager>> db_mgrs_by_db_file_;
     std::map<std::string, std::shared_ptr<AppManager>> app_mgrs_by_db_file_;
     std::map<DatabaseManager*, std::shared_ptr<AppManager>> app_mgrs_by_db_mgr_;
     std::map<AppManager*, std::shared_ptr<DatabaseManager>> db_mgrs_by_app_mgr_;
+};
+
+/// Helper class to only expose AppManagers::registerApp() api.
+class AppRegistrations
+{
+public:
+    AppRegistrations(AppManagers* app_managers) :
+        app_managers_(app_managers)
+    {
+    }
+
+    template <typename AppT> void registerApp() { app_managers_->registerApp<AppT>(); }
+
+private:
+    AppManagers* app_managers_ = nullptr;
 };
 
 } // namespace simdb

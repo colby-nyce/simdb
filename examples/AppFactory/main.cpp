@@ -1,6 +1,6 @@
 // clang-format off
 
-#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/AppManager.hpp"
 #include "SimplePipeline.hpp"
 
 // This example demonstrates how to create simdb::App subclasses
@@ -72,8 +72,6 @@ private:
     const float y_;
 };
 
-REGISTER_SIMDB_APPLICATION(MyApp);
-
 /// Helper class for negative testing
 class UnregisteredApp : public simdb::App
 {
@@ -118,6 +116,7 @@ TEST_INIT;
 int main()
 {
     simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<MyApp>();
     auto& app_mgr = app_mgrs.createAppManager("test.db");
 
     // Quick negative test: try to parameterize an unregistered app

@@ -1,18 +1,18 @@
 // clang-format off
 
-#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/AppManager.hpp"
 #include "SimplePipeline.hpp"
 
 /// This example demonstrates the use of concurrently-running SimDB apps.
 /// We will create four instances of the SimplePipeline app.
-
-REGISTER_SIMDB_APPLICATION(SimplePipeline);
 
 TEST_INIT;
 
 int main()
 {
     simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<SimplePipeline>();
+
     auto& app_mgr = app_mgrs.createAppManager("test.db");
     auto& db_mgr = app_mgrs.getDatabaseManager();
 

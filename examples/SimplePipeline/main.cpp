@@ -1,18 +1,17 @@
 // clang-format off
 
-#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/AppManager.hpp"
 #include "SimplePipeline.hpp"
 
 /// This example demonstrates a simple two-stage pipeline that compresses
 /// data on one thread and writes it to a SQLite database on another thread.
-
-REGISTER_SIMDB_APPLICATION(SimplePipeline);
 
 TEST_INIT;
 
 int main(int argc, char** argv)
 {
     simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<SimplePipeline>();
 
     // Test misuse of getAppManager(db_file, create_if_needed)
     EXPECT_THROW(app_mgrs.getAppManager("test.db"));

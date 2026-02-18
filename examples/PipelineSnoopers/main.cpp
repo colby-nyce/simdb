@@ -1,6 +1,6 @@
 // clang-format off
 
-#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/AppManager.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/utils/Compress.hpp"
 #include "SimDBTester.hpp"
@@ -592,13 +592,12 @@ private:
     uint32_t snooped_in_database_ = 0;
 };
 
-REGISTER_SIMDB_APPLICATION(PipelineSnooper);
-
 TEST_INIT;
 
 int main()
 {
     simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<PipelineSnooper>();
     auto& app_mgr = app_mgrs.createAppManager("test.db");
 
     // Setup...

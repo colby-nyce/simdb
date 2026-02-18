@@ -1,7 +1,7 @@
 // clang-format off
 
 #include "simdb/apps/App.hpp"
-#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/AppManager.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "SimDBTester.hpp"
@@ -249,8 +249,6 @@ private:
     simdb::ConcurrentQueue<double>* x_input_queue_ = nullptr;
     simdb::ConcurrentQueue<double>* y_input_queue_ = nullptr;
 };
-
-REGISTER_SIMDB_APPLICATION(MultiPortStages);
 
 TEST_INIT;
 

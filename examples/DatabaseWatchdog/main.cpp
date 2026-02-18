@@ -1,6 +1,6 @@
 // clang-format off
 
-#include "simdb/apps/AppRegistration.hpp"
+#include "simdb/apps/AppManager.hpp"
 #include "SimplePipeline.hpp"
 
 /// This example demonstrates how to post database queries from
@@ -166,14 +166,13 @@ private:
     friend class Watchdog;
 };
 
-REGISTER_SIMDB_APPLICATION(WatchedPipeline);
-REGISTER_SIMDB_APPLICATION(DatabaseWatchdog);
-
 TEST_INIT;
 
 int main()
 {
     simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<WatchedPipeline>();
+    app_mgrs.registerApp<DatabaseWatchdog>();
     auto& app_mgr = app_mgrs.createAppManager("test.db");
 
     app_mgr.disableMessageLog();
