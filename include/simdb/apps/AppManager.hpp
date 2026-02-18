@@ -6,6 +6,7 @@
 #include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <set>
@@ -819,13 +820,9 @@ public:
             throw DBException("AppManager already exists for database: ") << db_file;
         }
 
-        if (!new_db)
+        if (!new_db && !std::filesystem::exists(db_file))
         {
-            std::ifstream fin(db_file);
-            if (!fin.good())
-            {
-                throw DBException("Cannot reuse database since it doesn't exist: ") << db_file;
-            }
+            throw DBException("Cannot reuse database since it doesn't exist: ") << db_file;
         }
 
         std::shared_ptr<DatabaseManager> db_mgr(new DatabaseManager(db_file, new_db));
