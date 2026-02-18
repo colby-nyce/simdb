@@ -11,9 +11,6 @@
 
 /// This class demonstrates a simple pipeline design using SimDB.
 /// It is reused by most of the examples.
-///
-/// Tests that use this pipeline need to add this to the .cpp file:
-///   REGISTER_SIMDB_APPLICATION(SimplePipeline);
 
 class SimplePipeline : public simdb::App
 {
