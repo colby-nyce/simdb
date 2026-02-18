@@ -293,7 +293,7 @@ sudo apt-get install -y \
     cmake \
     libsqlite3-dev \
     zlib1g-dev \
-    clang-format-17 \
+    clang-format-19 \
     build-essential
 ```
 
@@ -364,7 +364,7 @@ make simdb_regress
 Before opening a PR:
 
 - Run `make simdb_regress` for release and/or debug builds (Linux, MacOS)
-- Format your code changes: `clang-format-17 -i $(git ls-files '*.cpp' '*.hpp')`
+- Format your code changes: `clang-format-19 -i $(git ls-files '*.cpp' '*.hpp')`
 - Ensure self-contained headers: `python3 scripts/check-headers.py`
 
 GitHub will run these checks too, and all must pass before merging your PR.
