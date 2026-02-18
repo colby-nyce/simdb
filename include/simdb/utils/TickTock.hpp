@@ -111,6 +111,6 @@ private:
 #define CONCAT_INNER(a, b) a##b
 
 #define PROFILE_BLOCK(block_name) \
-    auto CONCAT(__block_timer_, __COUNTER__) = simdb::utils::SelfProfiler::getInstance()->profile(block_name);
+    auto CONCAT(__block_timer_, __COUNTER__) = simdb::utils::SelfProfiler::getInstance() -> profile(block_name);
 
 #define PROFILE_METHOD PROFILE_BLOCK(__FUNCTION__)
