@@ -72,7 +72,7 @@ public:
 protected:
     void setStdoutLogger_(ThreadSafeLogger* logger) { stdout_logger_ = logger; }
     void setStderrLogger_(ThreadSafeLogger* logger) { stderr_logger_ = logger; }
-    void setFileLogger_(ThreadSafeLogger* logger)   { file_logger_ = logger; }
+    void setFileLogger_(ThreadSafeLogger* logger) { file_logger_ = logger; }
 
 private:
     /// Instance number for multi-instance apps (1-based).

@@ -320,10 +320,8 @@ public:
 
 private:
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr,
-               ThreadSafeLogger* stdout_logger = nullptr,
-               ThreadSafeLogger* stderr_logger = nullptr,
-               ThreadSafeLogger* file_logger = nullptr) :
+    AppManager(DatabaseManager* db_mgr, ThreadSafeLogger* stdout_logger = nullptr,
+               ThreadSafeLogger* stderr_logger = nullptr, ThreadSafeLogger* file_logger = nullptr) :
         db_mgr_(db_mgr),
         stdout_logger_(stdout_logger),
         stderr_logger_(stderr_logger),
@@ -739,7 +737,7 @@ public:
     /// call this method before createAppManager().
     ///
     /// Pass in prefix=true to see "[log]" before each line written to the logger's output.
-    void useThreadSafeStdoutLogger(bool prefix=false)
+    void useThreadSafeStdoutLogger(bool prefix = false)
     {
         if (!accepting_logger_requests_)
         {
@@ -752,7 +750,7 @@ public:
     /// call this method before createAppManager().
     ///
     /// Pass in prefix=true to see "[log]" before each line written to the logger's output.
-    void useThreadSafeStderrLogger(bool prefix=false)
+    void useThreadSafeStderrLogger(bool prefix = false)
     {
         if (!accepting_logger_requests_)
         {
@@ -765,7 +763,7 @@ public:
     /// call this method before createAppManager().
     ///
     /// Pass in prefix=true to see "[log]" before each line written to the logger's output.
-    void useThreadSafeFileLogger(const std::string & filename, bool prefix=false)
+    void useThreadSafeFileLogger(const std::string& filename, bool prefix = false)
     {
         if (!accepting_logger_requests_)
         {
@@ -796,10 +794,8 @@ public:
         }
 
         std::shared_ptr<DatabaseManager> db_mgr(new DatabaseManager(db_file, new_db));
-        std::shared_ptr<AppManager> app_mgr(new AppManager(db_mgr.get(),
-                                                           stdout_logger_.get(),
-                                                           stderr_logger_.get(),
-                                                           file_logger_.get()));
+        std::shared_ptr<AppManager> app_mgr(
+            new AppManager(db_mgr.get(), stdout_logger_.get(), stderr_logger_.get(), file_logger_.get()));
 
         db_mgrs_by_db_file_[db_file] = db_mgr;
         app_mgrs_by_db_file_[db_file] = app_mgr;

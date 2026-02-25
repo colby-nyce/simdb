@@ -1,10 +1,10 @@
 #pragma once
 
+#include <fstream>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <sstream>
-#include <fstream>
-#include <memory>
 #include <string>
 
 #include "simdb/Exceptions.hpp"
@@ -15,18 +15,20 @@ class ThreadSafeLogger
 {
 public:
     // Construct from existing ostream (cout, cerr, custom stream)
-    explicit ThreadSafeLogger(std::ostream& os, bool prefix=false)
-        : out_(&os)
-        , prefix_(prefix ? "[log] " : "")
-    {}
+    explicit ThreadSafeLogger(std::ostream& os, bool prefix = false) :
+        out_(&os),
+        prefix_(prefix ? "[log] " : "")
+    {
+    }
 
     // Construct from file name (logger owns the file)
-    explicit ThreadSafeLogger(const std::string& filename, bool prefix=false)
-        : owned_file_(std::make_unique<std::ofstream>(filename))
-        , out_(owned_file_.get())
-        , prefix_(prefix ? "[log] " : "")
+    explicit ThreadSafeLogger(const std::string& filename, bool prefix = false) :
+        owned_file_(std::make_unique<std::ofstream>(filename)),
+        out_(owned_file_.get()),
+        prefix_(prefix ? "[log] " : "")
     {
-        if (!*owned_file_) {
+        if (!*owned_file_)
+        {
             throw std::runtime_error("Failed to open log file");
         }
     }
@@ -34,23 +36,26 @@ public:
     class Guard
     {
     public:
-        explicit Guard(const ThreadSafeLogger& logger)
-            : logger_(logger)
-        {}
+        explicit Guard(const ThreadSafeLogger& logger) :
+            logger_(logger)
+        {
+        }
 
-        ~Guard() {
+        ~Guard()
+        {
             std::lock_guard<std::mutex> lock(logger_.mutex_);
             (*logger_.out_) << logger_.prefix_ << buffer_.str();
             logger_.out_->flush();
         }
 
-        template <typename T>
-        Guard& operator<<(T&& value) {
+        template <typename T> Guard& operator<<(T&& value)
+        {
             buffer_ << std::forward<T>(value);
             return *this;
         }
 
-        Guard& operator<<(std::ostream& (*manip)(std::ostream&)) {
+        Guard& operator<<(std::ostream& (*manip)(std::ostream&))
+        {
             buffer_ << manip;
             return *this;
         }
@@ -60,9 +65,7 @@ public:
         std::ostringstream buffer_;
     };
 
-    Guard protect() const {
-        return Guard(*this);
-    }
+    Guard protect() const { return Guard(*this); }
 
 private:
     mutable std::mutex mutex_;
