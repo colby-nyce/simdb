@@ -7,7 +7,6 @@
 #include "simdb/pipeline/PipelineSnooper.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
 #include "simdb/pipeline/ThreadMerger.hpp"
-#include "simdb/utils/MTLogger.hpp"
 
 #include <iostream>
 
@@ -22,9 +21,8 @@ namespace simdb::pipeline {
 class PipelineManager
 {
 public:
-    PipelineManager(DatabaseManager* db_mgr, const std::string& pipeline_log_file = "") :
-        db_mgr_(db_mgr),
-        pipeline_logger_(pipeline_log_file)
+    PipelineManager(DatabaseManager* db_mgr) :
+        db_mgr_(db_mgr)
     {
     }
 
@@ -38,8 +36,6 @@ public:
         }
         return async_db_accessor_;
     }
-
-    utils::MTLogger* getPipelineLogger() { return &pipeline_logger_; }
 
     Pipeline* createPipeline(const std::string& name, const App* app)
     {
@@ -173,19 +169,14 @@ public:
         return disabler;
     }
 
-    void postSimLoopTeardown(std::ostream* perf_report = &std::cout)
+    void postSimLoopTeardown()
     {
         checkOpen_();
 
         auto close_thread = [&](PollingThread* thread) {
             thread->close();
-
-            if (perf_report)
-            {
-                std::ostringstream oss;
-                thread->printPerfReport(oss);
-                *perf_report << oss.str() << "\n\n";
-            }
+            thread->printPerfReport();
+            std::cout << "\n\n";
         };
 
         auto it = polling_threads_.begin();
@@ -230,9 +221,6 @@ private:
     /// Flag saying whether a ScopedRunnableDisabler is active.
     /// Used in order to short-circuit nested disablers.
     bool disabler_active_ = false;
-
-    /// Multi-threaded pipeline logger.
-    utils::MTLogger pipeline_logger_;
 
     /// Flag used to prevent AsyncDatabaseAccessor from being
     /// accessed until threads are opened/finalized.

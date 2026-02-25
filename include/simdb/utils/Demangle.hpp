@@ -6,8 +6,7 @@
 namespace simdb {
 
 /*!
- * \brief Represents the internal buffer size for demangling C++ symbols via
- * sparta::demangle
+ * \brief Represents the internal buffer size for demangling C++ symbols
  */
 #define DEMANGLE_BUF_LENGTH 4096
 
