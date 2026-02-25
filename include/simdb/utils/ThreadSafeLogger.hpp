@@ -31,28 +31,6 @@ public:
         }
     }
 
-    // Get global std::cout logger
-    static ThreadSafeLogger * getGlobalCoutLogger(bool must_exist = true) {
-        return globalCoutLogger_(nullptr, must_exist);
-    }
-
-    // Set global std::cout logger
-    static void setGlobalCoutLogger(ThreadSafeLogger& logger) {
-        globalCoutLogger_(&logger);
-    }
-
-    // Set/get the global std::cout logger
-    static ThreadSafeLogger * globalCoutLogger_(ThreadSafeLogger* logger = nullptr, bool must_exist = true) {
-        static ThreadSafeLogger* global_logger = nullptr;
-        if (logger) {
-            global_logger = logger;
-        }
-        if (!global_logger && must_exist) {
-            throw DBException("Global thread-safe logger was never set!");
-        }
-        return global_logger;
-    }
-
     class Guard
     {
     public:
