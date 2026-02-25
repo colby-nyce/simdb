@@ -16,10 +16,6 @@ int main()
     auto& app_mgr = app_mgrs.createAppManager("test.db");
     auto& db_mgr = app_mgrs.getDatabaseManager();
 
-    // Disable pipeline messages; it clutters up stdout with so many running apps
-    app_mgr.disableMessageLog();
-    app_mgr.disableErrorLog();
-
     // Create 4 instances of the SimplePipeline app
     app_mgr.enableApp(SimplePipeline::NAME, 4);
 

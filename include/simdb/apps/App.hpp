@@ -47,6 +47,9 @@ class AsyncDatabaseAccessor;
 class PipelineManager;
 } // namespace pipeline
 
+class AppManager;
+class ThreadSafeLogger;
+
 /// Base class for SimDB applications. Note that app subclasses are given
 /// the DatabaseManager instance as a constructor argument, so they can
 /// access the database and perform operations like appending schemas,
@@ -57,19 +60,30 @@ public:
     virtual ~App() = default;
     void setInstance(size_t instance) { instance_ = instance; }
     size_t getInstance() const { return instance_; }
-    virtual void postInit(int argc, char** argv)
-    {
-        (void)argc;
-        (void)argv;
-    }
+    virtual void postInit([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {}
     virtual void createPipeline(pipeline::PipelineManager*) {}
     virtual void preTeardown() {}
     virtual void postTeardown() {}
+
+    ThreadSafeLogger* getStdoutLogger() const { return stdout_logger_; }
+    ThreadSafeLogger* getStderrLogger() const { return stderr_logger_; }
+    ThreadSafeLogger* getFileLogger() const { return file_logger_; }
+
+protected:
+    void setStdoutLogger_(ThreadSafeLogger* logger) { stdout_logger_ = logger; }
+    void setStderrLogger_(ThreadSafeLogger* logger) { stderr_logger_ = logger; }
+    void setFileLogger_(ThreadSafeLogger* logger) { file_logger_ = logger; }
 
 private:
     /// Instance number for multi-instance apps (1-based).
     /// If zero, then this is a single-instance app.
     size_t instance_ = 0;
+
+    /// Thread-safe loggers.
+    ThreadSafeLogger* stdout_logger_ = nullptr;
+    ThreadSafeLogger* stderr_logger_ = nullptr;
+    ThreadSafeLogger* file_logger_ = nullptr;
+    friend class AppManager;
 };
 
 class AppFactoryBase

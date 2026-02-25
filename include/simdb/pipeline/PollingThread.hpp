@@ -157,7 +157,7 @@ public:
         pause_cv_.notify_all(); // Wake the thread to resume
     }
 
-    void printPerfReport(std::ostream& os) const noexcept
+    void printPerfReport() const noexcept
     {
         if (runnables_.empty())
         {
@@ -175,18 +175,18 @@ public:
         const auto pct_time_sleeping = (total_sleep_seconds_ / total_elap_seconds) * 100;
         const auto pct_time_working = 100 - pct_time_sleeping;
 
-        os << "Thread containing:\n";
+        std::cout << "Thread containing:\n";
         for (const auto runnable : runnables_)
         {
-            runnable->print(os, 4);
+            runnable->print(std::cout, 4);
         }
 
-        os << "\n";
-        os << "    Performance report:\n";
-        os << "        Num times run:      " << num_times_run_ << "\n";
-        os << "        Pct time sleeping:  " << std::fixed << std::setprecision(1) << pct_time_sleeping << "%\n";
-        os << "        Pct time working:   " << std::fixed << std::setprecision(1) << pct_time_working << "%\n";
-        os << "\n";
+        std::cout << "\n";
+        std::cout << "    Performance report:\n";
+        std::cout << "        Num times run:      " << num_times_run_ << "\n";
+        std::cout << "        Pct time sleeping:  " << std::fixed << std::setprecision(1) << pct_time_sleeping << "%\n";
+        std::cout << "        Pct time working:   " << std::fixed << std::setprecision(1) << pct_time_working << "%\n";
+        std::cout << "\n";
     }
 
 private:

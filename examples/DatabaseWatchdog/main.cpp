@@ -175,9 +175,6 @@ int main()
     app_mgrs.registerApp<DatabaseWatchdog>();
     auto& app_mgr = app_mgrs.createAppManager("test.db");
 
-    app_mgr.disableMessageLog();
-    app_mgr.disableErrorLog();
-
     // Setup...
     app_mgr.enableApp(WatchedPipeline::NAME);
     app_mgr.enableApp(DatabaseWatchdog::NAME);
