@@ -9,13 +9,23 @@
 
 namespace simdb {
 
-/// Blob descriptor used for writing and reading raw bytes
-/// to/from the database.
+/*!
+ * \struct SqlBlob
+ *
+ * \brief Blob descriptor used for writing and reading raw bytes to/from the
+ *        database. Holds a pointer and byte count; used with SQL_VALUES() and
+ *        blob columns (e.g. getPropertyBlob / setPropertyBlob on SqlRecord).
+ */
 struct SqlBlob
 {
+    /// Pointer to the raw bytes to store or that were read.
     const void* data_ptr = nullptr;
+    /// Number of bytes at \p data_ptr.
     size_t num_bytes = 0;
 
+    /// Construct from a contiguous container (e.g. std::vector<T>).
+    /// \tparam T Element type; sizeof(T) * vals.size() gives num_bytes.
+    /// \param vals Container whose data() and size() define the blob.
     template <typename T>
     SqlBlob(const std::vector<T>& vals) :
         data_ptr(vals.data()),
@@ -27,6 +37,7 @@ struct SqlBlob
     SqlBlob(const SqlBlob&) = default;
 };
 
+/// Write a short debug representation of the blob to \p os (e.g. blob(addr, n=size)).
 inline std::ostream& operator<<(std::ostream& os, const SqlBlob& blob)
 {
     if (!blob.data_ptr || blob.num_bytes == 0)
