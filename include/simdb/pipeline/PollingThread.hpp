@@ -17,14 +17,18 @@
 
 namespace simdb::pipeline {
 
-/// Timer thread which "polls" its runnables for any activity. Goes back
-/// to sleep for a fixed amount of time before polling again.
+/*!
+ * \class PollingThread
+ *
+ * \brief Thread that repeatedly polls its Runnables for work; when none do
+ *        work, it sleeps for a fixed interval before polling again. Supports
+ *        pause/resume and performance reporting. Base for DatabaseThread.
+ */
 class PollingThread
 {
 public:
-    /// Create a thread with an "interval" in milliseconds. This value says
-    /// how long the thread should sleep if none of its Runnables had any
-    /// work to do.
+    /// \brief Create a thread with the given sleep interval when no work is done.
+    /// \param interval_milliseconds How long to sleep when no Runnable had work (default 100ms).
     PollingThread(const size_t interval_milliseconds = 100) :
         interval_ms_(interval_milliseconds)
     {
@@ -32,8 +36,11 @@ public:
 
     virtual ~PollingThread() noexcept = default;
 
+    /// \brief Return the sleep interval in milliseconds (when no work is done).
     size_t getIntervalMilliseconds() const { return interval_ms_; }
 
+    /// \brief Add a Runnable to this thread; must not be called while the thread is running.
+    /// \throws DBException if called while the thread is running.
     void addRunnable(Runnable* runnable)
     {
         if (is_running_)
@@ -43,10 +50,14 @@ public:
         runnables_.emplace_back(runnable);
     }
 
+    /// \brief Return the Runnables on this thread.
     const std::vector<Runnable*>& getRunnables() const { return runnables_; }
 
+    /// \brief Return the number of Runnables on this thread.
     size_t getNumRunnables() const { return runnables_.size(); }
 
+    /// \brief Reorder this thread's Runnables to match the order in \p runnables (only those
+    /// that belong to this thread).
     void ensureRelativeOrder(const std::vector<Runnable*>& runnables)
     {
         const std::set<Runnable*> my_runnables(runnables_.begin(), runnables_.end());
@@ -61,6 +72,7 @@ public:
         std::swap(ordered_runnables, runnables_);
     }
 
+    /// \brief Call processAll(true) on all enabled Runnables; return true if any did work.
     virtual bool flushRunnables()
     {
         bool did_work = false;
@@ -79,6 +91,7 @@ public:
         return did_work;
     }
 
+    /// \brief Start the polling thread (must have at least one Runnable).
     virtual void open()
     {
         if (runnables_.empty())
@@ -96,6 +109,8 @@ public:
         }
     }
 
+    /// \brief Stop the thread and join.
+    /// \note Meant to be called from the main thread.
     virtual void close() noexcept
     {
         if (!thread_)
@@ -118,6 +133,7 @@ public:
         thread_.reset();
     }
 
+    /// \brief Pause the polling loop; blocks until the thread has acknowledged it is paused.
     void pause()
     {
         if (!is_running_ || paused_)
@@ -140,8 +156,10 @@ public:
         paused_promise_.get_future().wait();
     }
 
+    /// \brief Return true if the thread is currently paused.
     bool paused() { return paused_; }
 
+    /// \brief Resume the polling loop after a pause.
     void resume()
     {
         if (!is_running_ || !paused_)
@@ -154,9 +172,10 @@ public:
             paused_ = false;
         }
 
-        pause_cv_.notify_all(); // Wake the thread to resume
+        pause_cv_.notify_all();
     }
 
+    /// \brief Print a performance report (sleep vs work %) for this thread.
     void printPerfReport() const noexcept
     {
         if (runnables_.empty())
