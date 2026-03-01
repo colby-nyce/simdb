@@ -155,6 +155,25 @@ public:
         return INSERT_(std::move(table), std::move(cols), std::move(vals));
     }
 
+    /// \brief INSERT into a table with values for all columns, in schema order.
+    ///        Equivalent to INSERT(table, SQL_COLUMNS(...), vals) with every
+    ///        column of the table. The number and order of values must match
+    ///        the table's columns.
+    std::unique_ptr<SqlRecord> INSERT(SqlTable&& table, SqlValues&& vals)
+    {
+        if (table.getName().find("internal$") == 0)
+        {
+            throw DBException("Cannot perform INSERT. This is an internal table.");
+        }
+        std::vector<std::string> col_names;
+        for (const auto& col : schema_.getTable(table.getName()).getColumns())
+        {
+            col_names.push_back(col->getName());
+        }
+        SqlColumns cols(col_names);
+        return INSERT_(std::move(table), std::move(cols), std::move(vals));
+    }
+
     /// This INSERT() overload is to be used for tables that were defined with
     /// at least one default value for its column(s).
     std::unique_ptr<SqlRecord> INSERT(SqlTable&& table)
@@ -174,6 +193,24 @@ public:
         {
             throw DBException("Cannot perform INSERT. This is an internal table.");
         }
+        return prepareINSERT_(std::move(table), std::move(cols));
+    }
+
+    /// \brief Create a prepared statement for inserting into all columns of a table.
+    ///        Equivalent to prepareINSERT(table, SQL_COLUMNS(...)) with every column
+    ///        of the table, in schema order.
+    std::unique_ptr<PreparedINSERT> prepareINSERT(SqlTable&& table)
+    {
+        if (table.getName().find("internal$") == 0)
+        {
+            throw DBException("Cannot perform INSERT. This is an internal table.");
+        }
+        std::vector<std::string> col_names;
+        for (const auto& col : schema_.getTable(table.getName()).getColumns())
+        {
+            col_names.push_back(col->getName());
+        }
+        SqlColumns cols(col_names);
         return prepareINSERT_(std::move(table), std::move(cols));
     }
 

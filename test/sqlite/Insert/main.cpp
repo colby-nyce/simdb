@@ -32,6 +32,15 @@ int main()
     record1->setPropertyInt64("SomeInt64", TEST_INT64 / 2);
     EXPECT_EQUAL(record1->getPropertyInt64("SomeInt64"), TEST_INT64 / 2);
 
+    // Verify INSERT(table, SQL_VALUES(...)) overload: all columns in schema order, no SQL_COLUMNS.
+    auto record_all_cols = db_mgr.INSERT(
+        SQL_TABLE("AllIntegerTypes"),
+        SQL_VALUES(TEST_INT32, TEST_INT64, static_cast<uint32_t>(TEST_INT32), static_cast<uint64_t>(TEST_INT64)));
+    EXPECT_EQUAL(record_all_cols->getPropertyInt32("SomeInt32"), TEST_INT32);
+    EXPECT_EQUAL(record_all_cols->getPropertyInt64("SomeInt64"), TEST_INT64);
+    EXPECT_EQUAL(record_all_cols->getPropertyUInt32("SomeUInt32"), static_cast<uint32_t>(TEST_INT32));
+    EXPECT_EQUAL(record_all_cols->getPropertyUInt64("SomeUInt64"), static_cast<uint64_t>(TEST_INT64));
+
     // Verify INSERT for floating-point types
     auto record2 = db_mgr.INSERT(
         SQL_TABLE("FloatingPointTypes"),
@@ -154,11 +163,26 @@ int main()
     EXPECT_EQUAL(high_volume_record2->getPropertyUInt32("EndTick"), UINT32_MAX);
     EXPECT_EQUAL(high_volume_record2->getPropertyBlob<int>("DataBlob"), data_vec);
 
+    // Verify prepareINSERT(SqlTable) overload: all columns from schema, no SQL_COLUMNS.
+    auto all_cols_insert = db_mgr.prepareINSERT(SQL_TABLE("AllIntegerTypes"));
+    all_cols_insert->setColumnValue(0, TEST_INT32);
+    all_cols_insert->setColumnValue(1, TEST_INT64);
+    all_cols_insert->setColumnValue(2, static_cast<uint32_t>(TEST_INT32));
+    all_cols_insert->setColumnValue(3, static_cast<uint64_t>(TEST_INT64));
+    auto all_cols_id = all_cols_insert->createRecord();
+    auto all_cols_record = db_mgr.findRecord("AllIntegerTypes", all_cols_id);
+    EXPECT_EQUAL(all_cols_record->getPropertyInt32("SomeInt32"), TEST_INT32);
+    EXPECT_EQUAL(all_cols_record->getPropertyInt64("SomeInt64"), TEST_INT64);
+    EXPECT_EQUAL(all_cols_record->getPropertyUInt32("SomeUInt32"), static_cast<uint32_t>(TEST_INT32));
+    EXPECT_EQUAL(all_cols_record->getPropertyUInt64("SomeUInt64"), static_cast<uint64_t>(TEST_INT64));
+
     // Verify that we cannot write to an internal table.
     EXPECT_TRUE(db_mgr.getSchema().hasTable("internal$SchemaTables"));
     EXPECT_THROW(db_mgr.INSERT(SQL_TABLE("internal$SchemaTables")));
     EXPECT_THROW(db_mgr.INSERT(SQL_TABLE("internal$SchemaTables"), SQL_COLUMNS("TableName"), SQL_VALUES("blah")));
+    EXPECT_THROW(db_mgr.INSERT(SQL_TABLE("internal$SchemaTables"), SQL_VALUES("x", "y", "z")));
     EXPECT_THROW(db_mgr.prepareINSERT(SQL_TABLE("internal$SchemaTables"), SQL_COLUMNS("TableName")));
+    EXPECT_THROW(db_mgr.prepareINSERT(SQL_TABLE("internal$SchemaTables")));
     EXPECT_THROW(db_mgr.EXECUTE("INSERT INTO internal$SchemaTables (TableName) VALUES (\"blah\")"));
 
     REPORT_ERROR;
