@@ -176,6 +176,60 @@ int main()
     EXPECT_EQUAL(all_cols_record->getPropertyUInt32("SomeUInt32"), static_cast<uint32_t>(TEST_INT32));
     EXPECT_EQUAL(all_cols_record->getPropertyUInt64("SomeUInt64"), static_cast<uint64_t>(TEST_INT64));
 
+    // Verify createRecordWithColValues(): single call with all column values (single- and multi-column).
+    auto float_inserter = db_mgr.prepareINSERT(SQL_TABLE("FloatingPointTypes"));
+    auto float_id = float_inserter->createRecordWithColValues(TEST_DOUBLE);
+    auto float_rec = db_mgr.findRecord("FloatingPointTypes", float_id);
+    EXPECT_EQUAL(float_rec->getPropertyDouble("SomeDouble"), TEST_DOUBLE);
+
+    auto one_shot_inserter = db_mgr.prepareINSERT(SQL_TABLE("AllIntegerTypes"));
+    const uint32_t u32_val = static_cast<uint32_t>(TEST_INT32);
+    const uint64_t u64_val = static_cast<uint64_t>(TEST_INT64);
+    auto one_shot_id = one_shot_inserter->createRecordWithColValues(TEST_INT32, TEST_INT64, u32_val, u64_val);
+    auto one_shot_record = db_mgr.findRecord("AllIntegerTypes", one_shot_id);
+    EXPECT_EQUAL(one_shot_record->getPropertyInt32("SomeInt32"), TEST_INT32);
+    EXPECT_EQUAL(one_shot_record->getPropertyInt64("SomeInt64"), TEST_INT64);
+    EXPECT_EQUAL(one_shot_record->getPropertyUInt32("SomeUInt32"), u32_val);
+    EXPECT_EQUAL(one_shot_record->getPropertyUInt64("SomeUInt64"), u64_val);
+
+    // Verify createRecordWithColValues() with std::string and const char* (StringTypes).
+    auto str_inserter = db_mgr.prepareINSERT(SQL_TABLE("StringTypes"));
+    auto str_id_std = str_inserter->createRecordWithColValues(TEST_STRING);
+    auto str_rec_std = db_mgr.findRecord("StringTypes", str_id_std);
+    EXPECT_EQUAL(str_rec_std->getPropertyString("SomeString"), TEST_STRING);
+
+    auto str_id_cstr = str_inserter->createRecordWithColValues("const char* literal");
+    auto str_rec_cstr = db_mgr.findRecord("StringTypes", str_id_cstr);
+    EXPECT_EQUAL(str_rec_cstr->getPropertyString("SomeString"), std::string("const char* literal"));
+
+    // Verify createRecordWithColValues() with std::vector (blob) and SqlBlob (BlobTypes).
+    auto blob_inserter = db_mgr.prepareINSERT(SQL_TABLE("BlobTypes"));
+    auto blob_id_vec = blob_inserter->createRecordWithColValues(TEST_VECTOR);
+    auto blob_rec_vec = db_mgr.findRecord("BlobTypes", blob_id_vec);
+    EXPECT_EQUAL(blob_rec_vec->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR);
+
+    simdb::SqlBlob blob_arg(TEST_VECTOR2);
+    auto blob_id_sql = blob_inserter->createRecordWithColValues(blob_arg);
+    auto blob_rec_sql = db_mgr.findRecord("BlobTypes", blob_id_sql);
+    EXPECT_EQUAL(blob_rec_sql->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR2);
+
+    // Verify createRecordWithColValues() with mixed types: int, std::string, std::vector (MixAndMatch).
+    auto mix_inserter = db_mgr.prepareINSERT(SQL_TABLE("MixAndMatch"));
+    const int mix_int = 99;
+    const std::string mix_str = "mixed_std::string";
+    auto mix_id = mix_inserter->createRecordWithColValues(mix_int, mix_str, TEST_VECTOR);
+    auto mix_rec = db_mgr.findRecord("MixAndMatch", mix_id);
+    EXPECT_EQUAL(mix_rec->getPropertyInt32("SomeInt32"), mix_int);
+    EXPECT_EQUAL(mix_rec->getPropertyString("SomeString"), mix_str);
+    EXPECT_EQUAL(mix_rec->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR);
+
+    // Same table with const char* for the string column.
+    auto mix_id2 = mix_inserter->createRecordWithColValues(100, "const char* in mix", TEST_VECTOR2);
+    auto mix_rec2 = db_mgr.findRecord("MixAndMatch", mix_id2);
+    EXPECT_EQUAL(mix_rec2->getPropertyInt32("SomeInt32"), 100);
+    EXPECT_EQUAL(mix_rec2->getPropertyString("SomeString"), std::string("const char* in mix"));
+    EXPECT_EQUAL(mix_rec2->getPropertyBlob<int>("SomeBlob"), TEST_VECTOR2);
+
     // Verify that we cannot write to an internal table.
     EXPECT_TRUE(db_mgr.getSchema().hasTable("internal$SchemaTables"));
     EXPECT_THROW(db_mgr.INSERT(SQL_TABLE("internal$SchemaTables")));
