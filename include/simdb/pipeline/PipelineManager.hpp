@@ -160,7 +160,8 @@ public:
         threads_opened_ = true;
     }
 
-    /// \brief Temporarily disable all pipeline runnables (and optionally pause threads); re-enabled when the returned object is destroyed.
+    /// \brief Temporarily disable all pipeline runnables (and optionally pause threads); re-enabled when the returned
+    /// object is destroyed.
     /// \param disable_threads_too If true, also pause polling threads; if false, only disable runnables.
     /// \return A ScopedRunnableDisabler, or nullptr if a disabler is already active (nested calls are no-ops).
     std::unique_ptr<ScopedRunnableDisabler> scopedDisableAll(bool disable_threads_too = true)

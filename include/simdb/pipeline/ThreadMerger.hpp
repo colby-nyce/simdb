@@ -59,7 +59,8 @@ public:
     /// \brief Merge all apps' non-database threads into a minimal set; cannot mix with addAppForMerging().
     void mergeAllAppThreads() { merge_all_apps_ = true; }
 
-    /// \brief Build the final list of PollingThreads (and one DatabaseThread); call once from PipelineManager::openPipelines().
+    /// \brief Build the final list of PollingThreads (and one DatabaseThread); call once from
+    /// PipelineManager::openPipelines().
     /// \param polling_threads Output vector; merged threads are appended (caller takes ownership).
     void performMerge(std::vector<std::unique_ptr<PollingThread>>& polling_threads)
     {

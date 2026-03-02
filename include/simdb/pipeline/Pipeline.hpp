@@ -157,7 +157,8 @@ public:
         state_ = State::FINALIZED;
     }
 
-    /// \brief Create a Flusher that runs the given stages (or all in order); wraps in transaction if any stage is a DatabaseStage.
+    /// \brief Create a Flusher that runs the given stages (or all in order); wraps in transaction if any stage is a
+    /// DatabaseStage.
     /// \param stage_names Stage names in flush order; if empty, use add order.
     /// \return Flusher or FlusherWithTransaction; caller owns.
     /// \throws DBException if a stage name does not exist.

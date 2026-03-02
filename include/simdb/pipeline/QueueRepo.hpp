@@ -38,7 +38,7 @@ template <typename T> class InputQueuePlaceholder : public QueuePlaceholder
 {
 public:
     /// \brief Construct with a reference to the stage's queue pointer (must be null initially).
-    /// \param queue Reference to the stage's ConcurrentQueue<T>*; set when 
+    /// \param queue Reference to the stage's ConcurrentQueue<T>*; set when
     /// \throws DBException if \p queue is non-null.
     InputQueuePlaceholder(ConcurrentQueue<T>*& queue) :
         queue_(queue)
