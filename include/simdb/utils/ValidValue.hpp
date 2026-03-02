@@ -4,8 +4,7 @@
 
 namespace simdb {
 
-template <typename T>
-class ValidValue
+template <typename T> class ValidValue
 {
 private:
     T value_ = 0;
@@ -37,25 +36,13 @@ public:
         return value_;
     }
 
-    operator const T&() const
-    {
-        return getValue();
-    }
+    operator const T&() const { return getValue(); }
 
-    operator T&()
-    {
-        return getValue();
-    }
+    operator T&() { return getValue(); }
 
-    bool isValid() const
-    {
-        return valid_;
-    }
+    bool isValid() const { return valid_; }
 
-    void clearValid()
-    {
-        valid_ = false;
-    }
+    void clearValid() { valid_ = false; }
 };
 
 } // namespace simdb

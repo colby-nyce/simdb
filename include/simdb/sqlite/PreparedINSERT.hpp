@@ -4,8 +4,8 @@
 #include "simdb/schema/SchemaDef.hpp"
 #include "simdb/sqlite/Connection.hpp"
 #include "simdb/sqlite/Transaction.hpp"
-#include "simdb/utils/utf16.hpp"
 #include "simdb/utils/ValidValue.hpp"
+#include "simdb/utils/utf16.hpp"
 
 namespace simdb {
 
@@ -183,7 +183,7 @@ public:
     /// table, both in number and in data type.
     /// \return The row ID of the newly inserted record.
     template <typename ColumnT, typename... RestOfColumns>
-    int createRecordWithColValues(const ColumnT & col_val, RestOfColumns &&... rest)
+    int createRecordWithColValues(const ColumnT& col_val, RestOfColumns&&... rest)
     {
         if (!one_shot_col_idx_.isValid())
         {
@@ -198,8 +198,7 @@ public:
     /// \tparam ColumnT The type of the column.
     /// \param col_val The value for the column.
     /// \return The row ID of the newly inserted object.
-    template <typename ColumnT>
-    int createRecordWithColValues(const ColumnT & col_val)
+    template <typename ColumnT> int createRecordWithColValues(const ColumnT& col_val)
     {
         if (!one_shot_col_idx_.isValid())
         {
