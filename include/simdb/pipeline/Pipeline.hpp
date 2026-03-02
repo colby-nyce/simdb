@@ -13,14 +13,23 @@ class DatabaseManager;
 
 namespace simdb::pipeline {
 
-/// SimDB pipelines are used to create high-performance multi-stage
-/// data processors en route to the database. Unlike other pipeline
-/// libraries, SimDB enforces move-only semantics for performance.
-/// There are no limitations regarding I/O data type changes from
-/// one stage/filter/transform to the next.
+/*!
+ * \class Pipeline
+ *
+ * \brief Multi-stage data processor with typed input/output ports between
+ *        stages. Add stages, declare port bindings, then finalize; stages
+ *        run on PollingThreads. Move-only semantics; no restriction on
+ *        I/O type changes between stages.
+ *
+ * \note Create via PipelineManager::createPipeline().
+ */
 class Pipeline
 {
 public:
+    /// \brief Construct a pipeline (typically via PipelineManager::createPipeline()).
+    /// \param db_mgr DatabaseManager for database stages.
+    /// \param name Pipeline name.
+    /// \param app The App that owns this pipeline.
     Pipeline(DatabaseManager* db_mgr, const std::string& name, const App* app) :
         db_mgr_(db_mgr),
         pipeline_name_(name),
@@ -28,12 +37,21 @@ public:
     {
     }
 
+    /// \brief Return the App that owns this pipeline.
     const App* getOwningApp() const { return app_; }
 
+    /// \brief Return the DatabaseManager used by database stages.
     DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 
+    /// \brief Return the pipeline name.
     std::string getName() const { return pipeline_name_; }
 
+    /// \brief Add a stage; only valid before noMoreStages(). Returns pointer to the new stage.
+    /// \tparam StageType Stage class (must derive from Stage).
+    /// \tparam StageCtorArgs Constructor argument types.
+    /// \param name Unique stage name within this pipeline.
+    /// \param args Arguments forwarded to the stage constructor.
+    /// \throws DBException if not accepting stages or stage name already exists.
     template <typename StageType, typename... StageCtorArgs>
     StageType* addStage(const std::string& name, StageCtorArgs&&... args)
     {
@@ -54,6 +72,8 @@ public:
         return static_cast<StageType*>(stage.get());
     }
 
+    /// \brief Finalize stages and start accepting bindings.
+    /// \throws DBException if not accepting stages.
     void noMoreStages()
     {
         if (state_ != State::ACCEPTING_STAGES)
@@ -69,6 +89,8 @@ public:
         state_ = State::ACCEPTING_BINDINGS;
     }
 
+    /// \brief Bind an output port to an input port (full names: "StageName.port").
+    /// \throws DBException if not accepting bindings.
     void bind(const std::string& output_port_full_name, const std::string& input_port_full_name)
     {
         if (state_ != State::ACCEPTING_BINDINGS)
@@ -78,6 +100,8 @@ public:
         queue_repo_.bind(output_port_full_name, input_port_full_name);
     }
 
+    /// \brief Finalize bindings and create queues; required before getInPortQueue/getOutPortQueue.
+    /// \throws DBException if not accepting bindings.
     void noMoreBindings()
     {
         if (state_ != State::ACCEPTING_BINDINGS)
@@ -89,6 +113,8 @@ public:
         state_ = State::BINDINGS_COMPLETE;
     }
 
+    /// \brief Return the input port queue; only valid after noMoreBindings().
+    /// \tparam T Element type of the queue.
     template <typename T> simdb::ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
         if (state_ != State::BINDINGS_COMPLETE && state_ != State::FINALIZED)
@@ -98,6 +124,8 @@ public:
         return queue_repo_.getInPortQueue<T>(port_full_name);
     }
 
+    /// \brief Return the output port queue; only valid after noMoreBindings().
+    /// \tparam T Element type of the queue.
     template <typename T> simdb::ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
     {
         if (state_ != State::BINDINGS_COMPLETE && state_ != State::FINALIZED)
@@ -107,6 +135,9 @@ public:
         return queue_repo_.getOutPortQueue<T>(port_full_name);
     }
 
+    /// \brief Assign each stage to a PollingThread (or the shared DatabaseThread); call after noMoreBindings().
+    /// \param threads Vector to which new PollingThreads may be appended.
+    /// \param database_thread Single shared DatabaseThread for all DatabaseStages (created if null).
     void assignStageThreads(std::vector<std::unique_ptr<PollingThread>>& threads,
                             std::unique_ptr<DatabaseThread>& database_thread)
     {
@@ -126,6 +157,10 @@ public:
         state_ = State::FINALIZED;
     }
 
+    /// \brief Create a Flusher that runs the given stages (or all in order); wraps in transaction if any stage is a DatabaseStage.
+    /// \param stage_names Stage names in flush order; if empty, use add order.
+    /// \return Flusher or FlusherWithTransaction; caller owns.
+    /// \throws DBException if a stage name does not exist.
     std::unique_ptr<Flusher> createFlusher(const std::vector<std::string>& stage_names = {})
     {
         std::vector<Stage*> stages;
@@ -153,8 +188,10 @@ public:
                             : std::unique_ptr<Flusher>(new Flusher(stages));
     }
 
+    /// \brief Return the AsyncDatabaseAccessor for this pipeline (set by PipelineManager after openPipelines()).
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor() const { return async_db_accessor_; }
 
+    /// \brief Return a map of stage name to Stage* (all stages in this pipeline).
     std::map<std::string, Stage*> getStages()
     {
         std::map<std::string, Stage*> stages;
@@ -165,6 +202,7 @@ public:
         return stages;
     }
 
+    /// \brief Return stages in the order they were added (name, Stage* pairs).
     std::vector<std::pair<std::string, Stage*>> getOrderedStages()
     {
         std::vector<std::pair<std::string, Stage*>> ordered_stages;

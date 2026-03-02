@@ -6,26 +6,40 @@
 #include "simdb/pipeline/Queue.hpp"
 #include <set>
 
-/// The classes in this file are used to create all the required
-/// simdb::ConcurrentQueue(s) needed for all apps' pipeline stages.
-
 namespace simdb::pipeline {
 
+/*!
+ * \class QueuePlaceholder
+ *
+ * \brief Abstract placeholder for a pipeline port queue. Used by StageQueueRepo
+ *        and PipelineQueueRepo to create and bind ConcurrentQueues when stages
+ *        are finalized and bindings are applied.
+ */
 class QueuePlaceholder
 {
 public:
     virtual ~QueuePlaceholder() = default;
+    /// \brief Create a new Queue and return ownership.
     virtual std::unique_ptr<QueueBase> createQueue() = 0;
+    /// \brief Assign an existing queue to this placeholder (e.g. after binding).
     virtual void assignQueue(QueueBase* queue) = 0;
+    /// \brief Return true if a queue has been created or assigned.
     virtual bool hasQueue() const = 0;
 };
 
+/*!
+ * \class InputQueuePlaceholder
+ *
+ * \brief Placeholder for an input port queue; holds a reference to the stage's
+ *        ConcurrentQueue<T>* so the queue can be assigned when bound.
+ * \tparam T Element type of the queue.
+ */
 template <typename T> class InputQueuePlaceholder : public QueuePlaceholder
 {
 public:
-    /// Create placeholder with a backpointer to the stage's queue member
-    /// variable. We will assign the queue to the stage variable when the queue
-    /// is created.
+    /// \brief Construct with a reference to the stage's queue pointer (must be null initially).
+    /// \param queue Reference to the stage's ConcurrentQueue<T>*; set when 
+    /// \throws DBException if \p queue is non-null.
     InputQueuePlaceholder(ConcurrentQueue<T>*& queue) :
         queue_(queue)
     {
@@ -53,20 +67,29 @@ public:
         queue_ = &typed_queue->get();
     }
 
+    /// \brief Return true if a queue has been created or assigned.
     bool hasQueue() const override { return queue_ != nullptr; }
 
+    /// \brief Return the assigned queue pointer (null until createQueue or assignQueue).
     ConcurrentQueue<T>* getQueue() { return queue_; }
 
 private:
     ConcurrentQueue<T>*& queue_;
 };
 
+/*!
+ * \class OutputQueuePlaceholder
+ *
+ * \brief Placeholder for an output port queue; holds a reference to the stage's
+ *        ConcurrentQueue<T>* so the queue can be assigned when bound.
+ * \tparam T Element type of the queue.
+ */
 template <typename T> class OutputQueuePlaceholder : public QueuePlaceholder
 {
 public:
-    /// Create placeholder with a backpointer to the stage's queue member
-    /// variable. We will assign the queue to the stage variable when the queue
-    /// is created.
+    /// \brief Construct with a reference to the stage's queue pointer (must be null initially).
+    /// \param queue Reference to the stage's ConcurrentQueue<T>*; set when noMoreStages() is called.
+    /// \throws DBException if \p queue is non-null.
     OutputQueuePlaceholder(ConcurrentQueue<T>*& queue) :
         queue_(queue)
     {
@@ -77,6 +100,7 @@ public:
         }
     }
 
+    /// \brief Create a new Queue and return ownership.
     std::unique_ptr<QueueBase> createQueue() override
     {
         auto queue = std::make_unique<Queue<T>>();
@@ -84,6 +108,7 @@ public:
         return queue;
     }
 
+    /// \brief Assign an existing queue to this placeholder (e.g. after binding).
     void assignQueue(QueueBase* queue) override
     {
         auto typed_queue = dynamic_cast<Queue<T>*>(queue);
@@ -96,15 +121,25 @@ public:
 
     bool hasQueue() const override { return queue_ != nullptr; }
 
+    /// \brief Return the assigned queue pointer (null until createQueue or assignQueue).
     ConcurrentQueue<T>* getQueue() { return queue_; }
 
 private:
     ConcurrentQueue<T>*& queue_;
 };
 
+/*!
+ * \class StageQueueRepo
+ *
+ * \brief Per-stage registry of input and output port placeholders. Used in
+ *        Stage subclasses (addInPort_/addOutPort_) before the stage name is set.
+ *        Keys become "stage_name.port_name" after setStageName().
+ */
 class StageQueueRepo
 {
 public:
+    /// \brief Register an input port placeholder; only in Stage subclass constructors (before name is set).
+    /// \throws DBException if stage name already set, or port name already exists.
     template <typename T> void addInPortPlaceholder(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {
         if (!stage_name_.empty())
@@ -120,6 +155,8 @@ public:
         placeholder = std::make_unique<InputQueuePlaceholder<T>>(queue);
     }
 
+    /// \brief Register an output port placeholder; only in Stage subclass constructors (before name is set).
+    /// \throws DBException if stage name already set, or port name already exists.
     template <typename T> void addOutPortPlaceholder(const std::string& port_name, ConcurrentQueue<T>*& queue)
     {
         if (!stage_name_.empty())
@@ -135,6 +172,8 @@ public:
         placeholder = std::make_unique<OutputQueuePlaceholder<T>>(queue);
     }
 
+    /// \brief Set the stage name; rekeys all placeholders to "stage_name.port_name". Call at most once.
+    /// \throws DBException if renaming or if name already set differently.
     void setStageName(const std::string& stage_name)
     {
         if (stage_name_ != stage_name && !stage_name_.empty())
@@ -178,9 +217,19 @@ private:
     friend class PipelineQueueRepo;
 };
 
+/*!
+ * \class PipelineQueueRepo
+ *
+ * \brief Aggregates StageQueueRepos, manages port bindings, and creates/assigns
+ *        queues in finalizeBindings(). Lifecycle: add stages via merge(), then
+ *        noMoreStages(), then bind() pairs, then finalizeBindings(); after that
+ *        getInPortQueue/getOutPortQueue and validateQueues() are valid.
+ */
 class PipelineQueueRepo
 {
 public:
+    /// \brief Merge another stage's placeholders into this repo; only while accepting stages.
+    /// \throws DBException if not accepting stages or if a port name collides.
     void merge(StageQueueRepo& other)
     {
         if (state_ != RepoState::ACCEPTING_STAGES)
@@ -211,6 +260,8 @@ public:
         other.output_placeholders_.clear();
     }
 
+    /// \brief Signal that no more stages will be merged; switch to accepting bindings.
+    /// \throws DBException if not accepting stages.
     void noMoreStages()
     {
         if (state_ != RepoState::ACCEPTING_STAGES)
@@ -221,6 +272,8 @@ public:
         state_ = RepoState::ACCEPTING_BINDINGS;
     }
 
+    /// \brief Bind an output port to an input port (both full names, e.g. "StageA.out" -> "StageB.in").
+    /// \throws DBException if not accepting bindings.
     void bind(const std::string& output_port_full_name, const std::string& input_port_full_name)
     {
         if (state_ != RepoState::ACCEPTING_BINDINGS)
@@ -230,6 +283,8 @@ public:
         port_bindings_[output_port_full_name] = input_port_full_name;
     }
 
+    /// \brief Create queues from bindings and unbound ports; switch to bindings complete.
+    /// \throws DBException if not accepting bindings or if a port is missing.
     void finalizeBindings()
     {
         if (state_ != RepoState::ACCEPTING_BINDINGS)
@@ -279,6 +334,9 @@ public:
         state_ = RepoState::BINDINGS_COMPLETE;
     }
 
+    /// \brief Return the input port queue for the given full port name; only after finalizeBindings().
+    /// \tparam T Element type of the queue.
+    /// \throws DBException if bindings not finalized, port not found, or type mismatch.
     template <typename T> ConcurrentQueue<T>* getInPortQueue(const std::string& port_full_name)
     {
         if (state_ != RepoState::BINDINGS_COMPLETE)
@@ -301,6 +359,9 @@ public:
         return typed_placeholder->getQueue();
     }
 
+    /// \brief Return the output port queue for the given full port name; only after finalizeBindings().
+    /// \tparam T Element type of the queue.
+    /// \throws DBException if bindings not finalized, port not found, or type mismatch.
     template <typename T> ConcurrentQueue<T>* getOutPortQueue(const std::string& port_full_name)
     {
         if (state_ != RepoState::BINDINGS_COMPLETE)
@@ -323,6 +384,8 @@ public:
         return typed_placeholder->getQueue();
     }
 
+    /// \brief Throw if any input or output port is unbound (not connected and not explicitly unbound).
+    /// \throws DBException with a message listing unbound ports.
     void validateQueues()
     {
         std::ostringstream oss;
