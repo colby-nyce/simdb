@@ -145,9 +145,9 @@ public:
     /// Execute the provided statement against the database
     /// connection. This will validate the command, and throw
     /// if this command is disallowed.
-    void executeCommand(const std::string& command)
+    void executeCommand(const std::string_view command)
     {
-        auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_, command.c_str(), nullptr, nullptr, nullptr));
+        auto rc = SQLiteReturnCode(sqlite3_exec(db_conn_, command.data(), nullptr, nullptr, nullptr));
         if (rc)
         {
             throw DBException(sqlite3_errmsg(db_conn_));
@@ -155,7 +155,7 @@ public:
     }
 
     /// Turn the given command into an SQL prepared statement.
-    SQLitePreparedStatement prepareStatement(const std::string& command)
+    SQLitePreparedStatement prepareStatement(const std::string_view command)
     {
         return SQLitePreparedStatement(db_conn_, command);
     }

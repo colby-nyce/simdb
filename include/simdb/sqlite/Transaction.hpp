@@ -65,10 +65,10 @@ inline std::ostream& operator<<(std::ostream& os, const SQLiteReturnCode& rc)
 class SQLitePreparedStatement
 {
 public:
-    SQLitePreparedStatement(sqlite3* db_conn, const std::string& cmd)
+    SQLitePreparedStatement(sqlite3* db_conn, const std::string_view cmd)
     {
         sqlite3_stmt* stmt = nullptr;
-        auto rc = sqlite3_prepare_v2(db_conn, cmd.c_str(), -1, &stmt, 0);
+        auto rc = sqlite3_prepare_v2(db_conn, cmd.data(), -1, &stmt, 0);
         if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED || rc == SQLITE_READONLY)
         {
             sqlite3_finalize(stmt);
