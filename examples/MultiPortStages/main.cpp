@@ -4,6 +4,7 @@
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/utils/ValidValue.hpp"
 #include "SimDBTester.hpp"
 
 /// This test demonstrates a pipeline with a multi-input, multi-output stage (MultiPortStages).
@@ -58,41 +59,6 @@ public:
     }
 
 private:
-    template <typename T>
-    class ValidValue
-    {
-    private:
-        T value_ = 0;
-        bool valid_ = false;
-
-    public:
-        ValidValue& operator=(T val)
-        {
-            value_ = val;
-            valid_ = true;
-            return *this;
-        }
-
-        T getValue() const
-        {
-            if (!valid_)
-            {
-                throw simdb::DBException("Invalid value - not set");
-            }
-            return value_;
-        }
-
-        bool isValid() const
-        {
-            return valid_;
-        }
-
-        void clearValid()
-        {
-            valid_ = false;
-        }
-    };
-
     /// This stage uses two inputs X and Y, and forwards the pair <X,Y> when
     /// both X and Y are available on the input queues.
     class SyncXYStage : public simdb::pipeline::Stage
@@ -191,8 +157,8 @@ private:
         simdb::ConcurrentQueue<double>* y_input_queue_ = nullptr;
         simdb::ConcurrentQueue<std::pair<double, double>>* xy_output_queue_ = nullptr;
         simdb::ConcurrentQueue<size_t>* num_unaligned_output_queue_ = nullptr;
-        ValidValue<double> ready_x_;
-        ValidValue<double> ready_y_;
+        simdb::ValidValue<double> ready_x_;
+        simdb::ValidValue<double> ready_y_;
     };
 
     /// Receive XY pairs and write the sum and product to the database. Also receive

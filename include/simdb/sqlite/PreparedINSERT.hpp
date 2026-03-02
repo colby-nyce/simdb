@@ -5,6 +5,7 @@
 #include "simdb/sqlite/Connection.hpp"
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/utf16.hpp"
+#include "simdb/utils/ValidValue.hpp"
 
 namespace simdb {
 
@@ -172,11 +173,50 @@ public:
         return db_conn_->getLastInsertRowId();
     }
 
+    /// \brief Instead of calling setColumnValue() multiple times followed
+    /// by createRecord(), you can just call this method once.
+    /// \tparam ColumnT The type of the first column.
+    /// \tparam RestOfColumns The types of the remaining columns.
+    /// \param col_val The value for the first column.
+    /// \param rest The values for the remaining columns.
+    /// \note The variadic template arguments must match ALL columns in this
+    /// table, both in number and in data type.
+    /// \return The row ID of the newly inserted record.
+    template <typename ColumnT, typename... RestOfColumns>
+    int createRecordWithColValues(const ColumnT & col_val, RestOfColumns &&... rest)
+    {
+        if (!one_shot_col_idx_.isValid())
+        {
+            one_shot_col_idx_ = 0;
+        }
+        setColumnValue(one_shot_col_idx_, col_val);
+        ++one_shot_col_idx_.getValue();
+        return createRecordWithColValues(std::forward<RestOfColumns>(rest)...);
+    }
+
+    /// \brief Base case for variadic createRecordWithColValues().
+    /// \tparam ColumnT The type of the column.
+    /// \param col_val The value for the column.
+    /// \return The row ID of the newly inserted object.
+    template <typename ColumnT>
+    int createRecordWithColValues(const ColumnT & col_val)
+    {
+        if (!one_shot_col_idx_.isValid())
+        {
+            one_shot_col_idx_ = 0;
+        }
+        setColumnValue(one_shot_col_idx_, col_val);
+        auto id = createRecord();
+        one_shot_col_idx_.clearValid();
+        return id;
+    }
+
 private:
     SQLitePreparedStatement prepared_stmt_;
     sqlite3_stmt* stmt_ = nullptr;
     std::vector<SqlDataType> col_dtypes_;
     std::shared_ptr<Connection> db_conn_;
+    ValidValue<uint32_t> one_shot_col_idx_;
 };
 
 } // namespace simdb
