@@ -50,23 +50,45 @@ class PipelineManager;
 class AppManager;
 class ThreadSafeLogger;
 
-/// Base class for SimDB applications. Note that app subclasses are given
-/// the DatabaseManager instance as a constructor argument, so they can
-/// access the database and perform operations like appending schemas,
-/// inserting records, etc.)
+/*!
+ * \class App
+ *
+ * \brief Base class for SimDB applications. Subclasses receive a
+ *        DatabaseManager in the constructor and can append schemas, insert
+ *        records, and create pipelines. Lifecycle hooks: postInit(),
+ *        createPipeline(), preTeardown(), postTeardown(). Use AppManager
+ *        to register, enable, and instantiate apps.
+ */
 class App
 {
 public:
     virtual ~App() = default;
+
+    /// \brief Set the instance number (1-based; 0 = single-instance). Called by AppManager.
     void setInstance(size_t instance) { instance_ = instance; }
+
+    /// \brief Get the instance number (0 if single-instance).
     size_t getInstance() const { return instance_; }
+
+    /// \brief Hook called after command-line parsing, before simulation starts.
     virtual void postInit([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {}
+
+    /// \brief Hook to create and configure this app's pipeline(s) on the given manager.
     virtual void createPipeline(pipeline::PipelineManager*) {}
+
+    /// \brief Hook called before simulation teardown.
     virtual void preTeardown() {}
+
+    /// \brief Hook called after simulation teardown (resource cleanup).
     virtual void postTeardown() {}
 
+    /// \brief Return the stdout logger (set by AppManager); may be null.
     ThreadSafeLogger* getStdoutLogger() const { return stdout_logger_; }
+
+    /// \brief Return the stderr logger (set by AppManager); may be null.
     ThreadSafeLogger* getStderrLogger() const { return stderr_logger_; }
+
+    /// \brief Return the file logger (set by AppManager); may be null.
     ThreadSafeLogger* getFileLogger() const { return file_logger_; }
 
 protected:
@@ -86,14 +108,35 @@ private:
     friend class AppManager;
 };
 
+/*!
+ * \class AppFactoryBase
+ *
+ * \brief Abstract factory for creating App instances and defining their schema.
+ *        Each app type exposes a nested AppFactory that implements this interface;
+ *        AppManager uses it to instantiate apps and register their tables.
+ *
+ * \note It is optional to define a custom AppFactory nested in your app class.
+ *       If you don't, the default AppFactory will be used, which creates the app
+ *       with the default constructor (DatabaseManager*).
+ */
 class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
+
+    /// \brief Create an App instance for the given DatabaseManager.
     virtual App* createApp(DatabaseManager*) = 0;
+
+    /// \brief Define this app's schema (tables, columns) on the given Schema.
     virtual void defineSchema(Schema& schema) const = 0;
 };
 
+/*!
+ * \class AppFactory
+ *
+ * \brief Default factory that creates AppT and delegates defineSchema to AppT::defineSchema.
+ * \tparam AppT App subclass (must have defineSchema(Schema&) and a constructor taking DatabaseManager*).
+ */
 template <typename AppT> class AppFactory : public AppFactoryBase
 {
 public:

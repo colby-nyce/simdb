@@ -16,51 +16,52 @@ namespace simdb::pipeline {
 class PipelineManager;
 class PollingThread;
 
-/// Various outcomes for each processOne/processAll calls to a runnable:
+/// \brief Outcome of processOne() / processAll(): whether the runnable did work or the thread may sleep.
 enum PipelineAction {
-    // Return if the runnable (task) pushed any data to its output queue,
-    // or otherwise should leave the pipeline tasks greedily executing
-    // as normal.
+    /// Runnable did work (or should keep the thread busy); thread continues without sleeping.
     PROCEED,
-
-    // Return if the runnable had no data to consume or otherwise should
-    // tell the pipeline thread to go back to sleep for a bit. Note that
-    // ALL runnables on a PollingThread need to return SLEEP in order for
-    // the thread to go back to sleep. If any runnable returns PROCEED,
-    // the thread will continue processing as normal without sleeping.
+    /// Runnable had nothing to do; if all runnables on the thread return SLEEP, the thread sleeps.
     SLEEP
 };
 
-/// Base class for all things that can be run on a pipeline thread.
+/*!
+ * \class Runnable
+ *
+ * \brief Base class for units of work on a pipeline thread (e.g. Stage). PollingThread
+ *        calls processOne() / processAll(); PROCEED means work was done, SLEEP means
+ *        none. Supports enable/disable and a human-readable description for reporting.
+ */
 class Runnable
 {
 public:
     virtual ~Runnable() = default;
 
-    /// Get this runnable's description.
+    /// \brief Return the runnable's description (for logging/reports); uses set value or getDescription_().
     std::string getDescription() const { return !description_.empty() ? description_ : getDescription_(); }
 
-    /// Set/overwrite the this runnable's description.
+    /// \brief Set or overwrite the runnable's description.
+    /// \param desc Description string.
     void setDescription(const std::string& desc) { description_ = desc; }
 
-    /// Process one item from the input queue, returning true
-    /// if this runnable did anything.
+    /// \brief Process one unit of work; return PROCEED if work was done, SLEEP otherwise.
+    /// \param force If true, run even when there is no input (e.g. for flushing).
     virtual PipelineAction processOne(bool force) = 0;
 
-    /// Flush and process everything from the input queue,
-    /// returning true if this runnable did anything.
+    /// \brief Process all pending work; return PROCEED if any work was done, SLEEP otherwise.
+    /// \param force If true, run until no more work (e.g. for flushing).
     virtual PipelineAction processAll(bool force) = 0;
 
-    /// Print info about this runnable for reporting purposes.
+    /// \brief Print a one-line description to \p os with \p indent spaces (for perf reports).
     virtual void print(std::ostream& os, int indent) const
     {
         os << std::string(indent, ' ') << getDescription() << "\n";
     }
 
-    /// Check if this runnable is enabled.
+    /// \brief Return true if this runnable is enabled (disabled runnables are skipped by the thread).
     bool enabled() const { return enabled_; }
 
-    /// Disable/re-enable this runnable.
+    /// \brief Enable or disable this runnable.
+    /// \param enable true to enable, false to disable.
     void enable(bool enable = true) { enabled_ = enable; }
 
 private:
@@ -69,8 +70,13 @@ private:
     bool enabled_ = true;
 };
 
-/// RAII utility used to disable all runnables while in scope,
-/// re-enabling them when going out of scope.
+/*!
+ * \class ScopedRunnableDisabler
+ *
+ * \brief RAII guard that disables the given runnables (and optionally pauses
+ *        the given polling threads) on construction and re-enables/resumes
+ *        them on destruction. Obtained from PipelineManager::scopedDisableAll().
+ */
 class ScopedRunnableDisabler
 {
 public:

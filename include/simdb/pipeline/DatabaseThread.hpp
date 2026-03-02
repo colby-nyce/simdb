@@ -14,15 +14,20 @@ class DatabaseManager;
 
 namespace simdb::pipeline {
 
-/// The database thread is used to ensure that Runnable::run()
-/// methods are grouped inside BEGIN/COMMIT TRANSACTION blocks
-/// for much better performance.
-///
-/// It also provides asynchronous access to the database for
-/// async pipeline queries or serialized data writes.
+/*!
+ * \class DatabaseThread
+ *
+ * \brief PollingThread dedicated to database stages. Runs all its Runnables
+ *        inside batched BEGIN/COMMIT transactions for performance, and
+ *        provides AsyncDatabaseAccessor for other threads to submit work
+ *        (eval) that runs on this thread. Exactly one DatabaseThread exists
+ *        for every pipeline associated with the same DatabaseManager (.db file).
+ */
 class DatabaseThread : public PollingThread, private AsyncDatabaseAccessHandler
 {
 public:
+    /// \brief Construct the database thread for the given DatabaseManager.
+    /// \param db_mgr DatabaseManager used for safeTransaction and async tasks.
     DatabaseThread(DatabaseManager* db_mgr) :
         db_mgr_(db_mgr),
         dormant_thread_(db_mgr)
@@ -31,6 +36,7 @@ public:
 
     ~DatabaseThread() noexcept = default;
 
+    /// \brief Return the AsyncDatabaseAccessor for submitting work to this thread.
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor() { return &db_accessor_; }
 
 private:
@@ -106,19 +112,25 @@ private:
         return did_work;
     }
 
-    /// Unlike the "always-on" PollingThread, the DormantThread
-    /// class uses a condition variable to wake up and service
-    /// async DB accesses before going back to sleep.
+    /*!
+     * \class DormantThread
+     *
+     * \brief Thread that sleeps until an async DB task is enqueued; then runs
+     *        the task in a safeTransaction() and goes back to sleep. Used to
+     *        service AsyncDatabaseAccessor::eval() without blocking the main
+     *        DB polling loop.
+     */
     class DormantThread
     {
     public:
-        DormantThread(DatabaseManager* db_mgr) :
+        explicit DormantThread(DatabaseManager* db_mgr) :
             db_mgr_(db_mgr)
         {
         }
 
         ~DormantThread() noexcept { close(); }
 
+        /// \brief Start the dormant thread (waits on condition variable for tasks).
         void open()
         {
             if (!thread_)
@@ -128,6 +140,7 @@ private:
             }
         }
 
+        /// \brief Stop the thread and join.
         void close() noexcept
         {
             {
@@ -146,6 +159,10 @@ private:
             }
         }
 
+        /// \brief Enqueue a task and optionally block until it completes (or timeout).
+        /// \param task Task to run on this thread inside safeTransaction().
+        /// \param timeout_seconds If > 0, block up to this many seconds; throw on timeout.
+        /// \throws DBException on timeout or if the task throws.
         void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0)
         {
             if (stop_)
@@ -176,9 +193,11 @@ private:
             }
         }
 
+        /// \brief Return true if there are pending async DB tasks in the queue.
         bool hasTasks() const { return !pending_async_db_tasks_.empty(); }
 
     private:
+        /// \brief Main loop that runs until the thread is stopped.
         void loop_()
         {
             while (true)

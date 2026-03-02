@@ -13,15 +13,20 @@
 
 namespace simdb::pipeline {
 
+/*!
+ * \class Stage
+ *
+ * \brief Base class for pipeline stages (Runnables with input/output ports
+ *        and an optional polling interval). Subclass to implement run_(); use
+ *        addInPort_/addOutPort_ in derived constructors to define queues.
+ *        The interval is the PollingThread sleep time when no work is done.
+ */
 class Stage : public Runnable
 {
 protected:
-    /// Note that the interval_milliseconds will inform the associated
-    /// PollingThread to sleep for this amount of time when there is nothing to
-    /// do on the thread. Overriding the interval is only available for
-    /// non-database stages. If you intend to call
-    /// AppManager::minimizeThreads(), then all non-database stages must agree
-    /// on the interval for their shared PollingThread.
+    /// \brief Construct with the polling interval (ms) for the thread when no work is done.
+    /// \param interval_milliseconds Sleep time for the PollingThread; non-database stages
+    ///        that share a thread must use the same interval.
     Stage(size_t interval_milliseconds = 100) :
         interval_milliseconds_(interval_milliseconds)
     {
@@ -90,6 +95,13 @@ private:
     friend class Flusher;
 };
 
+/*!
+ * \class DatabaseStageBase
+ *
+ * \brief Base for stages that run on the dedicated DatabaseThread and use
+ *        DatabaseAccessor (getDatabaseManager_(), getTableInserter_()). Do not
+ *        use getAsyncDatabaseAccessor_() from a DatabaseStage.
+ */
 class DatabaseStageBase : public Stage
 {
 protected:
@@ -101,6 +113,14 @@ protected:
     }
 };
 
+/*!
+ * \class DatabaseStage
+ *
+ * \brief Concrete base for app-specific database stages. Provides
+ *        getDatabaseManager_() and getTableInserter_() keyed by \p AppT.
+ *        Derive from DatabaseStage<YourApp> and implement run_().
+ * \tparam AppT The App type (for schema and table inserters).
+ */
 template <typename AppT> class DatabaseStage : public DatabaseStageBase
 {
 protected:

@@ -16,16 +16,25 @@ class App;
 
 namespace simdb::pipeline {
 
-/// This class manages all pipelines and their threads for an AppManager (or
-/// unit test).
+/*!
+ * \class PipelineManager
+ *
+ * \brief Manages all Pipeline instances and their PollingThreads for an
+ *        AppManager (or unit test). Creates pipelines, merges threads
+ *        (minimizeThreads), opens threads, and provides async DB access.
+ */
 class PipelineManager
 {
 public:
+    /// \brief Construct with the DatabaseManager to be used by the pipelines.
+    /// \param db_mgr Non-null DatabaseManager to be used by the pipelines.
     PipelineManager(DatabaseManager* db_mgr) :
         db_mgr_(db_mgr)
     {
     }
 
+    /// \brief Return the AsyncDatabaseAccessor for async DB work; only valid after openPipelines().
+    /// \throws DBException if called before openPipelines().
     AsyncDatabaseAccessor* getAsyncDatabaseAccessor()
     {
         checkOpen_();
@@ -37,6 +46,10 @@ public:
         return async_db_accessor_;
     }
 
+    /// \brief Create and own a new Pipeline with the given name and owning App.
+    /// \param name Pipeline name. Only used for reporting purposes.
+    /// \param app The App that owns this pipeline.
+    /// \return Raw pointer to the new Pipeline (manager retains ownership).
     Pipeline* createPipeline(const std::string& name, const App* app)
     {
         checkOpen_();
@@ -45,6 +58,7 @@ public:
         return pipelines_.back().get();
     }
 
+    /// \brief Return pointers to all created pipelines.
     std::vector<Pipeline*> getPipelines()
     {
         checkOpen_();
@@ -57,12 +71,16 @@ public:
         return pipelines;
     }
 
+    /// \brief Create a snooper for iterating stages with a key and snooped object type.
+    /// \return Unique_ptr to a PipelineSnooper<KeyType, SnoopedType>.
     template <typename KeyType, typename SnoopedType>
     std::unique_ptr<PipelineSnooper<KeyType, SnoopedType>> createSnooper()
     {
         return std::make_unique<PipelineSnooper<KeyType, SnoopedType>>(this);
     }
 
+    /// \brief Merge all apps' pipeline threads into a minimal set; call at most once.
+    /// \throws DBException if called more than once.
     void minimizeThreads()
     {
         if (thread_merger_)
@@ -74,6 +92,7 @@ public:
         thread_merger_->mergeAllAppThreads();
     }
 
+    /// \brief Mark one app's pipeline threads for merging (call before openPipelines()).
     void minimizeThreads(const App* app)
     {
         if (!thread_merger_)
@@ -83,6 +102,7 @@ public:
         thread_merger_->addAppForMerging(app);
     }
 
+    /// \brief Mark multiple apps' pipeline threads for merging (variadic).
     template <typename... Apps> void minimizeThreads(const App* app, Apps&&... rest)
     {
         if (!thread_merger_)
@@ -93,6 +113,7 @@ public:
         minimizeThreads(std::forward<Apps>(rest)...);
     }
 
+    /// \brief Create and open all polling threads (after stages are added and optionally minimizeThreads).
     void openPipelines()
     {
         checkOpen_();
@@ -139,13 +160,12 @@ public:
         threads_opened_ = true;
     }
 
-    /// Use this API to temporarily disable all pipeline tasks.
-    /// The pipelines will be re-enabled when the returned object
-    /// goes out of scope.
-    ///
-    /// Note that recursive calls to this method are no-ops. Only
-    /// the first call will disable the runnables; nested calls
-    /// will return a nullptr.
+    /// \brief Temporarily disable all pipeline runnables (and optionally pause threads);
+    /// re-enabled when the returnedobject is destroyed.
+    /// \param disable_threads_too If true, also pause polling threads; if false, only
+    /// disable runnables.
+    /// \return A ScopedRunnableDisabler, or nullptr if a disabler is already active (nested
+    /// calls are no-ops).
     std::unique_ptr<ScopedRunnableDisabler> scopedDisableAll(bool disable_threads_too = true)
     {
         if (disabler_active_)
@@ -169,6 +189,7 @@ public:
         return disabler;
     }
 
+    /// \brief Close all threads, flush runnables, and print performance reports.
     void postSimLoopTeardown()
     {
         checkOpen_();

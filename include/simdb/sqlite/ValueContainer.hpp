@@ -25,7 +25,11 @@ public:
     virtual int32_t bind(sqlite3_stmt* stmt, int32_t col_idx) const = 0;
 };
 
-/// Bind an int32_t to an INSERT prepared statement.
+/*!
+ * \class Integral32ValueContainer
+ *
+ * \brief Binds an int32_t value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class Integral32ValueContainer : public ValueContainerBase
 {
 public:
@@ -40,7 +44,11 @@ private:
     int32_t val_;
 };
 
-/// Bind a uint32_t to an INSERT prepared statement.
+/*!
+ * \class IntegralU32ValueContainer
+ *
+ * \brief Binds a uint32_t value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class IntegralU32ValueContainer : public ValueContainerBase
 {
 public:
@@ -58,7 +66,11 @@ private:
     uint32_t val_;
 };
 
-/// Bind an int64_t to an INSERT prepared statement.
+/*!
+ * \class Integral64ValueContainer
+ *
+ * \brief Binds an int64_t value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class Integral64ValueContainer : public ValueContainerBase
 {
 public:
@@ -73,7 +85,11 @@ private:
     int64_t val_;
 };
 
-/// Bind a uint64_t to an INSERT prepared statement.
+/*!
+ * \class IntegralU64ValueContainer
+ *
+ * \brief Binds a uint64_t value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class IntegralU64ValueContainer : public ValueContainerBase
 {
 public:
@@ -91,7 +107,11 @@ private:
     std::u16string u16_;
 };
 
-/// Bind a double to an INSERT prepared statement.
+/*!
+ * \class FloatingPointValueContainer
+ *
+ * \brief Binds a double value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class FloatingPointValueContainer : public ValueContainerBase
 {
 public:
@@ -109,7 +129,11 @@ private:
     double val_;
 };
 
-/// Bind a string to an INSERT prepared statement.
+/*!
+ * \class StringValueContainer
+ *
+ * \brief Binds a std::string value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class StringValueContainer : public ValueContainerBase
 {
 public:
@@ -127,7 +151,11 @@ private:
     std::string val_;
 };
 
-/// Bind a blob to an INSERT prepared statement.
+/*!
+ * \class BlobValueContainer
+ *
+ * \brief Binds a SqlBlob value to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ */
 class BlobValueContainer : public ValueContainerBase
 {
 public:
@@ -145,7 +173,12 @@ private:
     SqlBlob val_;
 };
 
-/// Bind a blob to an INSERT prepared statement.
+/*!
+ * \class VectorValueContainer
+ *
+ * \brief Binds a std::vector<T> as a blob to an INSERT prepared statement (SQL_VALUES / PreparedINSERT).
+ * \tparam T Element type of the vector; stored as raw bytes in the BLOB column.
+ */
 template <typename T> class VectorValueContainer : public ValueContainerBase
 {
 public:

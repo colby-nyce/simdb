@@ -11,15 +11,24 @@
 
 namespace simdb::utils {
 
+/*!
+ * \class SelfProfiler
+ *
+ * \brief Singleton that records per-method elapsed time (seconds) and prints
+ *        a summary on destruction. Use profile(method_name) to get a MethodTimer
+ *        that records one call, or PROFILE_METHOD / PROFILE_BLOCK() in code.
+ */
 class SelfProfiler
 {
 public:
+    /// \brief Return the singleton instance.
     static SelfProfiler* getInstance()
     {
         static SelfProfiler profiler;
         return &profiler;
     }
 
+    /// \brief On destruction, print a report of method names and average times (sorted by avg).
     ~SelfProfiler()
     {
         if (results_.empty())
@@ -54,15 +63,23 @@ public:
         }
     }
 
+    /*!
+     * \class MethodTimer
+     *
+     * \brief RAII timer that records elapsed time for one invocation of a named
+     *        method/block and reports it to the SelfProfiler on destruction.
+     */
     class MethodTimer
     {
     public:
-        MethodTimer(const char* method_name) :
+        /// \brief Start timing; \p method_name is used in the final report.
+        explicit MethodTimer(const char* method_name) :
             method_name_(method_name),
             start_time_(now_())
         {
         }
 
+        /// \brief Record elapsed time since construction with SelfProfiler.
         ~MethodTimer()
         {
             auto end_time = now_();
@@ -80,6 +97,8 @@ public:
         TimeT start_time_;
     };
 
+    /// \brief Create a timer for the given method/block name; hold until scope exit to record.
+    /// \param method_name Label for this timing in the profiler report.
     MethodTimer profile(const char* method_name) const { return MethodTimer(method_name); }
 
 private:
@@ -110,7 +129,9 @@ private:
 #define CONCAT(a, b) CONCAT_INNER(a, b)
 #define CONCAT_INNER(a, b) a##b
 
+/// \brief Profile a named block; declare at start of block; time is recorded when scope exits.
 #define PROFILE_BLOCK(block_name) \
     auto CONCAT(__block_timer_, __COUNTER__) = simdb::utils::SelfProfiler::getInstance()->profile(block_name);
 
+/// \brief Profile the current function (uses __FUNCTION__ as the name).
 #define PROFILE_METHOD PROFILE_BLOCK(__FUNCTION__)

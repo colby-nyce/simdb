@@ -7,11 +7,17 @@
 
 namespace simdb::pipeline {
 
-/// This class serves as a utility to flush pipeline stages
-/// in a specific order. Create with Pipeline::createFlusher().
+/*!
+ * \class Flusher
+ *
+ * \brief Utility to run pipeline stages in order until no more work (processAll
+ *        with force). Obtain from Pipeline::createFlusher(). Use when you need
+ *        to drain queues or sync stages outside the normal polling loop.
+ */
 class Flusher
 {
 protected:
+    /// \brief Construct with the ordered list of stages to flush (internal; use Pipeline::createFlusher()).
     Flusher(const std::vector<Stage*>& stages) :
         stages_(stages)
     {
@@ -26,6 +32,8 @@ protected:
 public:
     virtual ~Flusher() = default;
 
+    /// \brief Run all stages with processAll(true) in order until none return PROCEED.
+    /// \return PROCEED if any stage did work, SLEEP otherwise.
     virtual PipelineAction flush()
     {
         PipelineAction outcome = PipelineAction::SLEEP;
@@ -52,13 +60,17 @@ private:
     std::vector<Stage*> stages_;
 };
 
-/// This subclass is instantiated by Pipeline::createFlusher() when
-/// any of the stages that need flushing are database stages. It only
-/// serves to put the flush() inside a BEGIN/COMMIT TRANSACTION block
-/// for performance (avoid many small transactions).
+/*!
+ * \class FlusherWithTransaction
+ *
+ * \brief Flusher that runs flush() inside a single safeTransaction() when any
+ *        of the stages are DatabaseStages. Used by Pipeline::createFlusher()
+ *        automatically when needed; reduces many small transactions to one.
+ */
 class FlusherWithTransaction : public Flusher
 {
 private:
+    /// \brief Internal constructor (Pipeline::createFlusher() uses this when a database stage is present).
     FlusherWithTransaction(const std::vector<Stage*>& stages, DatabaseManager* db_mgr) :
         Flusher(stages),
         db_mgr_(db_mgr)
@@ -82,6 +94,8 @@ private:
     friend class Pipeline;
 
 public:
+    /// \brief Run flush() inside a single BEGIN/COMMIT transaction.
+    /// \return PROCEED if any stage did work, SLEEP otherwise.
     PipelineAction flush() override
     {
         auto outcome = PipelineAction::SLEEP;

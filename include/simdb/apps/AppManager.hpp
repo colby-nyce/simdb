@@ -29,13 +29,22 @@ template <typename T> struct has_nested_factory<T, std::void_t<typename T::AppFa
 class AppManager;
 class AppManagers;
 
+/*!
+ * \class AppRegistrationBase
+ *
+ * \brief Abstract registration that adds an app type to an AppManager when
+ *        registerApp() is called. Used by AppManagers to register app types
+ *        before createAppManager().
+ */
 class AppRegistrationBase
 {
 public:
     virtual ~AppRegistrationBase() = default;
+    /// \brief Register this app type with the given AppManager (e.g. enable it for later creation).
     virtual void registerApp(AppManager* app_manager) const = 0;
 };
 
+/// \brief Type-specific registration for AppT; created by AppManagers::registerApp<AppT>().
 template <typename AppT> class AppRegistration : public AppRegistrationBase
 {
 private:
@@ -44,16 +53,20 @@ private:
     friend class AppManagers;
 };
 
-/// This class is responsible for registering, enabling, instantiating,
-/// and managing the lifecycle of all SimDB applications running in a
-/// simulation.
+/*!
+ * \class AppManager
+ *
+ * \brief Registers, enables, instantiates, and manages the lifecycle of SimDB
+ *        apps for one database. Obtainfrom AppManagers::createAppManager() or
+ *        AppManagers::getAppManager().
+ */
 class AppManager
 {
 public:
-    /// Get our associated DatabaseManager.
+    /// \brief Return the associated DatabaseManager.
     DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 
-    /// Parameterize an app factory. Call this before createEnabledApps().
+    /// \brief Parameterize an app factory. Must be called before createEnabledApps().
     /// Your app subclass must have a public nested class called "AppFactory",
     /// inheriting publicly from simdb::AppFactoryBase. Your nested AppFactory
     /// can have any signature it needs to accept all required app constructor
@@ -715,15 +728,24 @@ template <typename AppT> void AppRegistration<AppT>::registerApp(AppManager* app
     app_manager->registerApp_<AppT>();
 }
 
-/// This class holds onto all DatabaseManagers and their AppManagers.
+/*!
+ * \class AppManagers
+ *
+ * \brief Singleton-like holder for all DatabaseManagers and AppManagers. Call
+ *        registerApp<AppT>() for each app type before createAppManager(); then
+ *        createAppManager(db_file), createEnabledApps(), createSchemas(),
+ *        postInit(), initializePipelines(), openPipelines(). Use getAppManager()
+ *        or getDatabaseManager() to access managers. Obtain from
+ *        AppManagers::getInstance() or AppRegistrations::getInstance().
+ */
 class AppManagers
 {
 public:
-    /// Register an app as early as possible (doesn't create it yet).
-    /// You need to call this method for all apps you might end up
-    /// creating **before** calling createAppManager(). As soon as
-    /// createAppManager() is called the first time, you can no
-    /// longer call registerApp().
+    /// \brief Register an app type; must be called before createAppManager()
+    /// \note You need to call this method for all apps you might end up
+    ///       creating **before** calling createAppManager(). As soon as
+    ///       createAppManager() is called the first time, you can no
+    ///       longer call registerApp().
     template <typename AppT> void registerApp()
     {
         if (app_registration_locked_)
@@ -980,15 +1002,22 @@ private:
     bool accepting_logger_requests_ = true;
 };
 
-/// Helper class to only expose AppManagers::registerApp() api.
+/*!
+ * \class AppRegistrations
+ *
+ * \brief Thin wrapper that exposes only registerApp<AppT>() on an AppManagers
+ *        instance. Use when you want to restrict API surface to registration only.
+ */
 class AppRegistrations
 {
 public:
-    AppRegistrations(AppManagers* app_managers) :
+    /// \brief Construct with the AppManagers instance to wrap.
+    explicit AppRegistrations(AppManagers* app_managers) :
         app_managers_(app_managers)
     {
     }
 
+    /// \brief Register an app type (forwards to AppManagers::registerApp<AppT>()).
     template <typename AppT> void registerApp() { app_managers_->registerApp<AppT>(); }
 
 private:

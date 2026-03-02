@@ -8,11 +8,18 @@
 
 namespace simdb {
 
-/// This class is used for high-volume table inserts with reusable prepared
-/// statements.
+/*!
+ * \class PreparedINSERT
+ *
+ * \brief Reusable prepared INSERT for high-volume table inserts. Obtained from
+ *        DatabaseManager::prepareINSERT(); use setColumnValue() for each
+ *        column (by 0-based index) then createRecord() to insert a row.
+ *        Column types must match the table schema.
+ */
 class PreparedINSERT
 {
 public:
+    /// \brief Internal constructor; use DatabaseManager::prepareINSERT() to obtain instances.
     PreparedINSERT(SQLitePreparedStatement&& stmt, const std::vector<SqlDataType>& col_dtypes,
                    std::shared_ptr<Connection> db_conn) :
         prepared_stmt_(std::move(stmt)),
@@ -22,9 +29,9 @@ public:
     {
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param ival Value to set for the column.
+    /// \brief Set the value for the given column index (int32_t).
+    /// \param col_idx 0-based column index.
+    /// \param ival Value to set for the column.
     void setColumnValue(uint32_t col_idx, const int32_t ival)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::int32_t)
@@ -35,9 +42,9 @@ public:
         sqlite3_bind_int(stmt_, (int32_t)col_idx + 1, ival);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param ival Value to set for the column.
+    /// \brief Set the value for the given column index (uint32_t).
+    /// \param col_idx 0-based column index.
+    /// \param ival Value to set for the column.
     void setColumnValue(uint32_t col_idx, const uint32_t ival)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::uint32_t)
@@ -48,9 +55,9 @@ public:
         sqlite3_bind_int64(stmt_, (int32_t)col_idx + 1, static_cast<sqlite3_int64>(ival));
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param ival Value to set for the column.
+    /// \brief Set the value for the given column index (int64_t).
+    /// \param col_idx 0-based column index.
+    /// \param ival Value to set for the column.
     void setColumnValue(uint32_t col_idx, const int64_t ival)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::int64_t)
@@ -61,9 +68,9 @@ public:
         sqlite3_bind_int64(stmt_, (int32_t)col_idx + 1, ival);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param ival Value to set for the column.
+    /// \brief Set the value for the given column index (uint64_t).
+    /// \param col_idx 0-based column index.
+    /// \param ival Value to set for the column.
     void setColumnValue(uint32_t col_idx, const uint64_t ival)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::uint64_t)
@@ -75,10 +82,10 @@ public:
         sqlite3_bind_text16(stmt_, (int32_t)col_idx + 1, u16.data(), 40, SQLITE_TRANSIENT);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @tparam ColumnT double or float
-    /// @param col_idx 0-based column index.
-    /// @param dval Value to set for the column.
+    /// \brief Set the value for the given column index (double/float).
+    /// \tparam ColumnT double or float
+    /// \param col_idx 0-based column index.
+    /// \param dval Value to set for the column.
     template <typename ColumnT>
     typename std::enable_if<std::is_floating_point_v<ColumnT>, void>::type setColumnValue(uint32_t col_idx,
                                                                                           const ColumnT dval)
@@ -91,10 +98,10 @@ public:
         sqlite3_bind_double(stmt_, (int32_t)col_idx + 1, dval);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @tparam T blob element type
-    /// @param col_idx 0-based column index.
-    /// @param blobval Value to set for the column.
+    /// \brief Set the value for the given column index (blob from std::vector<T>).
+    /// \tparam T Blob element type.
+    /// \param col_idx 0-based column index.
+    /// \param blobval Value to set for the column.
     template <typename T> void setColumnValue(uint32_t col_idx, const std::vector<T>& blobval)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::blob_t)
@@ -105,9 +112,9 @@ public:
         sqlite3_bind_blob(stmt_, (int32_t)col_idx + 1, blobval.data(), blobval.size() * sizeof(T), 0);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param blobval Value to set for the column.
+    /// \brief Set the value for the given column index (SqlBlob).
+    /// \param col_idx 0-based column index.
+    /// \param blobval Value to set for the column.
     void setColumnValue(uint32_t col_idx, const SqlBlob& blobval)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::blob_t)
@@ -118,9 +125,9 @@ public:
         sqlite3_bind_blob(stmt_, (int32_t)col_idx + 1, blobval.data_ptr, (int32_t)blobval.num_bytes, 0);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param strval Value to set for the column.
+    /// \brief Set the value for the given column index (std::string).
+    /// \param col_idx 0-based column index.
+    /// \param strval Value to set for the column.
     void setColumnValue(uint32_t col_idx, const std::string& strval)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::string_t)
@@ -131,9 +138,9 @@ public:
         sqlite3_bind_text(stmt_, (int32_t)col_idx + 1, strval.c_str(), -1, SQLITE_TRANSIENT);
     }
 
-    /// @brief Set the value for the given column index.
-    /// @param col_idx 0-based column index.
-    /// @param strval Value to set for the column.
+    /// \brief Set the value for the given column index (const char*).
+    /// \param col_idx 0-based column index.
+    /// \param strval Value to set for the column.
     void setColumnValue(uint32_t col_idx, const char* strval)
     {
         if (col_dtypes_.at(col_idx) != SqlDataType::string_t)
@@ -144,16 +151,11 @@ public:
         sqlite3_bind_text(stmt_, (int32_t)col_idx + 1, strval, -1, SQLITE_STATIC);
     }
 
-    /// @brief Execute the prepared INSERT statement and create a new record.
-    /// @param clear_bindings If true, clears all bound values after executing
-    /// the INSERT. If false, the bound values remain for the next INSERT unless
-    /// explicitly changed by calling setColumnValue() again. For any previously
-    /// bound values that are not changed, the same values will be used for the
-    /// next INSERT, which requires that the user is careful to ensure that the
-    /// bound values are valid for each INSERT. If they went out of scope or
-    /// were otherwise invalidated, the INSERT will likely fail if not cause a
-    /// crash.
-    /// @return The row ID of the newly inserted record.
+    /// \brief Execute the prepared INSERT and return the new row ID.
+    /// \param clear_bindings If true, clears all bound values after the INSERT.
+    ///        If false, bound values are reused for the next createRecord();
+    ///        ensure they remain valid (e.g. not out of scope).
+    /// \return The row ID of the newly inserted record.
     int createRecord(bool clear_bindings = true)
     {
         auto rc = SQLiteReturnCode(sqlite3_step(stmt_));

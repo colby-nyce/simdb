@@ -9,34 +9,34 @@
 
 namespace simdb {
 
-/// Used to construct and throw a standard C++ exception
+/*!
+ * \class DBException
+ *
+ * \brief SimDB exception type; stream additional context with operator<< before
+ *        throwing. what() returns the full message built from the initial
+ *        reason and any appended values.
+ */
 class DBException : public std::exception
 {
 public:
     DBException() = default;
 
-    /// Construct a DBException object
-    DBException(const std::string& reason) { reason_ << reason; }
+    /// \brief Construct with an initial reason string.
+    explicit DBException(const std::string& reason) { reason_ << reason; }
 
-    /// Copy construct a DBException object
+    /// \brief Copy constructor; copies the accumulated message.
     DBException(const DBException& rhs) { reason_ << rhs.reason_.str(); }
 
-    /// Destroy!
     virtual ~DBException() noexcept override {}
 
-    /**
-     * \brief Overload from std::exception
-     * \return Const char * of the exception reason
-     */
+    /// \brief Override from std::exception; returns the full exception message.
     virtual const char* what() const noexcept override
     {
         reason_str_ = reason_.str();
         return reason_str_.c_str();
     }
 
-    /**
-     * \brief Append additional information to the message.
-     */
+    /// \brief Append a value to the exception message (stream-style).
     template <typename T> DBException& operator<<(const T& msg)
     {
         reason_ << msg;
@@ -52,13 +52,17 @@ private:
     mutable std::string reason_str_;
 };
 
-/// Used in order to signal to safeTransaction() that the transaction
-/// must be retried. Since SimDB is multi-threaded, we expect the database
-/// to encounter locked tables etc. which should not be thrown out of
-/// calls to safeTransaction().
+/*!
+ * \class SafeTransactionSilentException
+ *
+ * \brief Internal exception signaling that safeTransaction() should retry (e.g.
+ *        SQLITE_BUSY, SQLITE_LOCKED). Not propagated out of safeTransaction();
+ *        the transaction is retried instead.
+ */
 class SafeTransactionSilentException : public std::exception
 {
 public:
+    /// \brief Construct with the SQLite return code (used in the message).
     explicit SafeTransactionSilentException(int rc) :
         msg_("The database is locked (return code " + std::to_string(rc) + ")")
     {
