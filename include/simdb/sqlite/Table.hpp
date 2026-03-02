@@ -34,7 +34,7 @@ private:
 };
 
 /*!
- * \class SqlTable
+ * \class SqlColumns
  *
  * \brief Helper class that is used under the hood for db_mgr.INSERT(...,
  * SQL_COLUMNS("ColA", "ColB"), ...)
@@ -91,7 +91,7 @@ private:
 };
 
 /*!
- * \class SqlTable
+ * \class SqlValues
  *
  * \brief Helper class that is used together with SQL_VALUES() in order to bind
  * data values to a prepared statement for INSERT's.
