@@ -63,23 +63,31 @@ class App
 {
 public:
     virtual ~App() = default;
+
     /// \brief Set the instance number (1-based; 0 = single-instance). Called by AppManager.
     void setInstance(size_t instance) { instance_ = instance; }
+
     /// \brief Get the instance number (0 if single-instance).
     size_t getInstance() const { return instance_; }
+
     /// \brief Hook called after command-line parsing, before simulation starts.
     virtual void postInit([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {}
+
     /// \brief Hook to create and configure this app's pipeline(s) on the given manager.
     virtual void createPipeline(pipeline::PipelineManager*) {}
+
     /// \brief Hook called before simulation teardown.
     virtual void preTeardown() {}
+
     /// \brief Hook called after simulation teardown (resource cleanup).
     virtual void postTeardown() {}
 
     /// \brief Return the stdout logger (set by AppManager); may be null.
     ThreadSafeLogger* getStdoutLogger() const { return stdout_logger_; }
+
     /// \brief Return the stderr logger (set by AppManager); may be null.
     ThreadSafeLogger* getStderrLogger() const { return stderr_logger_; }
+
     /// \brief Return the file logger (set by AppManager); may be null.
     ThreadSafeLogger* getFileLogger() const { return file_logger_; }
 
@@ -115,8 +123,10 @@ class AppFactoryBase
 {
 public:
     virtual ~AppFactoryBase() = default;
+
     /// \brief Create an App instance for the given DatabaseManager.
     virtual App* createApp(DatabaseManager*) = 0;
+
     /// \brief Define this app's schema (tables, columns) on the given Schema.
     virtual void defineSchema(Schema& schema) const = 0;
 };

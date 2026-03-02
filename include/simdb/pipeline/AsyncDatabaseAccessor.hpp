@@ -13,7 +13,7 @@ class DatabaseManager;
 
 namespace simdb::pipeline {
 
-/// \brief Callable queued by any thread and invoked on the dedicated database thread (receives DatabaseManager*).
+/// \brief Callable queued by any thread and invoked on the dedicated database thread.
 using AsyncDbAccessFunc = std::function<void(DatabaseManager*)>;
 
 /*!

@@ -741,11 +741,11 @@ template <typename AppT> void AppRegistration<AppT>::registerApp(AppManager* app
 class AppManagers
 {
 public:
-    /// \brief Register an app type; must be called before createAppManager() (call once per app type).
-    /// You need to call this method for all apps you might end up
-    /// creating **before** calling createAppManager(). As soon as
-    /// createAppManager() is called the first time, you can no
-    /// longer call registerApp().
+    /// \brief Register an app type; must be called before createAppManager()
+    /// \note You need to call this method for all apps you might end up
+    ///       creating **before** calling createAppManager(). As soon as
+    ///       createAppManager() is called the first time, you can no
+    ///       longer call registerApp().
     template <typename AppT> void registerApp()
     {
         if (app_registration_locked_)

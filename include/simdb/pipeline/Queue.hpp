@@ -37,6 +37,7 @@ template <typename T> class Queue : public QueueBase
 public:
     /// \brief Mutable access to the underlying ConcurrentQueue<T>.
     ConcurrentQueue<T>& get() { return queue_; }
+
     /// \brief Const access to the underlying ConcurrentQueue<T>.
     const ConcurrentQueue<T>& get() const { return queue_; }
 
