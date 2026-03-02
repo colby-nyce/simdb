@@ -22,7 +22,7 @@ public:
     DBException() = default;
 
     /// \brief Construct with an initial reason string.
-    explicit DBException(const std::string& reason) { reason_ << reason; }
+    explicit DBException(const std::string_view reason) { reason_ << reason; }
 
     /// \brief Copy constructor; copies the accumulated message.
     DBException(const DBException& rhs) { reason_ << rhs.reason_.str(); }

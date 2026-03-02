@@ -22,7 +22,7 @@ namespace simdb {
 class SqlTable
 {
 public:
-    SqlTable(const std::string& table_name) :
+    SqlTable(const std::string_view table_name) :
         table_name_(table_name)
     {
     }
