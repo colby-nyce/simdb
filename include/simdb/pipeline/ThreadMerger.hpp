@@ -13,18 +13,28 @@
 
 namespace simdb::pipeline {
 
-/// This class is used when finalizing all apps' pipeline stages,
-/// merging non-database threads appropriately when a call was made
-/// to AppManager::minimizeThreads() before openPipelines().
-
+/*!
+ * \class ThreadMerger
+ *
+ * \brief Merges non-database PollingThreads across pipelines when
+ *        PipelineManager::minimizeThreads() or minimizeThreads(app,...) was
+ *        called before openPipelines(). Creates a minimal set of threads.
+ *        Exactly one DatabaseThread is shared by all pipeline(s) DatabaseStages
+ *        if any.
+ */
 class ThreadMerger
 {
 public:
+    /// \brief Construct with the pipelines that will contribute stages.
+    /// \param pipelines All pipelines (from PipelineManager).
     ThreadMerger(const std::vector<std::unique_ptr<Pipeline>>& pipelines) :
         pipelines_(pipelines)
     {
     }
 
+    /// \brief Mark one app's non-database stages for merging; cannot mix with mergeAllAppThreads().
+    /// \param app App whose pipeline threads should be merged.
+    /// \throws DBException if already finalized or if mergeAllAppThreads() was used.
     void addAppForMerging(const App* app)
     {
         if (!accepting_apps_)
@@ -46,8 +56,11 @@ public:
         apps_to_merge_.push_back(app);
     }
 
+    /// \brief Merge all apps' non-database threads into a minimal set; cannot mix with addAppForMerging().
     void mergeAllAppThreads() { merge_all_apps_ = true; }
 
+    /// \brief Build the final list of PollingThreads (and one DatabaseThread); call once from PipelineManager::openPipelines().
+    /// \param polling_threads Output vector; merged threads are appended (caller takes ownership).
     void performMerge(std::vector<std::unique_ptr<PollingThread>>& polling_threads)
     {
         if (apps_to_merge_.empty() && !merge_all_apps_)

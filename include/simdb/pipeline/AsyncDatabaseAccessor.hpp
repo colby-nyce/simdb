@@ -13,18 +13,21 @@ class DatabaseManager;
 
 namespace simdb::pipeline {
 
-/// Function that is queued by any pipeline thread (or the main
-/// thread) and invoked on the dedicated database thread.
+/// \brief Callable queued by any thread and invoked on the dedicated database thread (receives DatabaseManager*).
 using AsyncDbAccessFunc = std::function<void(DatabaseManager*)>;
 
-/// This struct is used to wrap a DB access function and
-/// an exception that is suitable for std::future/promise.
+/*!
+ * \struct AsyncDatabaseTask
+ *
+ * \brief Wraps an AsyncDbAccessFunc and a std::promise for the exception message;
+ *        used to run the function on the DB thread and propagate exceptions to the caller.
+ */
 struct AsyncDatabaseTask
 {
     AsyncDbAccessFunc func;
     std::promise<std::string> exception_reason;
 
-    AsyncDatabaseTask(AsyncDbAccessFunc func) :
+    explicit AsyncDatabaseTask(AsyncDbAccessFunc func) :
         func(func)
     {
     }
@@ -33,34 +36,40 @@ struct AsyncDatabaseTask
 
 using AsyncDatabaseTaskPtr = std::shared_ptr<AsyncDatabaseTask>;
 
-/// Base class to be implemented by the DatabaseThread.
+/*!
+ * \class AsyncDatabaseAccessHandler
+ *
+ * \brief Interface implemented by DatabaseThread. Receives tasks and runs them
+ *        on the DB thread inside safeTransaction(); callers block until the
+ *        task completes (or timeout).
+ */
 class AsyncDatabaseAccessHandler
 {
 public:
     virtual ~AsyncDatabaseAccessHandler() = default;
 
-    /// Put a task on the DB thread for evaluation, and BLOCK
-    /// until it is called. The DB thread will complete its
-    /// current transaction (INSERTs) immediately and evaluate
-    /// this task inside a separate safeTransaction().
-    ///
-    /// If a nonzero timeout is given, throws a DBException
-    /// if the task is not completed within the timeout.
+    /// \brief Run the task on the DB thread; block until done (or timeout).
+    /// \param task Task to run inside a safeTransaction().
+    /// \param timeout_seconds If > 0, throw if not completed within this many seconds.
+    /// \throws DBException on timeout or if the task throws.
     virtual void eval(AsyncDatabaseTaskPtr&& task, double timeout_seconds = 0) = 0;
 };
 
-/// This class is used by SimDB apps and pipeline elements to
-/// asynchronously access the database. It supports async data
-/// writes and enqueuing general-purpose std::functions.
+/*!
+ * \class AsyncDatabaseAccessor
+ *
+ * \brief Handle for pipeline stages and apps to run code on the dedicated
+ *        database thread. eval(func) blocks the caller until func(DatabaseManager*)
+ *        has run. Obtained from PipelineManager::getAsyncDatabaseAccessor() or
+ *        DatabaseThread::getAsyncDatabaseAccessor().
+ */
 class AsyncDatabaseAccessor
 {
 public:
-    /// Invoke a std::function on the DB thread. This BLOCKS the
-    /// calling thread until the function is processed.
-    /// (Uses std::future/promise).
-    ///
-    /// If a nonzero timeout is given, throws a DBException
-    /// if the task is not completed within the timeout.
+    /// \brief Run \p func on the DB thread; block until it completes (or timeout).
+    /// \param func Callable that receives the DatabaseManager*.
+    /// \param timeout_seconds If > 0, throw if not completed within this many seconds.
+    /// \throws DBException on timeout or if \p func throws.
     void eval(const AsyncDbAccessFunc& func, double timeout_seconds = 0)
     {
         auto task = std::make_shared<AsyncDatabaseTask>(func);

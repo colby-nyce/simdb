@@ -9,18 +9,31 @@
 
 namespace simdb::pipeline {
 
-/// This class provides access to the DatabaseManager as well as prepared
-/// INSERT objects that are specific to a particular App's schema.
+/*!
+ * \class DatabaseAccessor
+ *
+ * \brief Provides DatabaseManager access and per-App prepared INSERT objects
+ *        for DatabaseStage. Used by DatabaseStage<AppT> to get the manager
+ *        and getTableInserter<AppT>(table_name) for high-volume inserts.
+ */
 class DatabaseAccessor
 {
 public:
+    /// \brief Construct with the DatabaseManager used for all operations.
+    /// \param db_mgr Non-null DatabaseManager.
     DatabaseAccessor(DatabaseManager* db_mgr) :
         db_mgr_(db_mgr)
     {
     }
 
+    /// \brief Return the DatabaseManager.
     DatabaseManager* getDatabaseManager() const { return db_mgr_; }
 
+    /// \brief Return a prepared INSERT for the given table; lazily builds inserters from App::defineSchema().
+    /// \tparam App App type (must have NAME and defineSchema()).
+    /// \param tbl_name Table name in the App's schema.
+    /// \return Raw pointer to the PreparedINSERT (owned by this accessor).
+    /// \throws DBException if the table is not in the App's schema.
     template <typename App> PreparedINSERT* getTableInserter(const std::string& tbl_name)
     {
         auto& inserters = tbl_inserters_by_app_[App::NAME];
