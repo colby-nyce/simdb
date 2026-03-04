@@ -456,8 +456,8 @@ private:
             }
         }
 
-        assert(std::set<App*>(out.begin(), out.end()) == std::set<App*>(getApps_().begin(), getApps_().end()));
-
+        auto apps = getApps_();
+        assert(std::set<App*>(out.begin(), out.end()) == std::set<App*>(apps.begin(), apps.end()));
         return out;
     }
 
