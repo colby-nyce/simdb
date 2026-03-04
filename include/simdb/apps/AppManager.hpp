@@ -456,8 +456,7 @@ private:
             }
         }
 
-        assert(std::set<App*>(out.begin(), out.end()) ==
-               std::set<App*>(getApps_().begin(), getApps_().end()));
+        assert(std::set<App*>(out.begin(), out.end()) == std::set<App*>(getApps_().begin(), getApps_().end()));
 
         return out;
     }
