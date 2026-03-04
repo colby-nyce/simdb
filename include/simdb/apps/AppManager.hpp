@@ -867,8 +867,7 @@ public:
         }
 
         std::shared_ptr<DatabaseManager> db_mgr(new DatabaseManager(db_file, new_db));
-        std::shared_ptr<AppManager> app_mgr(
-            new AppManager(db_mgr.get(), app_logger_.get()));
+        std::shared_ptr<AppManager> app_mgr(new AppManager(db_mgr.get(), app_logger_.get()));
 
         db_mgrs_by_db_file_[db_file] = db_mgr;
         app_mgrs_by_db_file_[db_file] = app_mgr;
