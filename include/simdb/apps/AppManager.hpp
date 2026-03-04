@@ -836,13 +836,13 @@ public:
     /// call this method before createAppManager().
     ///
     /// Every line written to the logger will start with the given prefix.
-    void useThreadSafeFileLogger(const std::string& filename, const std::string& prefix = "[simdb-log]")
+    void useThreadSafeFileLogger(const std::string& filename)
     {
         if (!accepting_logger_requests_)
         {
             throw DBException("No longer accepting thread-safe logger requests");
         }
-        app_logger_ = std::make_unique<ThreadSafeLogger>(filename, prefix);
+        app_logger_ = std::make_unique<ThreadSafeFileLogger>(filename);
     }
 
     /// Create a new AppManager with a new database.
