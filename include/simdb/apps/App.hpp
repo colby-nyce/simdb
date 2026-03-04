@@ -82,19 +82,11 @@ public:
     /// \brief Hook called after simulation teardown (resource cleanup).
     virtual void postTeardown() {}
 
-    /// \brief Return the stdout logger (set by AppManager); may be null.
-    ThreadSafeLogger* getStdoutLogger() const { return stdout_logger_; }
-
-    /// \brief Return the stderr logger (set by AppManager); may be null.
-    ThreadSafeLogger* getStderrLogger() const { return stderr_logger_; }
-
-    /// \brief Return the file logger (set by AppManager); may be null.
-    ThreadSafeLogger* getFileLogger() const { return file_logger_; }
+    /// \brief Return the app logger (set by AppManager); may be null.
+    ThreadSafeLogger* getAppLogger() const { return app_logger_; }
 
 protected:
-    void setStdoutLogger_(ThreadSafeLogger* logger) { stdout_logger_ = logger; }
-    void setStderrLogger_(ThreadSafeLogger* logger) { stderr_logger_ = logger; }
-    void setFileLogger_(ThreadSafeLogger* logger) { file_logger_ = logger; }
+    void setAppLogger_(ThreadSafeLogger* logger) { app_logger_ = logger; }
 
 private:
     /// Instance number for multi-instance apps (1-based).
@@ -102,9 +94,7 @@ private:
     size_t instance_ = 0;
 
     /// Thread-safe loggers.
-    ThreadSafeLogger* stdout_logger_ = nullptr;
-    ThreadSafeLogger* stderr_logger_ = nullptr;
-    ThreadSafeLogger* file_logger_ = nullptr;
+    ThreadSafeLogger* app_logger_ = nullptr;
     friend class AppManager;
 };
 

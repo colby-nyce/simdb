@@ -16,32 +16,30 @@ namespace simdb {
  *
  * \brief Thread-safe logger that serializes writes to an ostream or file. Use
  *        protect() to obtain a Guard; stream into the Guard, then on destruction
- *        the line is written under a lock. Optional "[log] " prefix per line.
+ *        the line is written under a lock.
  */
 class ThreadSafeLogger
 {
 public:
-    /// \brief Construct from an existing ostream (e.g. std::cout, std::cerr).
-    /// \param os Output stream to write to (caller keeps ownership).
-    /// \param prefix If true, prepend "[log] " to each line.
-    explicit ThreadSafeLogger(std::ostream& os, bool prefix = false) :
-        out_(&os),
-        prefix_(prefix ? "[log] " : "")
+    /// \brief Construct a logger that writes to stdout.
+    /// \param prefix The prefix to write to the beginning of each line.
+    ThreadSafeLogger(const std::string& prefix) :
+        out_(&std::cout),
+        prefix_(prefix)
     {
     }
 
-    /// \brief Construct from a file path; the logger owns and opens the file.
-    /// \param filename Path to the log file.
-    /// \param prefix If true, prepend "[log] " to each line.
-    /// \throws std::runtime_error if the file cannot be opened.
-    explicit ThreadSafeLogger(const std::string& filename, bool prefix = false) :
+    /// \brief Construct a logger that writes to a file.
+    /// \param filename The path to the log file.
+    /// \param prefix The prefix to write to the beginning of each line.
+    ThreadSafeLogger(const std::string& filename, const std::string& prefix) :
         owned_file_(std::make_unique<std::ofstream>(filename)),
         out_(owned_file_.get()),
-        prefix_(prefix ? "[log] " : "")
+        prefix_(prefix)
     {
-        if (!*owned_file_)
+        if (!owned_file_->is_open())
         {
-            throw std::runtime_error("Failed to open log file");
+            throw DBException("Failed to open log file: ") << filename;
         }
     }
 
