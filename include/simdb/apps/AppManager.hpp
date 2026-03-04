@@ -446,13 +446,18 @@ private:
                 }
             }
         }
-        for (const auto& [base, vec] : by_base)
+
+        // Now append any apps that were not given explicit hook ordering
+        for (auto& [_, app] : apps_)
         {
-            for (App* app : vec)
+            if (std::find(out.begin(), out.end(), app.get()) == out.end())
             {
-                out.push_back(app);
+                out.push_back(app.get());
             }
         }
+
+        assert(std::set<App*>(out.begin(), out.end()) == std::set<App*>(getApps_().begin(), getApps_().end()));
+
         return out;
     }
 
