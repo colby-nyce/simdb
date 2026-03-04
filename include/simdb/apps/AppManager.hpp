@@ -11,6 +11,9 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #define PROFILE_APP_PHASE [[maybe_unused]] ScopedTimer timer(getDatabaseManager(), __FUNCTION__);
 
@@ -331,14 +334,42 @@ public:
         pipeline_mgr_->minimizeThreads(app, std::forward<Apps>(rest)...);
     }
 
+    /// \brief Set the order in which app lifecycle hooks are invoked.
+    ///
+    /// postInit(), preTeardown(), and postTeardown() are called in this order
+    /// across apps. \p ordered_app_names lists base app names (e.g. \c "App2",
+    /// \c "App1"); hooks run first for all instances of the first name, then
+    /// the second, etc. Apps not listed are invoked after the listed apps, in
+    /// map order. Call before createEnabledApps() (or at least before the
+    /// hooks run). Pass an empty vector to clear ordering and use default
+    /// (map) order.
+    void setAppOrderingForHooks(const std::vector<std::string>& ordered_app_names)
+    {
+        hook_ordering_ = ordered_app_names;
+    }
+
+    /// \brief Set the order in which app lifecycle hooks are invoked (variadic).
+    ///
+    /// Same as setAppOrderingForHooks(vector) but takes a list of app names,
+    /// e.g. setAppOrderingForHooks("App2", "App1") so App2's hooks run before
+    /// App1's.
+    template <typename... AppNames>
+    void setAppOrderingForHooks(const std::string_view app_name, AppNames&&... app_names)
+    {
+        hook_ordering_.clear();
+        hook_ordering_.reserve(1 + sizeof...(AppNames));
+        hook_ordering_.emplace_back(app_name);
+        if constexpr (sizeof...(AppNames) > 0)
+        {
+            (hook_ordering_.emplace_back(std::forward<AppNames>(app_names)), ...);
+        }
+    }
+
 private:
     /// AppManagers are associated 1-to-1 with a DatabaseManager.
-    AppManager(DatabaseManager* db_mgr, ThreadSafeLogger* stdout_logger = nullptr,
-               ThreadSafeLogger* stderr_logger = nullptr, ThreadSafeLogger* file_logger = nullptr) :
+    AppManager(DatabaseManager* db_mgr, ThreadSafeLogger* app_logger = nullptr) :
         db_mgr_(db_mgr),
-        stdout_logger_(stdout_logger),
-        stderr_logger_(stderr_logger),
-        file_logger_(file_logger)
+        app_logger_(app_logger)
     {
     }
 
@@ -387,6 +418,44 @@ private:
         return apps;
     }
 
+    /// Get apps in the order to use for lifecycle hooks (postInit, preTeardown, postTeardown).
+    std::vector<App*> getAppsInHookOrder_()
+    {
+        if (hook_ordering_.empty())
+        {
+            return getApps_();
+        }
+        // Group by base app name (instance name is "BaseName-0", "BaseName-1", ...).
+        std::map<std::string, std::vector<App*>> by_base;
+        for (const auto& [instance_name, app] : apps_)
+        {
+            auto dash = instance_name.find_last_of('-');
+            std::string base = (dash != std::string::npos) ? instance_name.substr(0, dash) : instance_name;
+            by_base[base].push_back(app.get());
+        }
+        std::vector<App*> out;
+        out.reserve(apps_.size());
+        for (const std::string& base : hook_ordering_)
+        {
+            auto it = by_base.find(base);
+            if (it != by_base.end())
+            {
+                for (App* app : it->second)
+                {
+                    out.push_back(app);
+                }
+            }
+        }
+        for (const auto& [base, vec] : by_base)
+        {
+            for (App* app : vec)
+            {
+                out.push_back(app);
+            }
+        }
+        return out;
+    }
+
     /// Call after command line args and config files are parsed.
     void createEnabledApps_()
     {
@@ -401,13 +470,10 @@ private:
                 }
 
                 App* app = factory->createApp(db_mgr_);
+                app->app_logger_ = app_logger_;
                 app->instance_ = instance_num;
                 std::string instance_name = app_name + std::string("-") + std::to_string(instance_num);
                 apps_[instance_name] = std::unique_ptr<App>(app);
-
-                app->stdout_logger_ = stdout_logger_;
-                app->stderr_logger_ = stderr_logger_;
-                app->file_logger_ = file_logger_;
             }
         }
     }
@@ -442,7 +508,7 @@ private:
         PROFILE_APP_PHASE
 
         db_mgr_->safeTransaction([&]() {
-            for (auto app : getApps_())
+            for (auto app : getAppsInHookOrder_())
             {
                 app->postInit(argc, argv);
             }
@@ -501,7 +567,7 @@ private:
     {
         PROFILE_APP_PHASE
 
-        for (auto app : getApps_())
+        for (auto app : getAppsInHookOrder_())
         {
             app->preTeardown();
         }
@@ -512,7 +578,7 @@ private:
         }
 
         db_mgr_->safeTransaction([&]() {
-            for (auto app : getApps_())
+            for (auto app : getAppsInHookOrder_())
             {
                 app->postTeardown();
             }
@@ -653,6 +719,10 @@ private:
     /// for apps with multiple instances (one-based).
     std::map<std::string, std::unique_ptr<App>> apps_;
 
+    /// Optional order for lifecycle hooks (postInit, preTeardown, postTeardown).
+    /// Empty means use default (map) order.
+    std::vector<std::string> hook_ordering_;
+
     /// Enabled apps (may or may not be instantiated).
     /// Key is the App's NAME static member.
     /// Value is the number of instances to create.
@@ -672,14 +742,8 @@ private:
     /// All pipelines and threads are managed by PipelineManager.
     std::unique_ptr<pipeline::PipelineManager> pipeline_mgr_;
 
-    /// Stdout logger (thread-safe). Owned by AppManagers.
-    ThreadSafeLogger* stdout_logger_ = nullptr;
-
-    /// Stderr logger (thread-safe). Owned by AppManagers.
-    ThreadSafeLogger* stderr_logger_ = nullptr;
-
-    /// File logger (thread-safe). Owned by AppManagers.
-    ThreadSafeLogger* file_logger_ = nullptr;
+    /// App logger (thread-safe). Owned by AppManagers.
+    ThreadSafeLogger* app_logger_ = nullptr;
 
     /// RAII timer to measure the performance of various app setup/teardown
     /// phases.
@@ -755,43 +819,30 @@ public:
         app_registrations_.emplace_back(new AppRegistration<AppT>());
     }
 
-    /// If you want all apps to share a global thread-safe stdout logger,
-    /// call this method before createAppManager().
+    /// If you want all apps to share a global thread-safe logger, call this
+    /// method before createAppManager().
     ///
-    /// Pass in prefix=true to see "[log]" before each line written to the logger's output.
-    void useThreadSafeStdoutLogger(bool prefix = false)
+    /// Every line written to the logger will start with the given prefix.
+    void useThreadSafeLogger(const std::string& prefix = "[simdb-log]")
     {
         if (!accepting_logger_requests_)
         {
             throw DBException("No longer accepting thread-safe logger requests");
         }
-        stdout_logger_ = std::make_unique<ThreadSafeLogger>(std::cout, prefix);
-    }
-
-    /// If you want all apps to share a global thread-safe stderr logger,
-    /// call this method before createAppManager().
-    ///
-    /// Pass in prefix=true to see "[log]" before each line written to the logger's output.
-    void useThreadSafeStderrLogger(bool prefix = false)
-    {
-        if (!accepting_logger_requests_)
-        {
-            throw DBException("No longer accepting thread-safe logger requests");
-        }
-        stderr_logger_ = std::make_unique<ThreadSafeLogger>(std::cerr, prefix);
+        app_logger_ = std::make_unique<ThreadSafeLogger>(prefix);
     }
 
     /// If you want all apps to share a global thread-safe file logger,
     /// call this method before createAppManager().
     ///
-    /// Pass in prefix=true to see "[log]" before each line written to the logger's output.
-    void useThreadSafeFileLogger(const std::string& filename, bool prefix = false)
+    /// Every line written to the logger will start with the given prefix.
+    void useThreadSafeFileLogger(const std::string& filename)
     {
         if (!accepting_logger_requests_)
         {
             throw DBException("No longer accepting thread-safe logger requests");
         }
-        file_logger_ = std::make_unique<ThreadSafeLogger>(filename, prefix);
+        app_logger_ = std::make_unique<ThreadSafeFileLogger>(filename);
     }
 
     /// Create a new AppManager with a new database.
@@ -816,8 +867,7 @@ public:
         }
 
         std::shared_ptr<DatabaseManager> db_mgr(new DatabaseManager(db_file, new_db));
-        std::shared_ptr<AppManager> app_mgr(
-            new AppManager(db_mgr.get(), stdout_logger_.get(), stderr_logger_.get(), file_logger_.get()));
+        std::shared_ptr<AppManager> app_mgr(new AppManager(db_mgr.get(), app_logger_.get()));
 
         db_mgrs_by_db_file_[db_file] = db_mgr;
         app_mgrs_by_db_file_[db_file] = app_mgr;
@@ -996,9 +1046,7 @@ private:
     std::map<DatabaseManager*, std::shared_ptr<AppManager>> app_mgrs_by_db_mgr_;
     std::map<AppManager*, std::shared_ptr<DatabaseManager>> db_mgrs_by_app_mgr_;
 
-    std::unique_ptr<ThreadSafeLogger> stdout_logger_;
-    std::unique_ptr<ThreadSafeLogger> stderr_logger_;
-    std::unique_ptr<ThreadSafeLogger> file_logger_;
+    std::unique_ptr<ThreadSafeLogger> app_logger_;
     bool accepting_logger_requests_ = true;
 };
 
