@@ -1,6 +1,6 @@
-#include "simdb/apps/argos/CollectionMgr.hpp"
-#include "simdb/apps/AppManager.hpp"
 #include "SimDBTester.hpp"
+#include "simdb/apps/AppManager.hpp"
+#include "simdb/apps/argos/CollectionMgr.hpp"
 
 #include <random>
 std::random_device rd;  // Seed source for the random number engine
@@ -10,37 +10,30 @@ std::mt19937 gen(rd()); // mersenne_twister_engine
 TEST_INIT;
 
 /// Enum used to verify TinyStrings
-enum class Colors
-{
-    RED = 1,
-    GREEN = 2,
-    BLUE = 3,
-    WHITE = 0,
-    TRANSPARENT = -1
-};
+enum class Colors { RED = 1, GREEN = 2, BLUE = 3, WHITE = 0, TRANSPARENT = -1 };
 
 inline std::ostream& operator<<(std::ostream& os, const Colors& c)
 {
     switch (c)
     {
-        case Colors::RED:
-            os << "RED";
-            break;
-        case Colors::GREEN:
-            os << "GREEN";
-            break;
-        case Colors::BLUE:
-            os << "BLUE";
-            break;
-        case Colors::WHITE:
-            os << "WHITE";
-            break;
-        case Colors::TRANSPARENT:
-            os << "TRANSPARENT";
-            break;
-        default:
-            os << "UNKNOWN";
-            break;
+    case Colors::RED:
+        os << "RED";
+        break;
+    case Colors::GREEN:
+        os << "GREEN";
+        break;
+    case Colors::BLUE:
+        os << "BLUE";
+        break;
+    case Colors::WHITE:
+        os << "WHITE";
+        break;
+    case Colors::TRANSPARENT:
+        os << "TRANSPARENT";
+        break;
+    default:
+        os << "UNKNOWN";
+        break;
     }
     return os;
 }
@@ -140,17 +133,15 @@ DummyPacketPtr generateRandomDummyPacket()
 }
 
 // Template specializations
-namespace simdb
-{
+namespace simdb {
 
-template <> void defineEnumMap<Colors>(std::string& enum_name,
-                                       std::map<std::string, int>& map)
+template <> void defineEnumMap<Colors>(std::string& enum_name, std::map<std::string, int>& map)
 {
-    enum_name          = "Colors";
-    map["RED"]         = 1;
-    map["GREEN"]       = 2;
-    map["BLUE"]        = 3;
-    map["WHITE"]       = 0;
+    enum_name = "Colors";
+    map["RED"] = 1;
+    map["GREEN"] = 2;
+    map["BLUE"] = 3;
+    map["WHITE"] = 0;
     map["TRANSPARENT"] = -1;
 }
 
@@ -205,8 +196,10 @@ public:
             bool_collectable_ = collection_mgr->createCollectable<bool>("top.bool", "root");
             enum_collectable_ = collection_mgr->createCollectable<Colors>("top.enum", "root");
             dummy_packet_collectable_ = collection_mgr->createCollectable<DummyPacket>("top.dummy_packet", "root");
-            dummy_collectable_vec_contig_ = collection_mgr->createIterableCollector<DummyPacketPtrVec, false>("top.dummy_packet_vec_contig", "root", 32);
-            dummy_collectable_vec_sparse_ = collection_mgr->createIterableCollector<DummyPacketPtrVec, true>("top.dummy_packet_vec_sparse", "root", 32);
+            dummy_collectable_vec_contig_ = collection_mgr->createIterableCollector<DummyPacketPtrVec, false>(
+                "top.dummy_packet_vec_contig", "root", 32);
+            dummy_collectable_vec_sparse_ = collection_mgr->createIterableCollector<DummyPacketPtrVec, true>(
+                "top.dummy_packet_vec_sparse", "root", 32);
         });
     }
 
@@ -219,8 +212,7 @@ public:
         if (tick == 1000)
         {
             uint64_collectable_->activate(generateRandomInt<uint64_t>());
-        }
-        else if (tick == 2000)
+        } else if (tick == 2000)
         {
             uint64_collectable_->deactivate();
         }
@@ -229,8 +221,7 @@ public:
         if (tick == 1500)
         {
             bool_collectable_->activate(rand() % 2 == 0);
-        }
-        else if (tick == 2500)
+        } else if (tick == 2500)
         {
             bool_collectable_->deactivate();
         }
@@ -239,8 +230,7 @@ public:
         if (tick == 1800)
         {
             enum_collectable_->activate(generateRandomColor());
-        }
-        else if (tick == 2800)
+        } else if (tick == 2800)
         {
             enum_collectable_->deactivate();
         }
@@ -249,8 +239,7 @@ public:
         if (tick == 2000)
         {
             dummy_packet_collectable_->activate(generateRandomDummyPacket());
-        }
-        else if (tick == 3000)
+        } else if (tick == 3000)
         {
             dummy_packet_collectable_->deactivate();
         }
@@ -269,10 +258,7 @@ public:
         dummy_collectable_vec_sparse_->activate(&dummy_packet_vec_sparse_);
     }
 
-    uint64_t getCurrentTick() const
-    {
-        return current_tick_;
-    }
+    uint64_t getCurrentTick() const { return current_tick_; }
 
 private:
     void randomizeDummyPacketCollectables_()

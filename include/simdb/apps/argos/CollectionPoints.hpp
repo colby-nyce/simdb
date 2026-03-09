@@ -46,7 +46,8 @@ public:
 class CollectionPointBase
 {
 public:
-    CollectionPointBase(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype, TinyStrings<>* tiny_strings) :
+    CollectionPointBase(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype,
+                        TinyStrings<>* tiny_strings) :
         argos_record_(elem_id),
         elem_id_(elem_id),
         clk_id_(clk_id),
@@ -105,8 +106,7 @@ public:
         {
             swept_data.insert(swept_data.end(), argos_record_.data.begin(), argos_record_.data.end());
             last_collected_tick_ = getTick_();
-        }
-        else if (last_collected_tick_ > 0)
+        } else if (last_collected_tick_ > 0)
         {
             CollectionBuffer buffer(reusable_buf_, getElemId());
             static constexpr uint8_t REFER_TICK = std::numeric_limits<uint8_t>::max();
@@ -134,10 +134,7 @@ protected:
 
     uint64_t getTick_() const { return tick_reader_ ? tick_reader_->getTick() : 0; }
 
-    TinyStrings<>* getTinyStrings_() const
-    {
-        return tiny_strings_;
-    }
+    TinyStrings<>* getTinyStrings_() const { return tiny_strings_; }
 
 private:
     const uint16_t elem_id_;
@@ -323,22 +320,16 @@ private:
 class IterableCollectorBase : public CollectionPointBase
 {
 public:
-    uint16_t getQueueMaxSize() const
-    {
-        return queue_max_size_;
-    }
+    uint16_t getQueueMaxSize() const { return queue_max_size_; }
 
 protected:
     template <typename... Args>
-    IterableCollectorBase(Args&&... args)
-        : CollectionPointBase(std::forward<Args>(args)...)
+    IterableCollectorBase(Args&&... args) :
+        CollectionPointBase(std::forward<Args>(args)...)
     {
     }
 
-    void updateQueueMaxSize_(uint16_t size)
-    {
-        queue_max_size_ = std::max(queue_max_size_, size);
-    }
+    void updateQueueMaxSize_(uint16_t size) { queue_max_size_ = std::max(queue_max_size_, size); }
 
 private:
     uint16_t queue_max_size_ = 0;

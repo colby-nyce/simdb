@@ -269,9 +269,8 @@ public:
                 enum_val_blob.data_ptr = enum_val_vec.data();
                 enum_val_blob.num_bytes = enum_val_vec.size();
 
-                db_mgr->INSERT(
-                    SQL_TABLE("EnumDefns"),
-                    SQL_VALUES(enum_name_, enum_val_str, enum_val_blob, int_type_str));
+                db_mgr->INSERT(SQL_TABLE("EnumDefns"),
+                               SQL_VALUES(enum_name_, enum_val_str, enum_val_blob, int_type_str));
             }
 
             serialized_ = true;
@@ -322,7 +321,8 @@ public:
 
         db_mgr->INSERT(
             SQL_TABLE("StructFields"),
-            SQL_COLUMNS("StructName", "FieldName", "FieldType", "FormatCode", "IsAutoColorizeKey", "IsDisplayedByDefault"),
+            SQL_COLUMNS("StructName", "FieldName", "FieldType", "FormatCode", "IsAutoColorizeKey",
+                        "IsDisplayedByDefault"),
             SQL_VALUES(struct_name, name_, field_dtype_str, fmt, is_autocolorize_key, is_displayed_by_default));
     }
 
@@ -367,10 +367,9 @@ public:
         const auto is_autocolorize_key = (int)isAutocolorizeKey();
         const auto is_displayed_by_default = (int)isDisplayedByDefault();
 
-        db_mgr->INSERT(
-            SQL_TABLE("StructFields"),
-            SQL_COLUMNS("StructName", "FieldName", "FieldType", "IsAutoColorizeKey", "IsDisplayedByDefault"),
-            SQL_VALUES(struct_name, field_name, enum_name_, is_autocolorize_key, is_displayed_by_default));
+        db_mgr->INSERT(SQL_TABLE("StructFields"),
+                       SQL_COLUMNS("StructName", "FieldName", "FieldType", "IsAutoColorizeKey", "IsDisplayedByDefault"),
+                       SQL_VALUES(struct_name, field_name, enum_name_, is_autocolorize_key, is_displayed_by_default));
 
         EnumMap<EnumT>::instance()->serializeDefn(db_mgr);
     }
@@ -430,8 +429,7 @@ template <typename StructT> void writeStructFields(const StructT* s, StructField
 template <typename StructT> class StructFieldSerializer
 {
 public:
-    StructFieldSerializer(const std::vector<std::unique_ptr<FieldBase>>& fields,
-                          CollectionBuffer& buffer,
+    StructFieldSerializer(const std::vector<std::unique_ptr<FieldBase>>& fields, CollectionBuffer& buffer,
                           TinyStrings<>* tiny_strings) :
         fields_(fields),
         buffer_(buffer),
@@ -482,10 +480,7 @@ public:
     }
 
     /// Write a string field.
-    void writeField(const char* val)
-    {
-        writeField(std::string(val));
-    }
+    void writeField(const char* val) { writeField(std::string(val)); }
 
     size_t numBytesWritten() const { return num_bytes_written_; }
 

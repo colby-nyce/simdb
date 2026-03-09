@@ -3,9 +3,9 @@
 #include "simdb/apps/App.hpp"
 #include "simdb/apps/argos/CollectionPoints.hpp"
 #include "simdb/apps/argos/TreeNode.hpp"
-#include "simdb/schema/SchemaDef.hpp"
 #include "simdb/pipeline/Pipeline.hpp"
 #include "simdb/pipeline/PipelineManager.hpp"
+#include "simdb/schema/SchemaDef.hpp"
 #include "simdb/utils/Compress.hpp"
 
 #include <boost/algorithm/string/split.hpp>
@@ -98,8 +98,8 @@ public:
         auto [it, inserted] = clocks_.insert({name, period});
         if (!inserted && it->second != period)
         {
-            throw DBException("Clock '") << name << "' already registered with period "
-                << it->second << ". Cannot change period to " << period << ".";
+            throw DBException("Clock '") << name << "' already registered with period " << it->second
+                                         << ". Cannot change period to " << period << ".";
         }
     }
 
@@ -178,7 +178,8 @@ public:
 
         using collection_point_type =
             std::conditional_t<Sparse, SparseIterableCollectionPoint, ContigIterableCollectionPoint>;
-        auto collectable = std::make_shared<collection_point_type>(elem_id, clk_id, heartbeat_, dtype, capacity, &tiny_strings_);
+        auto collectable =
+            std::make_shared<collection_point_type>(elem_id, clk_id, heartbeat_, dtype, capacity, &tiny_strings_);
         collectables_.push_back(collectable);
         collectables_by_path_[path] = collectable.get();
         return collectable;
@@ -248,8 +249,7 @@ public:
             {
                 auto elem_id = iterable_collector->getElemId();
                 auto queue_max_size = iterable_collector->getQueueMaxSize();
-                db_mgr_->INSERT(SQL_TABLE("QueueMaxSizes"),
-                                SQL_VALUES((int)elem_id, (int)queue_max_size));
+                db_mgr_->INSERT(SQL_TABLE("QueueMaxSizes"), SQL_VALUES((int)elem_id, (int)queue_max_size));
             }
         }
 
@@ -302,10 +302,7 @@ private:
     class DatabaseStage : public pipeline::DatabaseStage<CollectionMgr>
     {
     public:
-        DatabaseStage()
-        {
-            addInPort_<DatabaseEntry>("data_to_write", input_queue_);
-        }
+        DatabaseStage() { addInPort_<DatabaseEntry>("data_to_write", input_queue_); }
 
     private:
         pipeline::PipelineAction run_(bool) override
@@ -314,10 +311,7 @@ private:
             if (input_queue_->try_pop(entry))
             {
                 auto inserter = getTableInserter_("CollectionRecords");
-                inserter->createRecordWithColValues(
-                    entry.tick,
-                    entry.bytes,
-                    entry.oldest_referred_tick);
+                inserter->createRecordWithColValues(entry.tick, entry.bytes, entry.oldest_referred_tick);
 
                 return pipeline::PROCEED;
             }
@@ -369,7 +363,7 @@ private:
                 node = node->children.back().get();
 
                 auto record = db_mgr_->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_COLUMNS("Name", "ParentID"),
-                                            SQL_VALUES(part, node->parent->db_id));
+                                              SQL_VALUES(part, node->parent->db_id));
 
                 node->db_id = record->getId();
                 if (part_idx == path_parts.size() - 1)
