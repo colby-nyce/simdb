@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/pipeline/Serialize.hpp"
+#include "simdb/apps/argos/Serialize.hpp"
 
 #include <cassert>
 #include <memory>
@@ -46,12 +46,14 @@ public:
 class CollectionPointBase
 {
 public:
-    CollectionPointBase(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype) :
+    CollectionPointBase(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype,
+                        TinyStrings<>* tiny_strings) :
         argos_record_(elem_id),
         elem_id_(elem_id),
         clk_id_(clk_id),
         heartbeat_(heartbeat),
-        dtype_(dtype)
+        dtype_(dtype),
+        tiny_strings_(tiny_strings)
     {
     }
 
@@ -94,6 +96,8 @@ public:
 
     bool isAutoCollected() const { return is_auto_collected_; }
 
+    uint64_t getLastCollectedTick() const { return last_collected_tick_; }
+
     /// Append the collected data from the black box unless the status is
     /// DONT_READ.
     void sweep(std::vector<char>& swept_data)
@@ -101,6 +105,14 @@ public:
         if (argos_record_.status != ArgosRecord::Status::DONT_READ)
         {
             swept_data.insert(swept_data.end(), argos_record_.data.begin(), argos_record_.data.end());
+            last_collected_tick_ = getTick_();
+        } else if (last_collected_tick_ > 0)
+        {
+            CollectionBuffer buffer(reusable_buf_, getElemId());
+            static constexpr uint8_t REFER_TICK = std::numeric_limits<uint8_t>::max();
+            buffer << REFER_TICK;
+            buffer << last_collected_tick_;
+            swept_data.insert(swept_data.end(), reusable_buf_.begin(), reusable_buf_.end());
         }
 
         if (argos_record_.status == ArgosRecord::Status::READ_ONCE)
@@ -108,13 +120,6 @@ public:
             argos_record_.reset();
         }
     }
-
-    /// Called at the end of simulation / when the pipeline collector is
-    /// destroyed. Given the DatabaseManager in case the collectable needs to
-    /// write any final metadata etc.
-    ///
-    /// Note that postSim() is called inside a BEGIN/COMMIT TRANSACTION block.
-    virtual void postSim(DatabaseManager*) {}
 
 protected:
     ArgosRecord argos_record_;
@@ -129,6 +134,8 @@ protected:
 
     uint64_t getTick_() const { return tick_reader_ ? tick_reader_->getTick() : 0; }
 
+    TinyStrings<>* getTinyStrings_() const { return tiny_strings_; }
+
 private:
     const uint16_t elem_id_;
     const uint16_t clk_id_;
@@ -136,6 +143,9 @@ private:
     const std::string dtype_;
     TickReader* tick_reader_ = nullptr;
     bool is_auto_collected_ = false;
+    uint64_t last_collected_tick_ = 0;
+    std::vector<char> reusable_buf_;
+    TinyStrings<>* tiny_strings_ = nullptr;
 };
 
 #define LOG_MINIFICATION simdb::CollectionPointBase::minificationLoggingEnabled()
@@ -205,7 +215,7 @@ private:
         if (LOG_MINIFICATION)
             std::cout << "\n\n[simdb verbose] tick " << getTick_() << ", cid " << getElemId() << "\n";
 
-        const auto num_bytes = getNumBytes_(val);
+        const auto num_bytes = getNumBytes_<T>();
         if (!isAutoCollected())
         {
             if (LOG_MINIFICATION)
@@ -215,7 +225,7 @@ private:
                 buffer << val;
             } else
             {
-                StructSerializer<T>::getInstance()->extract(&val, curr_data_);
+                StructSerializer<T>::getInstance()->extract(&val, curr_data_, getTinyStrings_());
                 buffer << curr_data_;
             }
             return;
@@ -236,7 +246,7 @@ private:
             }
         }
 
-        StructSerializer<T>::getInstance()->extract(&val, curr_data_);
+        StructSerializer<T>::getInstance()->extract(&val, curr_data_, getTinyStrings_());
         if (num_carry_overs_ < getHeartbeat() && curr_data_ == prev_data_)
         {
             if (LOG_MINIFICATION)
@@ -254,7 +264,7 @@ private:
         }
     }
 
-    template <typename T> size_t getNumBytes_(const T& val)
+    template <typename T> size_t getNumBytes_()
     {
         if constexpr (std::is_same_v<T, bool>)
         {
@@ -306,9 +316,28 @@ private:
     size_t num_carry_overs_ = 0;
 };
 
+/// Base class for sparse/contig iterable collectors.
+class IterableCollectorBase : public CollectionPointBase
+{
+public:
+    uint16_t getQueueMaxSize() const { return queue_max_size_; }
+
+protected:
+    template <typename... Args>
+    IterableCollectorBase(Args&&... args) :
+        CollectionPointBase(std::forward<Args>(args)...)
+    {
+    }
+
+    void updateQueueMaxSize_(uint16_t size) { queue_max_size_ = std::max(queue_max_size_, size); }
+
+private:
+    uint16_t queue_max_size_ = 0;
+};
+
 /// Collectable for contiguous (non-sparse) iterable data e.g.
 /// queue/vector/deque/etc.
-class ContigIterableCollectionPoint : public CollectionPointBase
+class ContigIterableCollectionPoint : public IterableCollectorBase
 {
 public:
     /// Minification for these collectables can do the following:
@@ -326,8 +355,8 @@ public:
     enum class Action : uint8_t { ARRIVE, DEPART, BOOKENDS, CHANGE, CARRY, FULL };
 
     ContigIterableCollectionPoint(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype,
-                                  size_t capacity) :
-        CollectionPointBase(elem_id, clk_id, heartbeat, dtype),
+                                  size_t capacity, TinyStrings<>* tiny_strings) :
+        IterableCollectorBase(elem_id, clk_id, heartbeat, dtype, tiny_strings),
         curr_snapshot_(capacity),
         prev_snapshot_(capacity)
     {
@@ -598,7 +627,7 @@ private:
             size = prev_snapshot_.capacity();
         }
 
-        queue_max_size_ = std::max(queue_max_size_, (uint16_t)size);
+        updateQueueMaxSize_((uint16_t)size);
         curr_snapshot_.clear();
 
         auto itr = container.begin();
@@ -641,28 +670,21 @@ private:
     typename std::enable_if<!type_traits::is_any_pointer<T>::value, bool>::type
     writeStruct_(const T& el, IterableSnapshot& snapshot, uint16_t bin_idx)
     {
-        StructSerializer<T>::getInstance()->extract(&el, snapshot[bin_idx]);
+        StructSerializer<T>::getInstance()->extract(&el, snapshot[bin_idx], getTinyStrings_());
         return true;
     }
 
-    /// Write the maximum size of this queue during simulation. This is used
-    /// for Argos' SchedulingLines feature.
-    ///
-    /// Note that postSim() is called inside a BEGIN/COMMIT TRANSACTION block.
-    void postSim(DatabaseManager* db_mgr) override;
-
     IterableSnapshot curr_snapshot_;
     IterableSnapshot prev_snapshot_;
-    uint16_t queue_max_size_ = 0;
 };
 
 /// Collectable for sparse iterable data e.g. queue/vector/deque/etc.
-class SparseIterableCollectionPoint : public CollectionPointBase
+class SparseIterableCollectionPoint : public IterableCollectorBase
 {
 public:
     SparseIterableCollectionPoint(uint16_t elem_id, uint16_t clk_id, size_t heartbeat, const std::string& dtype,
-                                  size_t capacity) :
-        CollectionPointBase(elem_id, clk_id, heartbeat, dtype),
+                                  size_t capacity, TinyStrings<>* tiny_strings) :
+        IterableCollectorBase(elem_id, clk_id, heartbeat, dtype, tiny_strings),
         expected_capacity_(capacity)
     {
         prev_data_by_bin_.resize(capacity);
@@ -723,7 +745,7 @@ private:
             }
         }
 
-        queue_max_size_ = std::max(queue_max_size_, num_valid);
+        updateQueueMaxSize_((uint16_t)num_valid);
 
         CollectionBuffer buffer(argos_record_.data, getElemId());
         if (LOG_MINIFICATION)
@@ -772,7 +794,7 @@ private:
     writeStruct_(const T& el, CollectionBuffer& buffer, uint16_t bin_idx)
     {
         buffer << bin_idx;
-        StructSerializer<T>::getInstance()->writeStruct(&el, buffer);
+        StructSerializer<T>::getInstance()->writeStruct(&el, buffer, getTinyStrings_());
 
         if (LOG_MINIFICATION)
             std::cout << "[simdb verbose] bin " << bin_idx << ", "
@@ -780,16 +802,9 @@ private:
         return true;
     }
 
-    /// Write the maximum size of this queue during simulation. This is used
-    /// for Argos' SchedulingLines feature.
-    ///
-    /// Note that postSim() is called inside a BEGIN/COMMIT TRANSACTION block.
-    void postSim(DatabaseManager* db_mgr) override;
-
     const size_t expected_capacity_;
     std::vector<std::vector<char>> prev_data_by_bin_;
     std::vector<size_t> num_carry_overs_by_bin_;
-    uint16_t queue_max_size_ = 0;
 };
 
 } // namespace simdb

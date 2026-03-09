@@ -3,7 +3,7 @@
 #pragma once
 
 #include "simdb/Exceptions.hpp"
-#include "simdb/pipeline/CollectionBuffer.hpp"
+#include "simdb/apps/argos/CollectionBuffer.hpp"
 #include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 #include "simdb/utils/TypeTraits.hpp"
@@ -39,7 +39,7 @@ enum class StructFields {
     string_t
 };
 
-template <typename FieldT> inline StructFields getFieldDTypeEnum()
+template <typename FieldT> inline constexpr StructFields getFieldDTypeEnum()
 {
     if constexpr (std::is_same_v<FieldT, char>)
     {
@@ -86,7 +86,7 @@ template <typename FieldT> inline StructFields getFieldDTypeEnum()
         return getFieldDTypeEnum<enum_int_t>();
     } else
     {
-        throw DBException("Unsupported data type: ") << demangle(typeid(FieldT).name());
+        static_assert(false, "Unsupported data type");
     }
 }
 
@@ -251,7 +251,31 @@ public:
 
     const std::string& getEnumName() const { return enum_name_; }
 
-    void serializeDefn(DatabaseManager* db_mgr) const;
+    void serializeDefn(DatabaseManager* db_mgr) const
+    {
+        using enum_int_t = typename std::underlying_type<EnumT>::type;
+
+        if (!serialized_)
+        {
+            auto dtype = getFieldDTypeEnum<enum_int_t>();
+            auto int_type_str = getFieldDTypeStr(dtype);
+
+            for (const auto& kvp : *map_)
+            {
+                auto enum_val_str = kvp.first;
+                auto enum_val_vec = convertIntToBlob<enum_int_t>(kvp.second);
+
+                SqlBlob enum_val_blob;
+                enum_val_blob.data_ptr = enum_val_vec.data();
+                enum_val_blob.num_bytes = enum_val_vec.size();
+
+                db_mgr->INSERT(SQL_TABLE("EnumDefns"),
+                               SQL_VALUES(enum_name_, enum_val_str, enum_val_blob, int_type_str));
+            }
+
+            serialized_ = true;
+        }
+    }
 
 private:
     EnumMap()
@@ -288,7 +312,19 @@ public:
 
     virtual size_t getNumBytes() const { return getDTypeNumBytes(dtype_); }
 
-    virtual void serializeDefn(DatabaseManager* db_mgr, const std::string& struct_name) const;
+    virtual void serializeDefn(DatabaseManager* db_mgr, const std::string& struct_name) const
+    {
+        const auto field_dtype_str = getFieldDTypeStr(dtype_);
+        const auto fmt = static_cast<int>(format_);
+        const auto is_autocolorize_key = (int)isAutocolorizeKey();
+        const auto is_displayed_by_default = (int)isDisplayedByDefault();
+
+        db_mgr->INSERT(
+            SQL_TABLE("StructFields"),
+            SQL_COLUMNS("StructName", "FieldName", "FieldType", "FormatCode", "IsAutoColorizeKey",
+                        "IsDisplayedByDefault"),
+            SQL_VALUES(struct_name, name_, field_dtype_str, fmt, is_autocolorize_key, is_displayed_by_default));
+    }
 
     void setIsAutocolorizeKey(bool is_autocolorize_key)
     {
@@ -325,7 +361,18 @@ public:
     {
     }
 
-    virtual void serializeDefn(DatabaseManager* db_mgr, const std::string& struct_name) const override;
+    void serializeDefn(DatabaseManager* db_mgr, const std::string& struct_name) const override
+    {
+        const auto field_name = getName();
+        const auto is_autocolorize_key = (int)isAutocolorizeKey();
+        const auto is_displayed_by_default = (int)isDisplayedByDefault();
+
+        db_mgr->INSERT(SQL_TABLE("StructFields"),
+                       SQL_COLUMNS("StructName", "FieldName", "FieldType", "IsAutoColorizeKey", "IsDisplayedByDefault"),
+                       SQL_VALUES(struct_name, field_name, enum_name_, is_autocolorize_key, is_displayed_by_default));
+
+        EnumMap<EnumT>::instance()->serializeDefn(db_mgr);
+    }
 
 private:
     const typename EnumMap<EnumT>::enum_map_t map_;
@@ -351,6 +398,7 @@ template <typename StructT> class StructFieldSerializer;
 /// the serializer.
 template <typename StructT> void writeStructFields(const StructT* s, StructFieldSerializer<StructT>* serializer)
 {
+    (void)s;
     (void)serializer;
 }
 
@@ -381,9 +429,11 @@ template <typename StructT> void writeStructFields(const StructT* s, StructField
 template <typename StructT> class StructFieldSerializer
 {
 public:
-    StructFieldSerializer(const std::vector<std::unique_ptr<FieldBase>>& fields, CollectionBuffer& buffer) :
+    StructFieldSerializer(const std::vector<std::unique_ptr<FieldBase>>& fields, CollectionBuffer& buffer,
+                          TinyStrings<>* tiny_strings) :
         fields_(fields),
-        buffer_(buffer)
+        buffer_(buffer),
+        tiny_strings_(tiny_strings)
     {
     }
 
@@ -421,7 +471,7 @@ public:
     {
         if (dynamic_cast<const StringField*>(fields_[current_field_idx_].get()))
         {
-            uint32_t string_id = StringMap::instance()->getStringId(val);
+            uint32_t string_id = tiny_strings_->getStringID(val);
             writeField<uint32_t>(string_id);
         } else
         {
@@ -442,6 +492,7 @@ private:
     size_t current_field_idx_ = 0;
     CollectionBuffer& buffer_;
     size_t num_bytes_written_ = 0;
+    TinyStrings<>* tiny_strings_ = nullptr;
 };
 
 template <typename StructT> class StructSerializer;
@@ -623,17 +674,17 @@ public:
 
     void serializeDefn(DatabaseManager* db_mgr) const { schema_.serializeDefn(db_mgr); }
 
-    size_t writeStruct(const StructT* s, CollectionBuffer& buffer) const
+    size_t writeStruct(const StructT* s, CollectionBuffer& buffer, TinyStrings<>* tiny_strings) const
     {
-        StructFieldSerializer<StructT> field_serializer(schema_.fields_, buffer);
+        StructFieldSerializer<StructT> field_serializer(schema_.fields_, buffer, tiny_strings);
         field_serializer.writeFields(s);
         return field_serializer.numBytesWritten();
     }
 
-    void extract(const StructT* s, std::vector<char>& bytes) const
+    void extract(const StructT* s, std::vector<char>& bytes, TinyStrings<>* tiny_strings) const
     {
         CollectionBuffer buffer(bytes);
-        writeStruct(s, buffer);
+        writeStruct(s, buffer, tiny_strings);
     }
 
 private:
