@@ -327,15 +327,14 @@ private:
         if (!root_)
         {
             root_ = std::make_unique<TreeNode>("root");
-            auto record =
-                db_mgr_->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_COLUMNS("Name", "ParentID"), SQL_VALUES("root", 0));
+            auto record = db_mgr_->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_VALUES("root", 0));
             root_->db_id = record->getId();
         }
 
         if (clock_db_ids_by_name_.find(clk) == clock_db_ids_by_name_.end())
         {
             auto period = clocks_.at(clk);
-            auto record = db_mgr_->INSERT(SQL_TABLE("Clocks"), SQL_COLUMNS("Name", "Period"), SQL_VALUES(clk, period));
+            auto record = db_mgr_->INSERT(SQL_TABLE("Clocks"), SQL_VALUES(clk, period));
             clock_db_ids_by_name_[clk] = record->getId();
         }
 
@@ -362,8 +361,7 @@ private:
                 node->children.push_back(std::move(new_node));
                 node = node->children.back().get();
 
-                auto record = db_mgr_->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_COLUMNS("Name", "ParentID"),
-                                              SQL_VALUES(part, node->parent->db_id));
+                auto record = db_mgr_->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_VALUES(part, node->parent->db_id));
 
                 node->db_id = record->getId();
                 if (part_idx == path_parts.size() - 1)
