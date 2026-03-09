@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/utils/MetaStructs.hpp"
+#include "simdb/utils/TypeTraits.hpp"
 
 #include <cstring>
 #include <iostream>
