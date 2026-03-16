@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "simdb/utils/StreamFormatters.hpp"
+
 namespace simdb::utils {
 
 /*!
@@ -44,6 +46,7 @@ public:
             sorted_avg_times.push_back(method_results.second / method_results.first);
         }
 
+        [[maybe_unused]] ios_format_saver fmt_saver(std::cout);
         std::sort(sorted_avg_times.begin(), sorted_avg_times.end(), std::greater<double>());
         for (auto avg_time : sorted_avg_times)
         {
