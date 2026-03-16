@@ -5,8 +5,8 @@
 #include "simdb/apps/App.hpp"
 #include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
-#include "simdb/utils/ThreadSafeLogger.hpp"
 #include "simdb/utils/StreamFormatters.hpp"
+#include "simdb/utils/ThreadSafeLogger.hpp"
 
 #include <filesystem>
 #include <iostream>

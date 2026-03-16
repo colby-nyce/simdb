@@ -2,22 +2,18 @@
 
 #include <iostream>
 
-namespace simdb
-{
+namespace simdb {
 
 class ios_format_saver
 {
 public:
-    explicit ios_format_saver(std::ios& s)
-        : stream_(s)
+    explicit ios_format_saver(std::ios& s) :
+        stream_(s)
     {
         state_.copyfmt(s);
     }
 
-    ~ios_format_saver()
-    {
-        stream_.copyfmt(state_);
-    }
+    ~ios_format_saver() { stream_.copyfmt(state_); }
 
 private:
     std::ios& stream_;
