@@ -5,6 +5,7 @@
 #include "simdb/apps/App.hpp"
 #include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/utils/StreamFormatters.hpp"
 #include "simdb/utils/ThreadSafeLogger.hpp"
 
 #include <filesystem>
@@ -765,6 +766,8 @@ private:
 
         ~ScopedTimer()
         {
+            [[maybe_unused]] ios_format_saver fmt_saver(std::cout);
+
             auto end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> dur = end - start_;
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(dur).count();
