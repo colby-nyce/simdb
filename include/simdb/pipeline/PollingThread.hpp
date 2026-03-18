@@ -4,6 +4,7 @@
 
 #include "simdb/Exceptions.hpp"
 #include "simdb/pipeline/Runnable.hpp"
+#include "simdb/utils/StreamFormatters.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -200,6 +201,7 @@ public:
             runnable->print(std::cout, 4);
         }
 
+        [[maybe_unused]] ios_format_saver fmt_saver(std::cout);
         std::cout << "\n";
         std::cout << "    Performance report:\n";
         std::cout << "        Num times run:      " << num_times_run_ << "\n";
