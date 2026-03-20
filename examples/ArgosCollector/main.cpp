@@ -1,136 +1,10 @@
 #include "SimDBTester.hpp"
+#include "RandUtils.hpp"
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collections.hpp"
 
-#include <random>
-std::random_device rd;  // Seed source for the random number engine
-std::mt19937 gen(rd()); // mersenne_twister_engine
-
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
-
-/// Enum used to verify TinyStrings
-enum class Colors { RED = 1, GREEN = 2, BLUE = 3, WHITE = 0, TRANSPARENT = -1 };
-
-inline std::ostream& operator<<(std::ostream& os, const Colors& c)
-{
-    switch (c)
-    {
-    case Colors::RED:
-        os << "RED";
-        break;
-    case Colors::GREEN:
-        os << "GREEN";
-        break;
-    case Colors::BLUE:
-        os << "BLUE";
-        break;
-    case Colors::WHITE:
-        os << "WHITE";
-        break;
-    case Colors::TRANSPARENT:
-        os << "TRANSPARENT";
-        break;
-    default:
-        os << "UNKNOWN";
-        break;
-    }
-    return os;
-}
-
-/// Example struct that contains a wide variety of supported data fields
-struct DummyPacket
-{
-    Colors e_color;
-    char ch;
-    int8_t int8;
-    int16_t int16;
-    int32_t int32;
-    int64_t int64;
-    uint8_t uint8;
-    uint16_t uint16;
-    uint32_t uint32;
-    uint64_t uint64;
-    float flt;
-    double dbl;
-    bool b;
-    std::string str;
-};
-
-using DummyPacketPtr = std::shared_ptr<DummyPacket>;
-using DummyPacketPtrVec = std::vector<DummyPacketPtr>;
-
-/// Random number/string/struct generators
-template <typename T> T generateRandomInt()
-{
-    constexpr auto minval = std::numeric_limits<T>::min();
-    constexpr auto maxval = std::numeric_limits<T>::max();
-    static std::uniform_int_distribution<T> distrib(minval, maxval);
-    return distrib(gen);
-}
-
-template <typename T> T generateRandomFloat()
-{
-    constexpr auto minval = std::numeric_limits<T>::min();
-    constexpr auto maxval = std::numeric_limits<T>::max();
-    static std::uniform_real_distribution<T> distrib(minval, maxval);
-    return distrib(gen);
-}
-
-char generateRandomChar()
-{
-    return 'A' + rand() % 26;
-}
-
-bool generateRandomBool()
-{
-    return rand() % 2 == 0;
-}
-
-std::string generateRandomString(size_t minchars = 2, size_t maxchars = 8)
-{
-    EXPECT_TRUE(minchars <= maxchars);
-
-    std::string str;
-    while (str.size() < minchars)
-    {
-        str += generateRandomChar();
-    }
-
-    while (str.size() < maxchars)
-    {
-        str += generateRandomChar();
-    }
-
-    return str;
-}
-
-Colors generateRandomColor()
-{
-    return static_cast<Colors>(rand() % 6 - 1);
-}
-
-DummyPacketPtr generateRandomDummyPacket()
-{
-    auto s = std::make_shared<DummyPacket>();
-
-    s->e_color = generateRandomColor();
-    s->ch = generateRandomChar();
-    s->int8 = generateRandomInt<int8_t>();
-    s->int16 = generateRandomInt<int16_t>();
-    s->int32 = generateRandomInt<int32_t>();
-    s->int64 = generateRandomInt<int64_t>();
-    s->uint8 = generateRandomInt<uint8_t>();
-    s->uint16 = generateRandomInt<uint16_t>();
-    s->uint32 = generateRandomInt<uint32_t>();
-    s->uint64 = generateRandomInt<uint64_t>();
-    s->flt = generateRandomFloat<float>();
-    s->dbl = generateRandomFloat<double>();
-    s->b = generateRandomBool();
-    s->str = generateRandomString();
-
-    return s;
-}
 
 /*
 // Template specializations
@@ -252,7 +126,7 @@ private:
         dummy_packet_vec_contig_.clear();
         for (int i = 0; i < rand() % 10; ++i)
         {
-            dummy_packet_vec_contig_.push_back(generateRandomDummyPacket());
+            dummy_packet_vec_contig_.push_back(simdb::generateRandomDummyPacket());
         }
 
         dummy_packet_vec_sparse_.clear();
@@ -261,7 +135,7 @@ private:
         {
             if (rand() % 2 == 0)
             {
-                dummy_packet_vec_sparse_[i] = generateRandomDummyPacket();
+                dummy_packet_vec_sparse_[i] = simdb::generateRandomDummyPacket();
             }
         }
     }
@@ -273,10 +147,10 @@ private:
     //std::shared_ptr<simdb::CollectionPoint> enum_collectable_;
     //std::shared_ptr<simdb::CollectionPoint> dummy_packet_collectable_;
 
-    DummyPacketPtrVec dummy_packet_vec_contig_;
+    simdb::DummyPacketPtrVec dummy_packet_vec_contig_;
     //std::shared_ptr<simdb::ContigIterableCollectionPoint> dummy_collectable_vec_contig_;
 
-    DummyPacketPtrVec dummy_packet_vec_sparse_;
+    simdb::DummyPacketPtrVec dummy_packet_vec_sparse_;
     //std::shared_ptr<simdb::SparseIterableCollectionPoint> dummy_collectable_vec_sparse_;
 };
 
