@@ -23,27 +23,17 @@ protected:
 
 //! \class TimestampedCollection
 //! \brief Collection with time values of a specific type e.g. double, uint64_t, ...
-template <typename TimeT>
-class TimestampedCollection : public Collection
+template <typename TimeT> class TimestampedCollection : public Collection
 {
 public:
     //! \brief Use a backpointer to get the current time
-    void timestampWith(const TimeT* backpointer)
-    {
-        timestamp_ = std::make_unique<Timestamp<TimeT>>(backpointer);
-    }
+    void timestampWith(const TimeT* backpointer) { timestamp_ = std::make_unique<Timestamp<TimeT>>(backpointer); }
 
     //! \brief Use a C-style function pointer to get the current time
-    void timestampWith(TimeT(*fn)())
-    {
-        timestamp_ = std::make_unique<Timestamp<TimeT>>(fn);
-    }
+    void timestampWith(TimeT (*fn)()) { timestamp_ = std::make_unique<Timestamp<TimeT>>(fn); }
 
     //! \brief Use a C-style function pointer to get the current time
-    void timestampWith(std::function<TimeT()> fn)
-    {
-        timestamp_ = std::make_unique<Timestamp<TimeT>>(fn);
-    }
+    void timestampWith(std::function<TimeT()> fn) { timestamp_ = std::make_unique<Timestamp<TimeT>>(fn); }
 
 private:
     std::unique_ptr<Timestamp<TimeT>> timestamp_;

@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "simdb/apps/argos/Collection.hpp"
 #include "simdb/Exceptions.hpp"
+#include "simdb/apps/argos/Collection.hpp"
 
 #include <map>
 #include <memory>
@@ -44,8 +44,7 @@ public:
     }
 
     //! \brief Get a collection previously created by addCollection()
-    template <typename TimeT>
-    TimestampedCollection<TimeT>* getCollection(const std::string& clk_name) const
+    template <typename TimeT> TimestampedCollection<TimeT>* getCollection(const std::string& clk_name) const
     {
         auto it = clk_collections_.find(clk_name);
         if (it == clk_collections_.end())
@@ -56,8 +55,7 @@ public:
         {
             return collection;
         }
-        throw DBException("TimestampedCollection exists for clock '") << clk_name
-            << "' but the dynamic_cast failed";
+        throw DBException("TimestampedCollection exists for clock '") << clk_name << "' but the dynamic_cast failed";
     }
 
 private:

@@ -24,26 +24,27 @@ struct QueryTimeUInt64
     using type = uint64_t;
 };
 
-template <typename TimeT>
-struct QueryTime;
+template <typename TimeT> struct QueryTime;
 
-template <>
-struct QueryTime<uint32_t> : QueryTimeNotUInt64 {};
+template <> struct QueryTime<uint32_t> : QueryTimeNotUInt64
+{
+};
 
-template <>
-struct QueryTime<uint64_t> : QueryTimeUInt64 {};
+template <> struct QueryTime<uint64_t> : QueryTimeUInt64
+{
+};
 
-template <>
-struct QueryTime<float> : QueryTimeFltPt {};
+template <> struct QueryTime<float> : QueryTimeFltPt
+{
+};
 
-template <>
-struct QueryTime<double> : QueryTimeFltPt {};
+template <> struct QueryTime<double> : QueryTimeFltPt
+{
+};
 
-template <typename TimeT>
-using query_time_t = typename QueryTime<TimeT>::type;
+template <typename TimeT> using query_time_t = typename QueryTime<TimeT>::type;
 
-template <typename TimeT>
-void TestTimestamps()
+template <typename TimeT> void TestTimestamps()
 {
     using namespace simdb::collection;
 
@@ -63,7 +64,7 @@ void TestTimestamps()
 
     const size_t num_steps = 100;
     std::vector<size_t> base_values(1000);
-    for (auto & v : base_values)
+    for (auto& v : base_values)
     {
         v = rand();
     }
@@ -76,8 +77,7 @@ void TestTimestamps()
         step_values.push_back(base_values);
     }
 
-    db_mgr.safeTransaction([&]()
-    {
+    db_mgr.safeTransaction([&]() {
         auto inserter = db_mgr.prepareINSERT(SQL_TABLE("DataBlobs"));
         while (++tick <= 100)
         {
@@ -116,8 +116,7 @@ void TestTimestamps()
     EXPECT_FALSE(results.getNextRecord());
 }
 
-template <typename... TimeTs>
-void TestTimestampsFor()
+template <typename... TimeTs> void TestTimestampsFor()
 {
     (TestTimestamps<TimeTs>(), ...);
 }
