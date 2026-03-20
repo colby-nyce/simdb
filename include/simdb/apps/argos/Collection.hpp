@@ -6,19 +6,25 @@
 
 namespace simdb::collection {
 
-//! \class CollectionBase
-//! \brief Base class for all collections. Subclasses will be
-//! templated on the specific <TimeT> type.
-class CollectionBase
+//! \class Collection
+//! \brief Base class for all timestamped collections. Subclasses
+//! will be templated on the specific <TimeT> type.
+class Collection
 {
 public:
-    virtual ~CollectionBase() = default;
+    virtual ~Collection() = default;
+
+    //! TODO cnyce: add all the collectable creation apis here
+
+protected:
+    //! Not meant to be directly instantiated
+    Collection() = default;
 };
 
-//! \class Collection
-//! \brief Collection of collectables with type-specific timestamps
+//! \class TimestampedCollection
+//! \brief Collection with time values of a specific type e.g. double, uint64_t, ...
 template <typename TimeT, TimeAccessorType AccessorType>
-class Collection : public CollectionBase
+class TimestampedCollection : public Collection
 {
 public:
     //! \brief Construct
@@ -27,7 +33,7 @@ public:
     //!         BACKPOINTER                 const TimeT*
     //!         CFUNCPOINTER                TimeT(*)()
     //!         STDFUNCTION                 std::function<TimeT()>
-    Collection(time_accessor_t<TimeT, AccessorType> time_accessor) :
+    TimestampedCollection(time_accessor_t<TimeT, AccessorType> time_accessor) :
         timestamp_(time_accessor)
     {}
 

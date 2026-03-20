@@ -31,7 +31,7 @@ public:
     //! \throw Throws if this clock already had a collection, but with a different
     //! clock period
     template <typename TimeT, TimeAccessorType AccessorType>
-    CollectionBase* addCollection(
+    Collection* addCollection(
         const std::string& clk_name,
         size_t clk_period,
         time_accessor_t<TimeT, AccessorType> time_accessor)
@@ -46,14 +46,14 @@ public:
         auto& collection = clk_collections_[clk_name];
         if (!collection)
         {
-            collection = std::make_unique<Collection<TimeT, AccessorType>>(time_accessor);
+            collection = std::make_unique<TimestampedCollection<TimeT, AccessorType>>(time_accessor);
             clk_periods_[clk_name] = clk_period;
         }
         return collection.get();
     }
 
     //! \brief Get a collection previous created by addCollection()
-    CollectionBase* getCollection(const std::string& clk_name) const
+    Collection* getCollection(const std::string& clk_name) const
     {
         auto it = clk_collections_.find(clk_name);
         if (it == clk_collections_.end())
@@ -64,7 +64,7 @@ public:
     }
 
 private:
-    std::map<std::string, std::unique_ptr<CollectionBase>> clk_collections_;
+    std::map<std::string, std::unique_ptr<Collection>> clk_collections_;
     std::map<std::string, size_t> clk_periods_;
 };
 
