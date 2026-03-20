@@ -1,6 +1,6 @@
 #include "SimDBTester.hpp"
 #include "simdb/apps/AppManager.hpp"
-#include "simdb/apps/argos/CollectionMgr.hpp"
+#include "simdb/apps/argos/Collections.hpp"
 
 #include <random>
 std::random_device rd;  // Seed source for the random number engine
@@ -132,6 +132,7 @@ DummyPacketPtr generateRandomDummyPacket()
     return s;
 }
 
+/*
 // Template specializations
 namespace simdb {
 
@@ -182,27 +183,12 @@ template <> void writeStructFields(const DummyPacket* pkt, StructFieldSerializer
 }
 
 } // namespace simdb
+*/
 
 /// Example simulator that configures all supported types of collections.
 class Sim
 {
 public:
-    void configCollectables(simdb::DatabaseManager& db_mgr, simdb::CollectionMgr* collection_mgr)
-    {
-        db_mgr.safeTransaction([&]() {
-            collection_mgr->addClock("root", 10);
-
-            uint64_collectable_ = collection_mgr->createCollectable<uint64_t>("top.uint64", "root");
-            bool_collectable_ = collection_mgr->createCollectable<bool>("top.bool", "root");
-            enum_collectable_ = collection_mgr->createCollectable<Colors>("top.enum", "root");
-            dummy_packet_collectable_ = collection_mgr->createCollectable<DummyPacket>("top.dummy_packet", "root");
-            dummy_collectable_vec_contig_ = collection_mgr->createIterableCollector<DummyPacketPtrVec, false>(
-                "top.dummy_packet_vec_contig", "root", 32);
-            dummy_collectable_vec_sparse_ = collection_mgr->createIterableCollector<DummyPacketPtrVec, true>(
-                "top.dummy_packet_vec_sparse", "root", 32);
-        });
-    }
-
     void step()
     {
         randomizeDummyPacketCollectables_();
@@ -211,51 +197,51 @@ public:
         // Collect a random uint64_t between ticks 10 and 25
         if (tick == 1000)
         {
-            uint64_collectable_->activate(generateRandomInt<uint64_t>());
+            //uint64_collectable_->activate(generateRandomInt<uint64_t>());
         } else if (tick == 2000)
         {
-            uint64_collectable_->deactivate();
+            //uint64_collectable_->deactivate();
         }
 
         // Collect a random bool between ticks 1500 and 2500
         if (tick == 1500)
         {
-            bool_collectable_->activate(rand() % 2 == 0);
+            //bool_collectable_->activate(rand() % 2 == 0);
         } else if (tick == 2500)
         {
-            bool_collectable_->deactivate();
+            //bool_collectable_->deactivate();
         }
 
         // Collect a random enum between ticks 1800 and 2800
         if (tick == 1800)
         {
-            enum_collectable_->activate(generateRandomColor());
+            //enum_collectable_->activate(generateRandomColor());
         } else if (tick == 2800)
         {
-            enum_collectable_->deactivate();
+            //enum_collectable_->deactivate();
         }
 
         // Collect a random DummyPacket between ticks 2000 and 3000
         if (tick == 2000)
         {
-            dummy_packet_collectable_->activate(generateRandomDummyPacket());
+            //dummy_packet_collectable_->activate(generateRandomDummyPacket());
         } else if (tick == 3000)
         {
-            dummy_packet_collectable_->deactivate();
+            //dummy_packet_collectable_->deactivate();
         }
 
         // Collect some different values for just one cycle. To do this, we call
         // the activate() method, passing in "once=true".
         if (tick >= 5000 && tick % 5 == 0)
         {
-            uint64_collectable_->activate(generateRandomInt<uint64_t>(), true);
-            bool_collectable_->activate(rand() % 2 == 0, true);
-            enum_collectable_->activate(generateRandomColor(), true);
-            dummy_packet_collectable_->activate(generateRandomDummyPacket(), true);
+            //uint64_collectable_->activate(generateRandomInt<uint64_t>(), true);
+            //bool_collectable_->activate(rand() % 2 == 0, true);
+            //enum_collectable_->activate(generateRandomColor(), true);
+            //dummy_packet_collectable_->activate(generateRandomDummyPacket(), true);
         }
 
-        dummy_collectable_vec_contig_->activate(&dummy_packet_vec_contig_);
-        dummy_collectable_vec_sparse_->activate(&dummy_packet_vec_sparse_);
+        //dummy_collectable_vec_contig_->activate(&dummy_packet_vec_contig_);
+        //dummy_collectable_vec_sparse_->activate(&dummy_packet_vec_sparse_);
     }
 
     uint64_t getCurrentTick() const { return current_tick_; }
@@ -282,62 +268,19 @@ private:
 
     uint64_t current_tick_ = 0;
 
-    std::shared_ptr<simdb::CollectionPoint> uint64_collectable_;
-    std::shared_ptr<simdb::CollectionPoint> bool_collectable_;
-    std::shared_ptr<simdb::CollectionPoint> enum_collectable_;
-    std::shared_ptr<simdb::CollectionPoint> dummy_packet_collectable_;
+    //std::shared_ptr<simdb::CollectionPoint> uint64_collectable_;
+    //std::shared_ptr<simdb::CollectionPoint> bool_collectable_;
+    //std::shared_ptr<simdb::CollectionPoint> enum_collectable_;
+    //std::shared_ptr<simdb::CollectionPoint> dummy_packet_collectable_;
 
     DummyPacketPtrVec dummy_packet_vec_contig_;
-    std::shared_ptr<simdb::ContigIterableCollectionPoint> dummy_collectable_vec_contig_;
+    //std::shared_ptr<simdb::ContigIterableCollectionPoint> dummy_collectable_vec_contig_;
 
     DummyPacketPtrVec dummy_packet_vec_sparse_;
-    std::shared_ptr<simdb::SparseIterableCollectionPoint> dummy_collectable_vec_sparse_;
+    //std::shared_ptr<simdb::SparseIterableCollectionPoint> dummy_collectable_vec_sparse_;
 };
 
 int main(int argc, char** argv)
 {
-    simdb::AppManagers app_mgrs;
-    app_mgrs.registerApp<simdb::CollectionMgr>();
-
-    // Create the app/db managers
-    auto& app_mgr = app_mgrs.createAppManager("test.db");
-    auto& db_mgr = app_mgrs.getDatabaseManager();
-
-    // Create the test simulator
-    Sim sim;
-
-    // Setup...
-    app_mgr.enableApp(simdb::CollectionMgr::NAME);
-    app_mgrs.createEnabledApps();
-    app_mgrs.createSchemas();
-
-    auto collection_mgr = app_mgr.getApp<simdb::CollectionMgr>();
-    sim.configCollectables(db_mgr, collection_mgr);
-
-    app_mgrs.postInit(argc, argv);
-    app_mgrs.initializePipelines();
-    app_mgrs.openPipelines();
-
-    // Simulate...
-    while (true)
-    {
-        sim.step();
-        auto tick = sim.getCurrentTick();
-
-        // "Sweep" the collection system for the current cycle,
-        // sending all active values to the database.
-        collection_mgr->sweep("root", tick);
-
-        // Stop at 10k steps
-        if (tick == 10000)
-        {
-            break;
-        }
-    }
-
-    // Finalize...
-    app_mgrs.postSimLoopTeardown();
-
-    REPORT_ERROR;
-    return ERROR_CODE;
+    (void)argc;(void)argv;
 }
