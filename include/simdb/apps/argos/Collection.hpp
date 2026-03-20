@@ -23,22 +23,30 @@ protected:
 
 //! \class TimestampedCollection
 //! \brief Collection with time values of a specific type e.g. double, uint64_t, ...
-template <typename TimeT, TimeAccessorType AccessorType>
+template <typename TimeT>
 class TimestampedCollection : public Collection
 {
 public:
-    //! \brief Construct
-    //! \param time_accessor Type depends on template params:
-    //!         AccessorType                time_accessor
-    //!         BACKPOINTER                 const TimeT*
-    //!         CFUNCPOINTER                TimeT(*)()
-    //!         STDFUNCTION                 std::function<TimeT()>
-    TimestampedCollection(time_accessor_t<TimeT, AccessorType> time_accessor) :
-        timestamp_(time_accessor)
-    {}
+    //! \brief Use a backpointer to get the current time
+    void timestampWith(const TimeT* backpointer)
+    {
+        timestamp_ = std::make_unique<Timestamp<TimeT>>(backpointer);
+    }
+
+    //! \brief Use a C-style function pointer to get the current time
+    void timestampWith(TimeT(*fn)())
+    {
+        timestamp_ = std::make_unique<Timestamp<TimeT>>(fn);
+    }
+
+    //! \brief Use a C-style function pointer to get the current time
+    void timestampWith(std::function<TimeT()> fn)
+    {
+        timestamp_ = std::make_unique<Timestamp<TimeT>>(fn);
+    }
 
 private:
-    Timestamp<TimeT, AccessorType> timestamp_;
+    std::unique_ptr<Timestamp<TimeT>> timestamp_;
 };
 
 } // namespace simdb::collection
