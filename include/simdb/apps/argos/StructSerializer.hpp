@@ -125,14 +125,14 @@ class StructSerializer
 {
 public:
     /// \brief Construct with a new tree. All structs will be placed
-    /// under the our tree's "root.structs" node.
+    /// under our tree's "root.dtypes.structs" node.
     StructSerializer()
         : owned_tree_(std::make_unique<SerializedTree>())
         , tree_(owned_tree_.get())
     {}
 
     /// \brief Construct using another tree. All structs will be placed
-    /// under the given tree's "root.structs" node.
+    /// under the given tree's "root.dtypes.structs" node.
     explicit StructSerializer(SerializedTree& tree)
         : tree_(&tree)
     {}
@@ -142,7 +142,10 @@ public:
     /// \note Implementation pending; no child node is attached yet.
     template <typename StructT>
     void registerStruct()
-    {}
+    {
+        //TODO cnyce
+        //[[maybe_unused]] using struct_t = type_traits::remove_any_pointer_t<StructT>;
+    }
 
     /// \brief Look up the database row id for a registered struct type
     /// \tparam StructT Same type key used with \ref registerStruct
@@ -179,7 +182,7 @@ private:
     {
         if (!structs_node_)
         {
-            structs_node_ = tree_->createNode<ElementTreeNode>("structs");
+            structs_node_ = tree_->createNodes<ElementTreeNode>("dtypes.structs");
         }
         return structs_node_;
     }

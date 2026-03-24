@@ -39,11 +39,22 @@ private:
         auto enum_id = enum_record->getId();
 
         std::map<std::string, enum_int_t<EnumT>> map;
-        defineEnumMap(map);
+        defineEnumMap<EnumT>(map);
 
+        auto inserter = db_mgr->prepareINSERT(SQL_TABLE("EnumFields"));
+        inserter->setColumnValue(0, enum_id);
         for (const auto& [enum_name, enum_value] : map)
         {
-            db_mgr->INSERT(SQL_TABLE("EnumFields"), SQL_VALUES(enum_id, enum_name, enum_value));
+            inserter->setColumnValue(1, enum_name);
+            if constexpr (std::is_same_v<enum_int_t<EnumT>, uint64_t>)
+            {
+                inserter->setColumnValue(2, enum_value);
+            }
+            else
+            {
+                inserter->setColumnValue(3, static_cast<int64_t>(enum_value));
+            }
+            inserter->createRecord();
         }
 
         return enum_id;
@@ -56,14 +67,15 @@ private:
 class EnumSerializer
 {
 public:
-    /// \brief Construct with a new tree.
+    /// \brief Construct with a new tree. All enums will be placed
+    /// under our tree's "root.dtypes.enums" node.
     EnumSerializer()
         : owned_tree_(std::make_unique<SerializedTree>())
         , tree_(owned_tree_.get())
     {}
 
     /// \brief Construct using another tree. All enums will be placed
-    /// under the given tree's "root.enums" node.
+    /// under the given tree's "root.dtypes.enums" node.
     explicit EnumSerializer(SerializedTree& tree)
         : tree_(&tree)
     {}
@@ -73,9 +85,10 @@ public:
     template <typename EnumT>
     void registerEnum()
     {
-        auto enum_name = demangle_type<EnumT>();
+        using enum_t = type_traits::remove_any_pointer_t<EnumT>;
+        auto enum_name = demangle_type<enum_t>();
         auto parent = getEnumsNode_();
-        parent->addChild<EnumTreeNode<EnumT>>(enum_name);
+        parent->addChild<EnumTreeNode<enum_t>>(enum_name);
     }
 
     /// \brief Look up the database row id for a registered enum type
@@ -85,7 +98,8 @@ public:
     template <typename EnumT>
     int getEnumDbId(bool must_exist = true) const
     {
-        auto enum_name = demangle_type<EnumT>();
+        using enum_t = type_traits::remove_any_pointer_t<EnumT>;
+        auto enum_name = demangle_type<enum_t>();
         auto parent = getEnumsNode_();
         auto enum_node = parent->getChildAs<SerializedTreeNode>(enum_name, must_exist);
         if (!enum_node)
@@ -113,7 +127,7 @@ private:
     {
         if (!enums_node_)
         {
-            enums_node_ = tree_->createNode<ElementTreeNode>("enums");
+            enums_node_ = tree_->createNodes<ElementTreeNode>("dtypes.enums");
         }
         return enums_node_;
     }

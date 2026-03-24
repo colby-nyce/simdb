@@ -39,14 +39,15 @@ private:
 class SimpleTypesSerializer
 {
 public:
-    /// \brief Construct with a new tree.
+    /// \brief Construct with a new tree. All simple types will be placed
+    /// under our tree's "root.dtypes.simple" node.
     SimpleTypesSerializer()
         : owned_tree_(std::make_unique<SerializedTree>())
         , tree_(owned_tree_.get())
     {}
 
     /// \brief Construct using another tree. All simple types will be placed
-    /// under the given tree's "builtins" node.
+    /// under the given tree's "root.dtypes.simple" node.
     explicit SimpleTypesSerializer(SerializedTree& tree)
         : tree_(&tree)
     {}
@@ -54,11 +55,12 @@ public:
     /// \brief Register scalar type \a SimpleTypeT under the shared \c builtins tree folder
     /// \tparam SimpleTypeT Trivial, standard-layout, non-enum type (see \ref SimpleTypeTreeNode)
     template <typename SimpleTypeT>
-    void registerBuiltIn()
+    void registerSimpleType()
     {
-        auto type_name = demangle_type<SimpleTypeT>();
+        using simple_t = type_traits::remove_any_pointer_t<SimpleTypeT>;
+        auto type_name = demangle_type<simple_t>();
         auto parent = getBuiltInsNode_();
-        parent->addChild<SimpleTypeTreeNode<SimpleTypeT>>(type_name);
+        parent->addChild<SimpleTypeTreeNode<simple_t>>(type_name);
     }
 
     /// \brief Look up the database row id for a registered built-in type
@@ -90,13 +92,19 @@ public:
         tree_->serializeBFS(db_mgr);
     }
 
+    /// \brief Tree this serializer reads/writes (owned or shared).
+    SerializedTree* getTree() { return tree_; }
+
+    /// \brief Tree this serializer reads/writes (owned or shared).
+    const SerializedTree* getTree() const { return tree_; }
+
 private:
     /// \return Lazy-created \c "builtins" grouping node under this serializer's tree
     SerializedTreeNode* getBuiltInsNode_() const
     {
         if (!builtins_node_)
         {
-            builtins_node_ = tree_->createNode<ElementTreeNode>("builtins");
+            builtins_node_ = tree_->createNodes<ElementTreeNode>("dtypes.simples");
         }
         return builtins_node_;
     }

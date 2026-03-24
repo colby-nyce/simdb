@@ -130,6 +130,12 @@ public:
         enums_tbl.addColumn("EnumName", dt::string_t);
         enums_tbl.addColumn("IntType", dt::string_t);
 
+        auto& enum_fields_tbl = schema.addTable("EnumFields");
+        enum_fields_tbl.addColumn("EnumID", dt::int32_t);
+        enum_fields_tbl.addColumn("FieldName", dt::string_t);
+        enum_fields_tbl.addColumn("FieldValUInt64", dt::uint64_t);
+        enum_fields_tbl.addColumn("FieldValInt64", dt::int64_t);
+
         auto& string_map_tbl = schema.addTable("StringMap");
         string_map_tbl.addColumn("IntVal", dt::int32_t);
         string_map_tbl.addColumn("String", dt::string_t);

@@ -6,6 +6,8 @@
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/Exceptions.hpp"
 
+#include <ostream>
+
 namespace simdb::collection {
 
 /// \class SerializedTreeNode
@@ -41,6 +43,24 @@ public:
             throw DBException("Invalid database ID");
         }
         return db_id_;
+    }
+
+    void print(std::ostream& os, unsigned depth = 0) const override
+    {
+        for (unsigned i = 0; i < depth; ++i)
+        {
+            os << "  ";
+        }
+        os << getName();
+        if (const int id = getDbId(false); id != 0)
+        {
+            os << " [db_id=" << id << ']';
+        }
+        os << '\n';
+        for (const auto& child : getChildren())
+        {
+            child->print(os, depth + 1);
+        }
     }
 
 private:

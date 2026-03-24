@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <ostream>
 #include <queue>
 #include <string>
 #include <type_traits>
@@ -159,12 +160,13 @@ public:
             auto existing = getChild(name, false);
             if (existing)
             {
-                if (!dynamic_cast<NodeT*>(existing))
+                auto typed_existing = dynamic_cast<NodeT*>(existing);
+                if (!typed_existing)
                 {
                     throw DBException("Child node exists but has incompatible type: ") << name
                         << " under parent path '" << getPath() << "'";
                 }
-                return existing;
+                return typed_existing;
             }
             return createChild_<NodeT>(name, this);
         }
@@ -259,6 +261,22 @@ public:
 
             cached_path_ = std::move(path);
             return cached_path_;
+        }
+
+        /// \brief Print this node and descendants with indentation (two spaces per level).
+        /// \param os Output stream.
+        /// \param depth Nesting depth; used for indentation (root is 0).
+        virtual void print(std::ostream& os, unsigned depth = 0) const
+        {
+            for (unsigned i = 0; i < depth; ++i)
+            {
+                os << "  ";
+            }
+            os << name_ << '\n';
+            for (const auto& child : children_)
+            {
+                child->print(os, depth + 1);
+            }
         }
 
     private:

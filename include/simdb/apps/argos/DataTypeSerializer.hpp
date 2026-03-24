@@ -6,6 +6,8 @@
 #include "simdb/apps/argos/EnumSerializer.hpp"
 #include "simdb/apps/argos/StructSerializer.hpp"
 
+#include <ostream>
+
 namespace simdb::collection {
 
 /// \class DataTypeSerializer
@@ -29,32 +31,47 @@ public:
         , struct_serializer_(tree)
     {}
 
-    /// \brief Serializer for collected trivial scalar (built-in) types
-    /// \return Reference to the nested simple-type subtree (\c builtins node)
+    /// \brief Get serializer for collected trivial scalar (non-enum)
     SimpleTypesSerializer& getSimpleTypes()
     {
         return simple_serializer_;
     }
 
-    /// \brief Serializer for enumerated types and their enumerators
-    /// \return Reference to the nested enum subtree (\c enums node)
+    /// \brief Get serializer for collected enums
     EnumSerializer& getEnumTypes()
     {
         return enum_serializer_;
     }
 
-    /// \brief Serializer for aggregate / struct types and their fields
-    /// \return Reference to the nested struct subtree (\c structs node)
+    /// \brief Get serializer for collected structs
     StructSerializer& getStructTypes()
     {
         return struct_serializer_;
     }
 
+    /// \brief Get correct serializer for the given type
+    template <typename ValueType>
+    auto* getSerializer()
+    {
+        using value_type = type_traits::remove_any_pointer_t<ValueType>;
+        if constexpr (std::is_enum_v<value_type>)
+        {
+            return &enum_serializer_;
+        }
+        else if constexpr (std::is_trivial_v<value_type> && std::is_standard_layout_v<value_type>)
+        {
+            return &simple_serializer_;
+        }
+        else
+        {
+            return &struct_serializer_;
+        }
+    }
+
     /// \brief Depth-first serialization of every registered type in one transaction
-    /// \param db_mgr Database connection used for inserts during tree traversal
     void serialize(DatabaseManager* db_mgr)
     {
-        db_mgr.safeTransaction([&]()
+        db_mgr->safeTransaction([&]()
         {
             simple_serializer_.serialize(db_mgr);
             enum_serializer_.serialize(db_mgr);
@@ -63,15 +80,20 @@ public:
     }
 
     /// \brief Breadth-first serialization of every registered type in one transaction
-    /// \param db_mgr Database connection used for inserts during tree traversal
     void serializeBFS(DatabaseManager* db_mgr)
     {
-        db_mgr.safeTransaction([&]()
+        db_mgr->safeTransaction([&]()
         {
             simple_serializer_.serializeBFS(db_mgr);
             enum_serializer_.serializeBFS(db_mgr);
             struct_serializer_.serializeBFS(db_mgr);
         });
+    }
+
+    /// \brief Print the merged data-type tree (root and all registered types).
+    void print(std::ostream& os) const
+    {
+        simple_serializer_.getTree()->getRoot()->print(os);
     }
 
 private:

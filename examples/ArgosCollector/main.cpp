@@ -7,13 +7,11 @@
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
 
-/*
 // Template specializations
-namespace simdb {
+namespace simdb::collection {
 
-template <> void defineEnumMap<Colors>(std::string& enum_name, std::map<std::string, int>& map)
+template <> void defineEnumMap<Colors>(std::map<std::string, int>& map)
 {
-    enum_name = "Colors";
     map["RED"] = 1;
     map["GREEN"] = 2;
     map["BLUE"] = 3;
@@ -21,44 +19,7 @@ template <> void defineEnumMap<Colors>(std::string& enum_name, std::map<std::str
     map["TRANSPARENT"] = -1;
 }
 
-template <> void defineStructSchema<DummyPacket>(StructSchema<DummyPacket>& schema)
-{
-    schema.addEnum<Colors>("color");
-    schema.addField<char>("ch");
-    schema.addField<int8_t>("int8");
-    schema.addField<int16_t>("int16");
-    schema.addField<int32_t>("int32");
-    schema.addField<int64_t>("int64");
-    schema.addField<uint8_t>("uint8");
-    schema.addField<uint16_t>("uint16");
-    schema.addField<uint32_t>("uint32");
-    schema.addField<uint64_t>("uint64");
-    schema.addField<float>("flt");
-    schema.addField<double>("dbl");
-    schema.addBool("b");
-    schema.addString("str");
-}
-
-template <> void writeStructFields(const DummyPacket* pkt, StructFieldSerializer<DummyPacket>* serializer)
-{
-    serializer->writeField(pkt->e_color);
-    serializer->writeField(pkt->ch);
-    serializer->writeField(pkt->int8);
-    serializer->writeField(pkt->int16);
-    serializer->writeField(pkt->int32);
-    serializer->writeField(pkt->int64);
-    serializer->writeField(pkt->uint8);
-    serializer->writeField(pkt->uint16);
-    serializer->writeField(pkt->uint32);
-    serializer->writeField(pkt->uint64);
-    serializer->writeField(pkt->flt);
-    serializer->writeField(pkt->dbl);
-    serializer->writeField(pkt->b);
-    serializer->writeField(pkt->str);
-}
-
-} // namespace simdb
-*/
+} // namespace simdb::collection
 
 /// Example simulator that configures all supported types of collections.
 class Sim
@@ -166,6 +127,13 @@ int main(int argc, char** argv)
 
     auto manual_int_collector = collections.collectScalarManually<int>(
         "manual.int", "root");
+
+    auto color = simdb::Colors::GREEN;
+    auto auto_enum_collector = collections.collectScalarWithAutoCollection<simdb::Colors>(
+        "auto.color", "root", &color);
+
+    auto manual_enum_collector = collections.collectScalarManually<simdb::Colors>(
+        "manual.color", "root");
 
     struct Packet
     {

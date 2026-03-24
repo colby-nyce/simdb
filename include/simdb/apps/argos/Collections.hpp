@@ -4,7 +4,7 @@
 
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/CollectionPipeline.hpp"
-#include "simdb/apps/argos/ElementTreeNode.hpp"
+#include "simdb/apps/argos/DataTypeSerializer.hpp"
 #include "simdb/utils/ValidValue.hpp"
 #include "simdb/Exceptions.hpp"
 
@@ -165,35 +165,44 @@ private:
     /// type tree. This tree looks something like this:
     ///
     ///   root
-    ///     builtins
+    ///     dtypes
+    ///       simple
     ///       i
     ///       q
-    ///     enums
-    ///       Status
-    ///         FAILED
-    ///         PASSED
-    ///       Colors
-    ///         RED
-    ///         GREEN
-    ///         BLUE
-    ///     structs
-    ///       MyFoo
-    ///         q
+    ///       enums
     ///         Status
-    ///       MyBar
-    ///         i
+    ///           FAILED
+    ///           PASSED
     ///         Colors
+    ///           RED
+    ///           GREEN
+    ///           BLUE
+    ///       structs
     ///         MyFoo
+    ///           q
+    ///           Status
+    ///         MyBar
+    ///           i
+    ///           Colors
+    ///           MyFoo
     template <typename ValueType>
     void updateDataTypeTree_()
     {
-        if constexpr (std::is_trivial_v<ValueType> && std::is_standard_layout_v<ValueType> && !std::is_enum_v<ValueType>)
+        auto serializer = dtype_serializer_.getSerializer<ValueType>();
+        using serializer_t = type_traits::remove_any_pointer_t<decltype(serializer)>;
+
+        if constexpr (std::is_same_v<serializer_t, SimpleTypesSerializer>)
         {
-            // TODO cnyce:
-            // 1. Add a new TreeNode subclass called "Enum"            
+            serializer->template registerSimpleType<ValueType>();
         }
-        // TODO cnyce:
-        // 1. Add a new TreeNode subclass called ""
+        else if constexpr (std::is_same_v<serializer_t, EnumSerializer>)
+        {
+            serializer->template registerEnum<ValueType>();
+        }
+        else if constexpr (std::is_same_v<serializer_t, StructSerializer>)
+        {
+            serializer->template registerStruct<ValueType>();
+        }
     }
 
     /// \brief Called when handling the app's postInit()
@@ -210,7 +219,9 @@ private:
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
         // Extract all information about collected data types
-        Data
+        dtype_serializer_.serialize(db_mgr);
+        std::cout << "Argos collection data type tree:\n";
+        dtype_serializer_.print(std::cout);
 
         // Create the elements tree. Start with every collectable path:
         //   top.mid.bottom.int_foo
@@ -224,11 +235,11 @@ private:
         //         int_foo
         //         string_bar
         //SerializedTree element_tree(std::in_place_type<ElementTreeNode>, "root");
-        for (const auto& path : all_collectable_paths_)
-        {
-            element_tree.createNodes<ElementTreeNode>(path);
-        }
-        element_tree.serialize(db_mgr);
+        //for (const auto& path : all_collectable_paths_)
+        //{
+        //    element_tree.createNodes<ElementTreeNode>(path);
+        //}
+        //element_tree.serialize(db_mgr);
     }
 
     /// \brief Called when handling the app's preTeardown()
@@ -251,6 +262,7 @@ private:
     std::map<std::string, size_t> clk_periods_;
     std::unordered_set<std::string> all_collectable_paths_;
     std::unique_ptr<TinyStrings<>> tiny_strings_;
+    DataTypeSerializer dtype_serializer_;
 };
 
 } // namespace simdb::collection
