@@ -272,22 +272,80 @@ public:
         friend class Tree;
     };
 
+    /// \brief Construct a tree with a default TreeNode root named "root".
+    Tree() :
+        root_(std::make_unique<TreeNode>("root"))
+    {
+    }
+
+    /// \brief Construct a tree with a user-supplied root node type.
+    /// \tparam RootT Root node type derived from TreeNode.
+    /// \tparam Args Constructor argument types for RootT.
+    /// \param tag Type tag used to select RootT.
+    /// \param args Forwarded constructor args for RootT.
+    template <typename RootT, typename... Args>
+    explicit Tree(std::in_place_type_t<RootT> tag, Args&&... args) :
+        root_(makeRootNode_<RootT>(tag, std::forward<Args>(args)...))
+    {
+    }
+
+    /// \brief Construct a tree from an already-created root node.
+    /// \tparam RootT Root node type derived from TreeNode.
+    /// \param root Owned root node; must not be null.
+    template <typename RootT>
+    explicit Tree(std::unique_ptr<RootT> root) :
+        root_(adoptRootNode_(std::move(root)))
+    {
+    }
+
     virtual ~Tree() = default;
 
     /// \brief Get the tree root node.
     /// \return Mutable root node pointer.
-    TreeNode* getRoot() { return &root_; }
+    TreeNode* getRoot() { return root_.get(); }
 
     /// \brief Get the tree root node (const overload).
     /// \return Const root node pointer.
-    const TreeNode* getRoot() const { return &root_; }
+    const TreeNode* getRoot() const { return root_.get(); }
+
+    /// \brief Get the tree root node cast to a specific type.
+    /// \tparam RootT Desired root type derived from TreeNode.
+    /// \param must_exist If true, throw when root has incompatible type.
+    /// \return Typed root pointer, or nullptr on incompatible type when must_exist is false.
+    template <typename RootT>
+    RootT* getRootAs(bool must_exist = true)
+    {
+        static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
+        auto* typed_root = dynamic_cast<RootT*>(getRoot());
+        if (!typed_root && must_exist)
+        {
+            throw DBException("Tree root exists but has incompatible type");
+        }
+        return typed_root;
+    }
+
+    /// \brief Get the tree root node cast to a specific type (const overload).
+    /// \tparam RootT Desired root type derived from TreeNode.
+    /// \param must_exist If true, throw when root has incompatible type.
+    /// \return Typed root pointer, or nullptr on incompatible type when must_exist is false.
+    template <typename RootT>
+    const RootT* getRootAs(bool must_exist = true) const
+    {
+        static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
+        auto* typed_root = dynamic_cast<const RootT*>(getRoot());
+        if (!typed_root && must_exist)
+        {
+            throw DBException("Tree root exists but has incompatible type");
+        }
+        return typed_root;
+    }
 
     /// \brief Traverse the tree in breadth-first order.
     /// \param callback Called for each visited node; return false to stop traversal.
     void bfs(std::function<bool(TreeNode*)> callback)
     {
         std::queue<TreeNode*> queue;
-        queue.push(&root_);
+        queue.push(root_.get());
 
         while (!queue.empty())
         {
@@ -311,7 +369,7 @@ public:
     void bfs(std::function<bool(const TreeNode*)> callback) const
     {
         std::queue<const TreeNode*> queue;
-        queue.push(&root_);
+        queue.push(root_.get());
 
         while (!queue.empty())
         {
@@ -368,14 +426,14 @@ public:
     /// \param callback Called for each visited node; return false to stop traversal.
     void dfs(std::function<bool(TreeNode*)> callback)
     {
-        dfsImpl_(&root_, callback);
+        dfsImpl_(root_.get(), callback);
     }
 
     /// \brief Traverse the tree in depth-first pre-order (const overload).
     /// \param callback Called for each visited node; return false to stop traversal.
     void dfs(std::function<bool(const TreeNode*)> callback) const
     {
-        dfsImpl_(&root_, callback);
+        dfsImpl_(root_.get(), callback);
     }
 
     /// \brief Traverse nodes of a specific type in depth-first pre-order.
@@ -439,7 +497,7 @@ public:
             }
         }
 
-        TreeNode* current = &root_;
+        TreeNode* current = root_.get();
         for (size_t idx = 0; idx < path_parts.size(); ++idx)
         {
             const auto& token = path_parts[idx];
@@ -538,7 +596,7 @@ public:
             }
         }
 
-        TreeNode* current = &root_;
+        TreeNode* current = root_.get();
         for (const auto& token : path_parts)
         {
             current = current->getChild(token, false);
@@ -585,7 +643,7 @@ public:
             }
         }
 
-        const TreeNode* current = &root_;
+        const TreeNode* current = root_.get();
         for (const auto& token : path_parts)
         {
             current = current->getChild(token, false);
@@ -608,6 +666,24 @@ public:
     }
 
 private:
+    template <typename RootT, typename... Args>
+    static std::unique_ptr<TreeNode> makeRootNode_(std::in_place_type_t<RootT>, Args&&... args)
+    {
+        static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
+        return std::make_unique<RootT>(std::forward<Args>(args)...);
+    }
+
+    template <typename RootT>
+    static std::unique_ptr<TreeNode> adoptRootNode_(std::unique_ptr<RootT> root)
+    {
+        static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
+        if (!root)
+        {
+            throw DBException("Tree root node pointer cannot be null");
+        }
+        return std::move(root);
+    }
+
     bool dfsImpl_(TreeNode* node, const std::function<bool(TreeNode*)>& callback)
     {
         if (!callback(node))
@@ -644,7 +720,7 @@ private:
         return true;
     }
 
-    TreeNode root_{"root"};
+    std::unique_ptr<TreeNode> root_;
 };
 
 } // namespace simdb

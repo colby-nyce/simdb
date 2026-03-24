@@ -13,6 +13,8 @@ namespace simdb::collection {
 class SerializedTreeNode : public Tree::TreeNode
 {
 public:
+    using Tree::TreeNode::TreeNode;
+
     /// \brief Get our database ID after calling serialize()
     /// \throw Throws if must_exist and serialize() was never called
     /// \return Returns the ID of the written DB record
@@ -51,6 +53,8 @@ private:
 class SerializedTree : public Tree
 {
 public:
+    using Tree::Tree;
+
     /// \brief Serialize everything about this node to the database
     /// using depth-first traversal
     void serialize(DatabaseManager* db_mgr)
