@@ -209,20 +209,25 @@ private:
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
-        // Write all elements
-        SerializedTree element_tree(std::in_place_type<ElementTreeNode>, "root");
+        // Extract all information about collected data types
+        Data
+
+        // Create the elements tree. Start with every collectable path:
+        //   top.mid.bottom.int_foo
+        //   top.mid.bottom.string_bar
+        //
+        // Tree:
+        //
+        //   top
+        //     mid
+        //       bottom
+        //         int_foo
+        //         string_bar
+        //SerializedTree element_tree(std::in_place_type<ElementTreeNode>, "root");
         for (const auto& path : all_collectable_paths_)
         {
             element_tree.createNodes<ElementTreeNode>(path);
         }
-
-        // Before serializing, add under the root node:
-        //   builtins
-        //   enums
-        //   structs
-        element_tree.createNode<>("builtins");
-        element_tree.createNode<>("enums");
-        element_tree.createNode<>("structs");
         element_tree.serialize(db_mgr);
     }
 

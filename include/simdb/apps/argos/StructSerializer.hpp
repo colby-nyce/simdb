@@ -119,6 +119,81 @@ public:
     }
 };
 
+/// \class StructSerializer
+/// \brief Owns the \ref SerializedTree subtree where collected struct types are registered and serialized
+class StructSerializer
+{
+public:
+    /// \brief Construct with a new tree. All structs will be placed
+    /// under the our tree's "root.structs" node.
+    StructSerializer()
+        : owned_tree_(std::make_unique<SerializedTree>())
+        , tree_(owned_tree_.get())
+    {}
+
+    /// \brief Construct using another tree. All structs will be placed
+    /// under the given tree's "root.structs" node.
+    explicit StructSerializer(SerializedTree& tree)
+        : tree_(&tree)
+    {}
+
+    /// \brief Ensure \a StructT participates in type registration (tree node TBD)
+    /// \tparam StructT C++ struct or class type to expose in the Argos schema
+    /// \note Implementation pending; no child node is attached yet.
+    template <typename StructT>
+    void registerStruct()
+    {}
+
+    /// \brief Look up the database row id for a registered struct type
+    /// \tparam StructT Same type key used with \ref registerStruct
+    /// \param must_exist If true, missing nodes trigger assertions in the tree API
+    /// \return Primary key from the last \ref serialize_, or 0 if \a must_exist is false and the type is absent
+    template <typename StructT>
+    int getStructDbId(bool must_exist = true) const
+    {
+        auto struct_name = demangle_type<StructT>();
+        auto parent = getStructsNode_();
+        auto struct_node = parent->getChildAs<SerializedTreeNode>(struct_name, must_exist);
+        if (!struct_node)
+        {
+            return 0;
+        }
+        return struct_node->getDbId(must_exist);
+    }
+
+    /// \brief Serialize data types to the database (depth-first traversal)
+    void serialize(DatabaseManager* db_mgr)
+    {
+        tree_->serialize(db_mgr);
+    }
+
+    /// \brief Serialize data types to the database (breadth-first traversal)
+    void serializeBFS(DatabaseManager* db_mgr)
+    {
+        tree_->serializeBFS(db_mgr);
+    }
+
+private:
+    /// \return Lazy-created \c "structs" grouping node under this serializer's tree
+    SerializedTreeNode* getStructsNode_() const
+    {
+        if (!structs_node_)
+        {
+            structs_node_ = tree_->createNode<ElementTreeNode>("structs");
+        }
+        return structs_node_;
+    }
+
+    /// \brief Tree storage when this serializer constructs the root (constructor without tree)
+    std::unique_ptr<SerializedTree> owned_tree_;
+
+    /// \brief Tree receiving struct nodes; non-owning when the serializer shares an external tree
+    SerializedTree *const tree_;
+
+    /// \brief Cached handle to the \c structs child folder node
+    mutable SerializedTreeNode* structs_node_ = nullptr;
+};
+
 } // namespace simdb::collection
 
 /// \brief Opens a collector class body derived from \ref simdb::collection::StructCollector

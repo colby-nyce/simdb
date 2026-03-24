@@ -25,7 +25,7 @@ public:
 
     void append(const void* data, const size_t num_bytes)
     {
-        const auto* bytes = static_cast<const char*>(data);
+        auto bytes = static_cast<const char*>(data);
         out_.insert(out_.end(), bytes, bytes + num_bytes);
     }
 

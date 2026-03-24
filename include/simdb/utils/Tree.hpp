@@ -104,14 +104,14 @@ public:
         NodeT* getChildAs(const std::string& child_name, bool must_exist = true)
         {
             static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
-            auto* child = getChild(child_name, must_exist);
+            auto child = getChild(child_name, must_exist);
             if (!child && must_exist)
             {
                 throw DBException("Child node '") << child_name << "' does not exist under path '"
                     << getPath() << "'";
             }
 
-            auto* typed_child = dynamic_cast<NodeT*>(child);
+            auto typed_child = dynamic_cast<NodeT*>(child);
             if (!typed_child && must_exist)
             {
                 throw DBException("Child node exists but has incompatible type: ") << child_name
@@ -130,14 +130,14 @@ public:
         const NodeT* getChildAs(const std::string& child_name, bool must_exist = true) const
         {
             static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
-            auto* child = getChild(child_name, must_exist);
+            auto child = getChild(child_name, must_exist);
             if (!child && must_exist)
             {
                 throw DBException("Child node '") << child_name << "' does not exist under path '"
                     << getPath() << "'";
             }
 
-            auto* typed_child = dynamic_cast<const NodeT*>(child);
+            auto typed_child = dynamic_cast<const NodeT*>(child);
             if (!typed_child && must_exist)
             {
                 throw DBException("Child node exists but has incompatible type: ") << child_name
@@ -156,7 +156,7 @@ public:
         {
             static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
             validateName_(name);
-            auto* existing = getChild(name, false);
+            auto existing = getChild(name, false);
             if (existing)
             {
                 if (!dynamic_cast<NodeT*>(existing))
@@ -198,7 +198,7 @@ public:
                 throw DBException("Node does not have a parent: ") << getPath();
             }
 
-            auto* typed_parent = dynamic_cast<NodeT*>(parent_);
+            auto typed_parent = dynamic_cast<NodeT*>(parent_);
             if (!typed_parent && must_exist)
             {
                 throw DBException("Parent exists but has incompatible type. Occurred at path: ") << getPath();
@@ -220,7 +220,7 @@ public:
                 throw DBException("Node does not have a parent: ") << getPath();
             }
 
-            const auto* typed_parent = dynamic_cast<const NodeT*>(parent_);
+            const auto typed_parent = dynamic_cast<const NodeT*>(parent_);
             if (!typed_parent && must_exist)
             {
                 throw DBException("Parent exists but has incompatible type. Occurred at path: ") << getPath();
@@ -274,7 +274,7 @@ public:
                 throw DBException("Cannot add duplicate sibling tree node name: ") << child->getName()
                     << " under parent path '" << getPath() << "'";
             }
-            auto* raw_ptr = child.get();
+            auto raw_ptr = child.get();
             children_.emplace_back(std::move(child));
             return raw_ptr;
         }
@@ -339,7 +339,7 @@ public:
     RootT* getRootAs(bool must_exist = true)
     {
         static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
-        auto* typed_root = dynamic_cast<RootT*>(getRoot());
+        auto typed_root = dynamic_cast<RootT*>(getRoot());
         if (!typed_root && must_exist)
         {
             throw DBException("Tree root exists but has incompatible type");
@@ -355,7 +355,7 @@ public:
     const RootT* getRootAs(bool must_exist = true) const
     {
         static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
-        auto* typed_root = dynamic_cast<const RootT*>(getRoot());
+        auto typed_root = dynamic_cast<const RootT*>(getRoot());
         if (!typed_root && must_exist)
         {
             throw DBException("Tree root exists but has incompatible type");
@@ -372,7 +372,7 @@ public:
 
         while (!queue.empty())
         {
-            auto* node = queue.front();
+            auto node = queue.front();
             queue.pop();
 
             if (!callback(node))
@@ -396,7 +396,7 @@ public:
 
         while (!queue.empty())
         {
-            auto* node = queue.front();
+            auto node = queue.front();
             queue.pop();
 
             if (!callback(node))
@@ -419,7 +419,7 @@ public:
     {
         static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
         bfs([&callback](TreeNode* node) {
-            auto* typed_node = dynamic_cast<NodeT*>(node);
+            auto typed_node = dynamic_cast<NodeT*>(node);
             if (!typed_node)
             {
                 return true;
@@ -436,7 +436,7 @@ public:
     {
         static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
         bfs([&callback](const TreeNode* node) {
-            auto* typed_node = dynamic_cast<const NodeT*>(node);
+            auto typed_node = dynamic_cast<const NodeT*>(node);
             if (!typed_node)
             {
                 return true;
@@ -467,7 +467,7 @@ public:
     {
         static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
         dfs([&callback](TreeNode* node) {
-            auto* typed_node = dynamic_cast<NodeT*>(node);
+            auto typed_node = dynamic_cast<NodeT*>(node);
             if (!typed_node)
             {
                 return true;
@@ -484,7 +484,7 @@ public:
     {
         static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
         dfs([&callback](const TreeNode* node) {
-            auto* typed_node = dynamic_cast<const NodeT*>(node);
+            auto typed_node = dynamic_cast<const NodeT*>(node);
             if (!typed_node)
             {
                 return true;
@@ -526,12 +526,12 @@ public:
             const auto& token = path_parts[idx];
             const bool is_leaf = (idx == path_parts.size() - 1);
 
-            auto* existing_child = current->getChild(token, false);
+            auto existing_child = current->getChild(token, false);
             if (existing_child)
             {
                 if (is_leaf)
                 {
-                    auto* typed_leaf = dynamic_cast<LeafT*>(existing_child);
+                    auto typed_leaf = dynamic_cast<LeafT*>(existing_child);
                     if (!typed_leaf)
                     {
                         throw DBException("Tree node already exists at path but has incompatible type: ")
@@ -541,7 +541,7 @@ public:
                 }
                 else
                 {
-                    auto* typed_intermediate = dynamic_cast<IntermediateT*>(existing_child);
+                    auto typed_intermediate = dynamic_cast<IntermediateT*>(existing_child);
                     if (!typed_intermediate)
                     {
                         throw DBException("Intermediate tree node already exists at path but has incompatible type: ")
@@ -578,7 +578,7 @@ public:
     template <typename NodeT>
     NodeT& getNode(const std::string& path)
     {
-        auto* node = tryGetNodeAs<NodeT>(path, true /*must_exist*/);
+        auto node = tryGetNodeAs<NodeT>(path, true /*must_exist*/);
         return *node;
     }
 
@@ -590,7 +590,7 @@ public:
     template <typename NodeT>
     const NodeT& getNode(const std::string& path) const
     {
-        auto* node = tryGetNodeAs<NodeT>(path, true /*must_exist*/);
+        auto node = tryGetNodeAs<NodeT>(path, true /*must_exist*/);
         return *node;
     }
 
@@ -633,7 +633,7 @@ public:
             }
         }
 
-        auto* typed_node = dynamic_cast<NodeT*>(current);
+        auto typed_node = dynamic_cast<NodeT*>(current);
         if (!typed_node && must_exist)
         {
             throw DBException("Tree node exists at path but has incompatible type: ") << path;
@@ -680,7 +680,7 @@ public:
             }
         }
 
-        auto* typed_node = dynamic_cast<const NodeT*>(current);
+        auto typed_node = dynamic_cast<const NodeT*>(current);
         if (!typed_node && must_exist)
         {
             throw DBException("Tree node exists at path but has incompatible type: ") << path;

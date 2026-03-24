@@ -39,30 +39,38 @@ private:
 class SimpleTypesSerializer
 {
 public:
-    /// \brief Construct using another tree. All simple types will be placed
-    /// under the given tree's "builtins" node.
-    explicit SimpleTypesSerializer(SerializedTree& tree)
-        : builtins_node_(tree.createNode<ElementTreeNode>("builtins"))
-    {}
-
     /// \brief Construct with a new tree.
     SimpleTypesSerializer()
         : owned_tree_(std::make_unique<SerializedTree>())
-        , builtins_node_(owned_tree_->createNode<ElementTreeNode>("builtins"))
+        , tree_(owned_tree_.get())
     {}
 
+    /// \brief Construct using another tree. All simple types will be placed
+    /// under the given tree's "builtins" node.
+    explicit SimpleTypesSerializer(SerializedTree& tree)
+        : tree_(&tree)
+    {}
+
+    /// \brief Register scalar type \a SimpleTypeT under the shared \c builtins tree folder
+    /// \tparam SimpleTypeT Trivial, standard-layout, non-enum type (see \ref SimpleTypeTreeNode)
     template <typename SimpleTypeT>
     void registerBuiltIn()
     {
         auto type_name = demangle_type<SimpleTypeT>();
-        builtins_node_->addChild<SimpleTypeTreeNode<SimpleTypeT>>(type_name);
+        auto parent = getBuiltInsNode_();
+        parent->addChild<SimpleTypeTreeNode<SimpleTypeT>>(type_name);
     }
 
+    /// \brief Look up the database row id for a registered built-in type
+    /// \tparam SimpleTypeT Same type key used with \ref registerBuiltIn
+    /// \param must_exist If true, missing nodes trigger assertions in the tree API
+    /// \return Primary key from the last \ref serialize_, or 0 if \a must_exist is false and the type is absent
     template <typename SimpleTypeT>
     int getBuiltInDbId(bool must_exist = true) const
     {
         auto type_name = demangle_type<SimpleTypeT>();
-        auto* builtin_node = builtins_node_->getChildAs<SerializedTreeNode>(type_name, must_exist);
+        auto parent = getBuiltInsNode_();
+        auto builtin_node = parent->getChildAs<SerializedTreeNode>(type_name, must_exist);
         if (!builtin_node)
         {
             return 0;
@@ -70,9 +78,37 @@ public:
         return builtin_node->getDbId(must_exist);
     }
 
+    /// \brief Serialize data types to the database (depth-first traversal)
+    void serialize(DatabaseManager* db_mgr)
+    {
+        tree_->serialize(db_mgr);
+    }
+
+    /// \brief Serialize data types to the database (breadth-first traversal)
+    void serializeBFS(DatabaseManager* db_mgr)
+    {
+        tree_->serializeBFS(db_mgr);
+    }
+
 private:
+    /// \return Lazy-created \c "builtins" grouping node under this serializer's tree
+    SerializedTreeNode* getBuiltInsNode_() const
+    {
+        if (!builtins_node_)
+        {
+            builtins_node_ = tree_->createNode<ElementTreeNode>("builtins");
+        }
+        return builtins_node_;
+    }
+
+    /// \brief Tree storage when this serializer constructs the root (constructor without tree)
     std::unique_ptr<SerializedTree> owned_tree_;
-    SerializedTreeNode* builtins_node_ = nullptr;
+
+    /// \brief Tree receiving built-in type nodes; non-owning when the serializer shares an external tree
+    SerializedTree *const tree_;
+
+    /// \brief Cached handle to the \c builtins child folder node
+    mutable SerializedTreeNode* builtins_node_ = nullptr;
 };
 
 } // namespace simdb::collection

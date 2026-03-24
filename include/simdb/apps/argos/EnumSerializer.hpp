@@ -56,30 +56,38 @@ private:
 class EnumSerializer
 {
 public:
-    /// \brief Construct using another tree. All enums will be placed
-    /// under the given tree's "root.enums" node.
-    explicit EnumSerializer(SerializedTree& tree)
-        : enums_node_(tree.createNode<ElementTreeNode>("enums"))
-    {}
-
     /// \brief Construct with a new tree.
     EnumSerializer()
         : owned_tree_(std::make_unique<SerializedTree>())
-        , enums_node_(owned_tree_->createNode<ElementTreeNode>("enums"))
+        , tree_(owned_tree_.get())
     {}
 
+    /// \brief Construct using another tree. All enums will be placed
+    /// under the given tree's "root.enums" node.
+    explicit EnumSerializer(SerializedTree& tree)
+        : tree_(&tree)
+    {}
+
+    /// \brief Register enum \a EnumT under the shared \c enums tree folder
+    /// \tparam EnumT Enumeration type; the program must provide \c defineEnumMap<EnumT>
     template <typename EnumT>
     void registerEnum()
     {
         auto enum_name = demangle_type<EnumT>();
-        enums_node_->addChild<EnumTreeNode<EnumT>>(enum_name);
+        auto parent = getEnumsNode_();
+        parent->addChild<EnumTreeNode<EnumT>>(enum_name);
     }
 
+    /// \brief Look up the database row id for a registered enum type
+    /// \tparam EnumT Same type key used with \ref registerEnum
+    /// \param must_exist If true, missing nodes trigger assertions in the tree API
+    /// \return Primary key from the last \ref serialize_, or 0 if \a must_exist is false and the type is absent
     template <typename EnumT>
     int getEnumDbId(bool must_exist = true) const
     {
         auto enum_name = demangle_type<EnumT>();
-        auto enum_node = enums_node_->getChildAs<SerializedTreeNode>(enum_name, must_exist);
+        auto parent = getEnumsNode_();
+        auto enum_node = parent->getChildAs<SerializedTreeNode>(enum_name, must_exist);
         if (!enum_node)
         {
             return 0;
@@ -87,9 +95,37 @@ public:
         return enum_node->getDbId(must_exist);
     }
 
+    /// \brief Serialize data types to the database (depth-first traversal)
+    void serialize(DatabaseManager* db_mgr)
+    {
+        tree_->serialize(db_mgr);
+    }
+
+    /// \brief Serialize data types to the database (breadth-first traversal)
+    void serializeBFS(DatabaseManager* db_mgr)
+    {
+        tree_->serializeBFS(db_mgr);
+    }
+
 private:
+    /// \return Lazy-created \c "enums" grouping node under this serializer's tree
+    SerializedTreeNode* getEnumsNode_() const
+    {
+        if (!enums_node_)
+        {
+            enums_node_ = tree_->createNode<ElementTreeNode>("enums");
+        }
+        return enums_node_;
+    }
+
+    /// \brief Tree storage when this serializer constructs the root (constructor without tree)
     std::unique_ptr<SerializedTree> owned_tree_;
-    SerializedTreeNode* enums_node_ = nullptr;
+
+    /// \brief Tree receiving enum nodes; non-owning when the serializer shares an external tree
+    SerializedTree *const tree_;
+
+    /// \brief Cached handle to the \c enums child folder node
+    mutable SerializedTreeNode* enums_node_ = nullptr;
 };
 
 } // namespace simdb::collection
