@@ -1,5 +1,6 @@
 #include "SimDBTester.hpp"
 #include "simdb/utils/Tree.hpp"
+#include "simdb/apps/argos/SerializedTreeNode.hpp"
 
 TEST_INIT;
 
@@ -88,6 +89,25 @@ void testCreateNodeTypeMismatchThrows()
     EXPECT_THROW(([&]() { tree.createNode<LeafNode, IntermediateNode>("top..leaf"); })());
 }
 
+void testCreateNodes()
+{
+    simdb::Tree tree;
+
+    auto* leaf = tree.createNodes<IntermediateNode>("top.mid.leaf");
+    EXPECT_NOTEQUAL(leaf, nullptr);
+    EXPECT_EQUAL(leaf->getPath(), std::string("top.mid.leaf"));
+
+    auto* top = tree.getRoot()->getChildAs<IntermediateNode>("top");
+    EXPECT_NOTEQUAL(top, nullptr);
+
+    auto* mid = top->getChildAs<IntermediateNode>("mid");
+    EXPECT_NOTEQUAL(mid, nullptr);
+    EXPECT_EQUAL(mid->getPath(), std::string("top.mid"));
+
+    auto* same_leaf = tree.createNodes<IntermediateNode>("top.mid.leaf");
+    EXPECT_EQUAL(same_leaf, leaf);
+}
+
 void testGetNodeApis()
 {
     simdb::Tree tree;
@@ -133,6 +153,7 @@ int main()
     testGetChildMustExistBehavior();
     testGetChildAsBehavior();
     testCreateNodeTypeMismatchThrows();
+    testCreateNodes();
     testGetNodeApis();
 
     REPORT_ERROR;

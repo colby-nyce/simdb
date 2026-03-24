@@ -2,6 +2,8 @@
 #include "SimDBTester.hpp"
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collections.hpp"
+#include "simdb/apps/argos/ElementsTree.hpp"
+#include "simdb/utils/Tree.hpp"
 
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
@@ -156,6 +158,22 @@ private:
 
 int main(int argc, char** argv)
 {
+    // Unit-style coverage for the generic Tree API with ElementTreeNode leaves.
+    simdb::Tree tree;
+    auto* leaf = tree.createNode<simdb::collection::ElementTreeNode>("top.mid.leaf");
+    EXPECT_EQUAL(leaf->getName(), std::string("leaf"));
+    EXPECT_EQUAL(leaf->getPath(), std::string("top.mid.leaf"));
+
+    auto& same_leaf = tree.getNode<simdb::collection::ElementTreeNode>("top.mid.leaf");
+    EXPECT_EQUAL(&same_leaf, leaf);
+
+    auto* parent = leaf->getParentAs<simdb::Tree::TreeNode>(true);
+    EXPECT_NOTEQUAL(parent, nullptr);
+    EXPECT_EQUAL(parent->getName(), std::string("mid"));
+    EXPECT_EQUAL(parent->getPath(), std::string("top.mid"));
+
+    EXPECT_THROW(([&]() { tree.getNode<simdb::collection::ElementTreeNode>("top.mid.missing"); })());
+
     simdb::collection::Collections collections;
     collections.addCollection<uint64_t>("root", 1);
 
@@ -204,4 +222,7 @@ int main(int argc, char** argv)
     // TODO cnyce
 
     app_mgrs.postSimLoopTeardown();
+
+    REPORT_ERROR;
+    return ERROR_CODE;
 }

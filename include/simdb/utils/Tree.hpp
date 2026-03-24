@@ -162,6 +162,50 @@ public:
         /// \return Parent node pointer, or nullptr for root.
         const TreeNode* getParent() const { return parent_; }
 
+        /// \brief Get the parent cast to a specfic node type
+        /// \tparam NodeT Desired parent type derived from TreeNode.
+        /// \param must_exist If true, throw when parent is missing or has incompatible type.
+        /// \return Typed parent pointer, or nullptr if the parent does not exist or has a different type.
+        /// \throw DBException If \a must_exist is true and the parent is missing or has incompatible type.
+        template <typename NodeT>
+        NodeT* getParentAs(bool must_exist = true)
+        {
+            if (!parent_ && must_exist)
+            {
+                throw DBException("Node does not have a parent: ") << getPath();
+            }
+
+            auto* typed_parent = dynamic_cast<NodeT*>(parent_);
+            if (!typed_parent && must_exist)
+            {
+                throw DBException("Parent exists but has incompatible type. Occurred at path: ") << getPath();
+            }
+
+            return typed_parent;
+        }
+
+        /// \brief Get the parent cast to a specfic node type (const version)
+        /// \tparam NodeT Desired parent type derived from TreeNode.
+        /// \param must_exist If true, throw when parent is missing or has incompatible type.
+        /// \return Typed parent pointer, or nullptr if the parent does not exist or has a different type.
+        /// \throw DBException If \a must_exist is true and the parent is missing or has incompatible type.
+        template <typename NodeT>
+        const NodeT* getParentAs(bool must_exist = true) const
+        {
+            if (!parent_ && must_exist)
+            {
+                throw DBException("Node does not have a parent: ") << getPath();
+            }
+
+            const auto* typed_parent = dynamic_cast<const NodeT*>(parent_);
+            if (!typed_parent && must_exist)
+            {
+                throw DBException("Parent exists but has incompatible type. Occurred at path: ") << getPath();
+            }
+
+            return typed_parent;
+        }
+
         /// \brief Build this node's dot-delimited path from root.
         /// \details Root node path is an empty string. Non-root paths exclude the root name.
         /// \return Dot-delimited path.
@@ -174,7 +218,7 @@ public:
 
             std::vector<std::string> node_names;
             auto node = this;
-            while (node != nullptr && !node->name_.empty())
+            while (node != nullptr && node->parent_ != nullptr)
             {
                 node_names.push_back(node->name_);
                 node = node->parent_;
@@ -243,12 +287,7 @@ public:
     void bfs(std::function<bool(TreeNode*)> callback)
     {
         std::queue<TreeNode*> queue;
-
-        // Don't apply the callback to the unnamed root
-        for (auto& child : root_.getChildren())
-        {
-            queue.push(child.get());
-        }
+        queue.push(&root_);
 
         while (!queue.empty())
         {
@@ -272,12 +311,7 @@ public:
     void bfs(std::function<bool(const TreeNode*)> callback) const
     {
         std::queue<const TreeNode*> queue;
-
-        // Don't apply the callback to the unnamed root
-        for (const auto& child : root_.getChildren())
-        {
-            queue.push(child.get());
-        }
+        queue.push(&root_);
 
         while (!queue.empty())
         {
@@ -334,22 +368,14 @@ public:
     /// \param callback Called for each visited node; return false to stop traversal.
     void dfs(std::function<bool(TreeNode*)> callback)
     {
-        // Don't apply the callback to the unnamed root
-        for (auto& child : root_.getChildren())
-        {
-            dfsImpl_(child.get(), callback);
-        }
+        dfsImpl_(&root_, callback);
     }
 
     /// \brief Traverse the tree in depth-first pre-order (const overload).
     /// \param callback Called for each visited node; return false to stop traversal.
     void dfs(std::function<bool(const TreeNode*)> callback) const
     {
-        // Don't apply the callback to the unnamed root
-        for (const auto& child : root_.getChildren())
-        {
-            dfsImpl_(child.get(), callback);
-        }
+        dfsImpl_(&root_, callback);
     }
 
     /// \brief Traverse nodes of a specific type in depth-first pre-order.
@@ -451,6 +477,16 @@ public:
         }
 
         return dynamic_cast<LeafT*>(current);
+    }
+
+    /// \brief Get or create nodes for a dot-delimited path using one node type.
+    /// \tparam NodeT Node type used for all path segments.
+    /// \param path Dot-delimited path, e.g. "top.mid.leaf".
+    /// \return Pointer to the leaf node at \a path.
+    template <typename NodeT>
+    NodeT* createNodes(const std::string& path)
+    {
+        return createNode<NodeT, NodeT>(path);
     }
 
     /// \brief Get a node at a dot-delimited path and return it by reference.
@@ -608,7 +644,7 @@ private:
         return true;
     }
 
-    TreeNode root_;
+    TreeNode root_{"root"};
 };
 
 } // namespace simdb
