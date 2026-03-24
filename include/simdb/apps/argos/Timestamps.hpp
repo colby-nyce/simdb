@@ -8,31 +8,31 @@
 
 namespace simdb::collection {
 
-//! \class Timestamp
-//! \brief Type-specific timestamp that can get current time values via
-//! a backpointer, C-style function, or a std::function
+/// \class Timestamp
+/// \brief Type-specific timestamp that can get current time values via
+/// a backpointer, C-style function, or a std::function
 template <typename TimeT> class Timestamp
 {
 public:
-    //! \brief Construct with a backpointer to get the current time value
+    /// \brief Construct with a backpointer to get the current time value
     Timestamp(const TimeT* backpointer) :
         backpointer_(backpointer)
     {
     }
 
-    //! \brief Construct with a C-style function pointer to get the current time value
+    /// \brief Construct with a C-style function pointer to get the current time value
     Timestamp(TimeT (*fn)()) :
         cfuncpointer_(fn)
     {
     }
 
-    //! \brief Construct with a std::function to get the current time value
+    /// \brief Construct with a std::function to get the current time value
     Timestamp(std::function<TimeT()> fn) :
         stdfunction_(fn)
     {
     }
 
-    //! Add the type-specific time column in the given table
+    /// Add the type-specific time column in the given table
     void addTimeColumn(Table& tbl, const std::string& tbl_name = "Timestamp") const
     {
         using dt = SqlDataType;
@@ -52,7 +52,7 @@ public:
         }
     }
 
-    //! Store the current type-specific time value
+    /// Store the current type-specific time value
     void snapshot()
     {
         if (backpointer_)
@@ -67,7 +67,7 @@ public:
         }
     }
 
-    //! Apply the stored type-specific time value to the INSERT at column 0
+    /// Apply the stored type-specific time value to the INSERT at column 0
     void apply(PreparedINSERT* inserter) const { inserter->setColumnValue(0, time_.getValue()); }
 
 private:

@@ -87,6 +87,8 @@ template <typename T> struct is_any_pointer<std::weak_ptr<T> const&> : public st
 {
 };
 
+template <typename T> constexpr auto is_any_pointer_v = is_any_pointer<T>::value;
+
 template <typename T> struct remove_any_pointer
 {
     using type = T;
