@@ -146,6 +146,29 @@ public:
             return typed_child;
         }
 
+        /// \brief Add a typed child by name, or no-op if an equivalent child already exists.
+        /// \tparam NodeT Child node type derived from TreeNode.
+        /// \param name Child name; must not contain '.'.
+        /// \throw DBException If \a name contains '.', if a sibling with the same name exists
+        /// but is not a \a NodeT, or if a new child cannot be added.
+        template <typename NodeT>
+        NodeT* addChild(const std::string& name)
+        {
+            static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
+            validateName_(name);
+            auto* existing = getChild(name, false);
+            if (existing)
+            {
+                if (!dynamic_cast<NodeT*>(existing))
+                {
+                    throw DBException("Child node exists but has incompatible type: ") << name
+                        << " under parent path '" << getPath() << "'";
+                }
+                return existing;
+            }
+            return createChild_<NodeT>(name, this);
+        }
+
         /// \brief Get this node's children.
         /// \return Mutable vector of owned child nodes.
         std::vector<std::unique_ptr<TreeNode>>& getChildren() { return children_; }

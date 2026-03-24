@@ -202,4 +202,77 @@ template <std::size_t N, typename T, typename... Ts> struct TypeAt<N, T, Ts...>
     using type = typename TypeAt<N - 1, Ts...>::type;
 };
 
+/**
+ * \brief This templated struct lets us know about
+ *  the return type from any random function pointer.
+ *  This is specialized for a couple different signatures.
+ */
+template <typename T>
+struct return_type { using type = T; };
+
+template <typename R, typename... Ts>
+struct return_type<std::function<R (Ts...)>> { using type = R; };
+
+template <typename R, typename... Ts>
+struct return_type<std::function<R (Ts...)> const> { using type = R; };
+
+template <typename R, typename T, typename... Ts>
+struct return_type<std::function<R (Ts...)> T:: *> { using type = R; };
+
+template <typename R, typename T, typename... Ts>
+struct return_type<std::function<R (Ts...)> const T:: *> { using type = R; };
+
+template <typename R, typename T, typename... Ts>
+struct return_type<std::function<R (Ts...)> T:: * const &> { using type = R; };
+
+template <typename R, typename T, typename... Ts>
+struct return_type<std::function<R (Ts...)> const T:: * const> { using type = R; };
+
+template <typename R, typename... Ts>
+struct return_type<R (*)(Ts...)> { using type = R; };
+
+template <typename R, typename... Ts>
+struct return_type<R& (*)(Ts...)> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<R (T:: *)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<R & (T:: *)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<std::shared_ptr<R> (T:: *)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<std::shared_ptr<R> & (T:: *)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<R (T:: * const)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<R & (T:: * const)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<std::shared_ptr<R> (T:: * const)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<std::shared_ptr<R> & (T:: * const)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<R (T:: * const &)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<R & (T:: * const &)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<std::shared_ptr<R> (T:: * const &)() const> { using type = R; };
+
+template <typename R, typename T>
+struct return_type<std::shared_ptr<R> & (T:: * const &)() const> { using type = R; };
+
+/** \brief Alias Template for return_type.
+*/
+template <typename T>
+using return_type_t = typename return_type<T>::type;
+
 } // namespace simdb::type_traits

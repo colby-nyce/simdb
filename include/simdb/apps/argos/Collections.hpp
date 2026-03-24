@@ -165,9 +165,6 @@ private:
     /// type tree. This tree looks something like this:
     ///
     ///   root
-    ///     clocks
-    ///       root
-    ///
     ///     builtins
     ///       i
     ///       q
@@ -190,7 +187,13 @@ private:
     template <typename ValueType>
     void updateDataTypeTree_()
     {
-        // TODO cnyce
+        if constexpr (std::is_trivial_v<ValueType> && std::is_standard_layout_v<ValueType> && !std::is_enum_v<ValueType>)
+        {
+            // TODO cnyce:
+            // 1. Add a new TreeNode subclass called "Enum"            
+        }
+        // TODO cnyce:
+        // 1. Add a new TreeNode subclass called ""
     }
 
     /// \brief Called when handling the app's postInit()
@@ -212,6 +215,14 @@ private:
         {
             element_tree.createNodes<ElementTreeNode>(path);
         }
+
+        // Before serializing, add under the root node:
+        //   builtins
+        //   enums
+        //   structs
+        element_tree.createNode<>("builtins");
+        element_tree.createNode<>("enums");
+        element_tree.createNode<>("structs");
         element_tree.serialize(db_mgr);
     }
 
