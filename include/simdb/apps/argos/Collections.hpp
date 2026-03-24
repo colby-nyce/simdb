@@ -4,6 +4,7 @@
 
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/CollectionPipeline.hpp"
+#include "simdb/apps/argos/ElementTreeNode.hpp"
 #include "simdb/utils/ValidValue.hpp"
 #include "simdb/Exceptions.hpp"
 
@@ -205,8 +206,13 @@ private:
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
-        // Build data types tree
-        // TODO cnyce
+        // Write all elements
+        SerializedTree element_tree(std::in_place_type<ElementTreeNode>, "root");
+        for (const auto& path : all_collectable_paths_)
+        {
+            element_tree.createNodes<ElementTreeNode>(path);
+        }
+        element_tree.serialize(db_mgr);
     }
 
     /// \brief Called when handling the app's preTeardown()
