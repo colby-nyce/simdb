@@ -197,7 +197,10 @@ protected:
     const size_t expected_capacity_;
 };
 
-/// TODO cnyce
+/// \class AutoContainerCollector
+/// \brief Container collectable that reads from a user-held const pointer for auto-collection (parallel to \ref AutoScalarCollector for scalars).
+/// \tparam ContainerT Container type whose values are collected (vector, deque, etc.).
+/// \tparam Sparse Reserved with \ref ContainerCollector for optional sparse-container semantics in future minification paths.
 template <typename ContainerT, bool Sparse>
 class AutoContainerCollector : public ContainerCollector<ContainerT, Sparse>
 {
