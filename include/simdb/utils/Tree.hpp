@@ -477,7 +477,7 @@ public:
     /// \return Pointer to the leaf node at \a path.
     /// \throw DBException If path is empty, contains empty segments, or if an existing node
     /// has an incompatible runtime type for LeafT/IntermediateT.
-    template <typename LeafT, typename IntermediateT = TreeNode>
+    template <typename LeafT = TreeNode, typename IntermediateT = TreeNode>
     LeafT* createNode(const std::string& path)
     {
         static_assert(std::is_base_of_v<TreeNode, LeafT>, "LeafT must derive from Tree::TreeNode");
@@ -663,6 +663,32 @@ public:
             throw DBException("Tree node exists at path but has incompatible type: ") << path;
         }
         return typed_node;
+    }
+
+    /// \brief Try to get the node at a dot-delimited path (untyped).
+    /// \param path Dot-delimited path, e.g. "top.mid.leaf".
+    /// \param must_exist If true, throw when the path is invalid or the node is missing.
+    /// \return Node pointer, or nullptr when not found and \a must_exist is false.
+    /// \throw DBException If path is invalid, or if \a must_exist is true and the node is missing.
+    TreeNode* tryGet(const std::string& path, bool must_exist = true)
+    {
+        return tryGetNodeAs<TreeNode>(path, must_exist);
+    }
+
+    /// \brief Try to get the node at a dot-delimited path (untyped, const overload).
+    /// \param path Dot-delimited path, e.g. "top.mid.leaf".
+    /// \param must_exist If true, throw when the path is invalid or the node is missing.
+    /// \return Const node pointer, or nullptr when not found and \a must_exist is false.
+    /// \throw DBException If path is invalid, or if \a must_exist is true and the node is missing.
+    const TreeNode* tryGet(const std::string& path, bool must_exist = true) const
+    {
+        return tryGetNodeAs<TreeNode>(path, must_exist);
+    }
+
+    /// \brief Check if there is a node at the given path
+    bool contains(const std::string& path) const
+    {
+        return tryGet(path, false) != nullptr;
     }
 
 private:
