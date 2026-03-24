@@ -243,7 +243,12 @@ public:
     void bfs(std::function<bool(TreeNode*)> callback)
     {
         std::queue<TreeNode*> queue;
-        queue.push(&root_);
+
+        // Don't apply the callback to the unnamed root
+        for (auto& child : root_.getChildren())
+        {
+            queue.push(child.get());
+        }
 
         while (!queue.empty())
         {
@@ -267,7 +272,12 @@ public:
     void bfs(std::function<bool(const TreeNode*)> callback) const
     {
         std::queue<const TreeNode*> queue;
-        queue.push(&root_);
+
+        // Don't apply the callback to the unnamed root
+        for (const auto& child : root_.getChildren())
+        {
+            queue.push(child.get());
+        }
 
         while (!queue.empty())
         {
@@ -286,18 +296,94 @@ public:
         }
     }
 
+    /// \brief Traverse nodes of a specific type in breadth-first order.
+    /// \tparam NodeT Desired node type derived from TreeNode.
+    /// \param callback Called for each visited typed node; return false to stop traversal.
+    template <typename NodeT>
+    void bfsTypedNodes(std::function<bool(NodeT*)> callback)
+    {
+        static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
+        bfs([&callback](TreeNode* node) {
+            auto* typed_node = dynamic_cast<NodeT*>(node);
+            if (!typed_node)
+            {
+                return true;
+            }
+            return callback(typed_node);
+        });
+    }
+
+    /// \brief Traverse nodes of a specific type in breadth-first order (const overload).
+    /// \tparam NodeT Desired node type derived from TreeNode.
+    /// \param callback Called for each visited typed node; return false to stop traversal.
+    template <typename NodeT>
+    void bfsTypedNodes(std::function<bool(const NodeT*)> callback) const
+    {
+        static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
+        bfs([&callback](const TreeNode* node) {
+            auto* typed_node = dynamic_cast<const NodeT*>(node);
+            if (!typed_node)
+            {
+                return true;
+            }
+            return callback(typed_node);
+        });
+    }
+
     /// \brief Traverse the tree in depth-first pre-order.
     /// \param callback Called for each visited node; return false to stop traversal.
     void dfs(std::function<bool(TreeNode*)> callback)
     {
-        dfsImpl_(&root_, callback);
+        // Don't apply the callback to the unnamed root
+        for (auto& child : root_.getChildren())
+        {
+            dfsImpl_(child.get(), callback);
+        }
     }
 
     /// \brief Traverse the tree in depth-first pre-order (const overload).
     /// \param callback Called for each visited node; return false to stop traversal.
     void dfs(std::function<bool(const TreeNode*)> callback) const
     {
-        dfsImpl_(&root_, callback);
+        // Don't apply the callback to the unnamed root
+        for (const auto& child : root_.getChildren())
+        {
+            dfsImpl_(child.get(), callback);
+        }
+    }
+
+    /// \brief Traverse nodes of a specific type in depth-first pre-order.
+    /// \tparam NodeT Desired node type derived from TreeNode.
+    /// \param callback Called for each visited typed node; return false to stop traversal.
+    template <typename NodeT>
+    void dfsTypedNodes(std::function<bool(NodeT*)> callback)
+    {
+        static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
+        dfs([&callback](TreeNode* node) {
+            auto* typed_node = dynamic_cast<NodeT*>(node);
+            if (!typed_node)
+            {
+                return true;
+            }
+            return callback(typed_node);
+        });
+    }
+
+    /// \brief Traverse nodes of a specific type in depth-first pre-order (const overload).
+    /// \tparam NodeT Desired node type derived from TreeNode.
+    /// \param callback Called for each visited typed node; return false to stop traversal.
+    template <typename NodeT>
+    void dfsTypedNodes(std::function<bool(const NodeT*)> callback) const
+    {
+        static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
+        dfs([&callback](const TreeNode* node) {
+            auto* typed_node = dynamic_cast<const NodeT*>(node);
+            if (!typed_node)
+            {
+                return true;
+            }
+            return callback(typed_node);
+        });
     }
 
     /// \brief Get or create a leaf node for a dot-delimited path.
@@ -486,7 +572,7 @@ public:
     }
 
 private:
-    static bool dfsImpl_(TreeNode* node, const std::function<bool(TreeNode*)>& callback)
+    bool dfsImpl_(TreeNode* node, const std::function<bool(TreeNode*)>& callback)
     {
         if (!callback(node))
         {
@@ -504,7 +590,7 @@ private:
         return true;
     }
 
-    static bool dfsImpl_(const TreeNode* node, const std::function<bool(const TreeNode*)>& callback)
+    bool dfsImpl_(const TreeNode* node, const std::function<bool(const TreeNode*)>& callback) const
     {
         if (!callback(node))
         {
