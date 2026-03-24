@@ -9,6 +9,8 @@ namespace simdb::collection {
 class ElementTreeNode : public SerializedTreeNode
 {
 private:
+    using SerializedTreeNode::SerializedTreeNode;
+
     int serialize_(DatabaseManager* db_mgr) override final
     {
         int parent_id = 0;
@@ -19,7 +21,7 @@ private:
 
         auto record = db_mgr->INSERT(
             SQL_TABLE("ElementTreeNodes"),
-            SQL_VALUES(getName(), parent_id);
+            SQL_VALUES(getName(), parent_id));
 
         return record->getId();
     }

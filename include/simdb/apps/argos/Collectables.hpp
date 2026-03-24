@@ -3,7 +3,7 @@
 #pragma once
 
 #include "simdb/apps/argos/ArgosRecord.hpp"
-#include "simdb/apps/argos/DataTypesSerializer.hpp"
+//#include "simdb/apps/argos/DataTypesSerializer.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 

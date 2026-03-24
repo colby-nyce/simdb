@@ -1,5 +1,5 @@
 #include "SimDBTester.hpp"
-#include "simdb/apps/argos/ElementsTree.hpp"
+#include "simdb/apps/argos/ElementTreeNode.hpp"
 
 TEST_INIT;
 
