@@ -6,7 +6,9 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <functional>
 #include <memory>
+#include <queue>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -29,18 +31,19 @@ public:
 
         /// \brief Construct a node with no parent (typically root).
         /// \param name Node name.
-        explicit TreeNode(std::string name) :
-            name_(std::move(name))
+        explicit TreeNode(const std::string& name) :
+            TreeNode(name, nullptr)
         {
         }
 
         /// \brief Construct a node with a parent.
         /// \param name Node name.
         /// \param parent Parent node pointer.
-        TreeNode(std::string name, TreeNode* parent) :
-            name_(std::move(name)),
+        TreeNode(const std::string& name, TreeNode* parent) :
+            name_(name),
             parent_(parent)
         {
+            validateName_(name_);
         }
 
         /// \brief Get this node's local name.
@@ -199,9 +202,22 @@ public:
         {
             static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
             auto child = std::make_unique<NodeT>(std::forward<Args>(args)...);
+            if (getChild(child->getName(), false) != nullptr)
+            {
+                throw DBException("Cannot add duplicate sibling tree node name: ") << child->getName()
+                    << " under parent path '" << getPath() << "'";
+            }
             auto* raw_ptr = child.get();
             children_.emplace_back(std::move(child));
             return raw_ptr;
+        }
+
+        static void validateName_(const std::string& name)
+        {
+            if (name.find('.') != std::string::npos)
+            {
+                throw DBException("Tree node name cannot contain '.': ") << name;
+            }
         }
 
         std::string name_;
@@ -212,6 +228,8 @@ public:
         friend class Tree;
     };
 
+    virtual ~Tree() = default;
+
     /// \brief Get the tree root node.
     /// \return Mutable root node pointer.
     TreeNode* getRoot() { return &root_; }
@@ -219,6 +237,68 @@ public:
     /// \brief Get the tree root node (const overload).
     /// \return Const root node pointer.
     const TreeNode* getRoot() const { return &root_; }
+
+    /// \brief Traverse the tree in breadth-first order.
+    /// \param callback Called for each visited node; return false to stop traversal.
+    void bfs(std::function<bool(TreeNode*)> callback)
+    {
+        std::queue<TreeNode*> queue;
+        queue.push(&root_);
+
+        while (!queue.empty())
+        {
+            auto* node = queue.front();
+            queue.pop();
+
+            if (!callback(node))
+            {
+                return;
+            }
+
+            for (auto& child : node->getChildren())
+            {
+                queue.push(child.get());
+            }
+        }
+    }
+
+    /// \brief Traverse the tree in breadth-first order (const overload).
+    /// \param callback Called for each visited node; return false to stop traversal.
+    void bfs(std::function<bool(const TreeNode*)> callback) const
+    {
+        std::queue<const TreeNode*> queue;
+        queue.push(&root_);
+
+        while (!queue.empty())
+        {
+            auto* node = queue.front();
+            queue.pop();
+
+            if (!callback(node))
+            {
+                return;
+            }
+
+            for (const auto& child : node->getChildren())
+            {
+                queue.push(child.get());
+            }
+        }
+    }
+
+    /// \brief Traverse the tree in depth-first pre-order.
+    /// \param callback Called for each visited node; return false to stop traversal.
+    void dfs(std::function<bool(TreeNode*)> callback)
+    {
+        dfsImpl_(&root_, callback);
+    }
+
+    /// \brief Traverse the tree in depth-first pre-order (const overload).
+    /// \param callback Called for each visited node; return false to stop traversal.
+    void dfs(std::function<bool(const TreeNode*)> callback) const
+    {
+        dfsImpl_(&root_, callback);
+    }
 
     /// \brief Get or create a leaf node for a dot-delimited path.
     /// \tparam LeafT Node type for the final path segment.
@@ -406,6 +486,42 @@ public:
     }
 
 private:
+    static bool dfsImpl_(TreeNode* node, const std::function<bool(TreeNode*)>& callback)
+    {
+        if (!callback(node))
+        {
+            return false;
+        }
+
+        for (auto& child : node->getChildren())
+        {
+            if (!dfsImpl_(child.get(), callback))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static bool dfsImpl_(const TreeNode* node, const std::function<bool(const TreeNode*)>& callback)
+    {
+        if (!callback(node))
+        {
+            return false;
+        }
+
+        for (const auto& child : node->getChildren())
+        {
+            if (!dfsImpl_(child.get(), callback))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     TreeNode root_;
 };
 
