@@ -11,29 +11,6 @@
 
 namespace simdb::collection {
 
-/// \class SimpleTypeTreeNode
-/// \brief TreeNode which represents a collected simple (scalar) type
-/// \tparam SimpleTypeT C++ type to record (trivial, standard-layout, non-enum)
-/// \note Serialization guaranteed to only occur once; no dups in database
-template <typename SimpleTypeT>
-class SimpleTypeTreeNode : public SerializedTreeNode
-{
-    static_assert(std::is_trivial_v<SimpleTypeT> && std::is_standard_layout_v<SimpleTypeT> && !std::is_enum_v<SimpleTypeT>,
-                  "SimpleTypeTreeNode only supports trivial, standard-layout, non-enum types");
-
-public:
-    using SerializedTreeNode::SerializedTreeNode;
-
-private:
-    int serialize_(DatabaseManager* db_mgr) override final
-    {
-        auto demangled_name = demangle_type<SimpleTypeT>();
-        auto num_bytes = static_cast<int>(sizeof(SimpleTypeT));
-        auto record = db_mgr->INSERT(SQL_TABLE("CollectedDataTypes"), SQL_VALUES(demangled_name, num_bytes));
-        return record->getId();
-    }
-};
-
 /// \class SimpleTypesSerializer
 /// \brief Handles serialization of simple scalar types used in an Argos collection
 class SimpleTypesSerializer
@@ -42,7 +19,7 @@ public:
     /// \brief Construct with a new tree. All simple types will be placed
     /// under our tree's "root.dtypes.simple" node.
     SimpleTypesSerializer()
-        : owned_tree_(std::make_unique<SerializedTree>())
+        : owned_tree_(SerializedTree::createDefault())
         , tree_(owned_tree_.get())
     {}
 
@@ -53,14 +30,14 @@ public:
     {}
 
     /// \brief Register scalar type \a SimpleTypeT under the shared \c builtins tree folder
-    /// \tparam SimpleTypeT Trivial, standard-layout, non-enum type (see \ref SimpleTypeTreeNode)
+    /// \tparam SimpleTypeT Trivial, standard-layout, non-enum type
     template <typename SimpleTypeT>
     void registerSimpleType()
     {
         using simple_t = type_traits::remove_any_pointer_t<SimpleTypeT>;
         auto type_name = demangle_type<simple_t>();
         auto parent = getBuiltInsNode_();
-        parent->addChild<SimpleTypeTreeNode<simple_t>>(type_name);
+        parent->addChild<ElementTreeNode>(type_name);
     }
 
     /// \brief Look up the database row id for a registered built-in type
@@ -100,11 +77,11 @@ public:
 
 private:
     /// \return Lazy-created \c "builtins" grouping node under this serializer's tree
-    SerializedTreeNode* getBuiltInsNode_() const
+    Tree::TreeNode* getBuiltInsNode_() const
     {
         if (!builtins_node_)
         {
-            builtins_node_ = tree_->createNodes<ElementTreeNode>("dtypes.simples");
+            builtins_node_ = tree_->createNodes<>("dtypes.simples");
         }
         return builtins_node_;
     }
@@ -116,7 +93,7 @@ private:
     SerializedTree *const tree_;
 
     /// \brief Cached handle to the \c builtins child folder node
-    mutable SerializedTreeNode* builtins_node_ = nullptr;
+    mutable Tree::TreeNode* builtins_node_ = nullptr;
 };
 
 } // namespace simdb::collection

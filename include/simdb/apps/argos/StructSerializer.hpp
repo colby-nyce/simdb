@@ -127,7 +127,7 @@ public:
     /// \brief Construct with a new tree. All structs will be placed
     /// under our tree's "root.dtypes.structs" node.
     StructSerializer()
-        : owned_tree_(std::make_unique<SerializedTree>())
+        : owned_tree_(SerializedTree::createDefault())
         , tree_(owned_tree_.get())
     {}
 
@@ -178,11 +178,11 @@ public:
 
 private:
     /// \return Lazy-created \c "structs" grouping node under this serializer's tree
-    SerializedTreeNode* getStructsNode_() const
+    Tree::TreeNode* getStructsNode_() const
     {
         if (!structs_node_)
         {
-            structs_node_ = tree_->createNodes<ElementTreeNode>("dtypes.structs");
+            structs_node_ = tree_->createNodes<>("dtypes.structs");
         }
         return structs_node_;
     }
@@ -194,7 +194,7 @@ private:
     SerializedTree *const tree_;
 
     /// \brief Cached handle to the \c structs child folder node
-    mutable SerializedTreeNode* structs_node_ = nullptr;
+    mutable Tree::TreeNode* structs_node_ = nullptr;
 };
 
 } // namespace simdb::collection

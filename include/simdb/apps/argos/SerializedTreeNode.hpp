@@ -46,17 +46,26 @@ public:
     }
 
 private:
-    void print_(std::ostream& os) const override
-    {
-        os << getName();
-        if (const int id = getDbId(false); id != 0)
-        {
-            os << " [db_id=" << id << ']';
-        }
-    }
-
     virtual int serialize_(DatabaseManager* db_mgr) = 0;
     int db_id_ = 0;
+};
+
+/// \class DefaultSerializedRootNode
+/// \brief Default implemenetation of the root tree node
+/// for the SerializedTree class.
+class DefaultSerializedRootNode : public SerializedTreeNode
+{
+public:
+    explicit DefaultSerializedRootNode(const std::string& root_name)
+        : SerializedTreeNode(root_name)
+    {}
+
+private:
+    int serialize_(DatabaseManager* db_mgr) override final
+    {
+        auto record = db_mgr->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_VALUES(getName(), 0));
+        return record->getId();
+    };
 };
 
 /// \class SerializedTree
@@ -64,7 +73,28 @@ private:
 class SerializedTree : public Tree
 {
 public:
-    using Tree::Tree;
+    template <typename RootT>
+    explicit SerializedTree(std::unique_ptr<RootT> root) :
+        Tree(std::move(root))
+    {}
+
+    static std::unique_ptr<SerializedTree> createDefault(const std::string& root_name = "root")
+    {
+        return createWithRoot<DefaultSerializedRootNode>(root_name);
+    }
+
+    template <typename RootT, typename... Args>
+    static std::unique_ptr<SerializedTree> createWithRoot(const std::string& root_name, Args&&... args)
+    {
+        return createWithNamedRoot<RootT>(root_name, std::forward<Args>(args)...);
+    }
+
+    template <typename RootT, typename... Args>
+    static std::unique_ptr<SerializedTree> createWithNamedRoot(const std::string& root_name, Args&&... args)
+    {
+        auto root = std::make_unique<RootT>(root_name, std::forward<Args>(args)...);
+        return std::make_unique<SerializedTree>(std::move(root));
+    }
 
     /// \brief Serialize everything about this node to the database
     /// using depth-first traversal

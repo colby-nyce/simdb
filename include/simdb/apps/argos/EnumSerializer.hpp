@@ -70,7 +70,7 @@ public:
     /// \brief Construct with a new tree. All enums will be placed
     /// under our tree's "root.dtypes.enums" node.
     EnumSerializer()
-        : owned_tree_(std::make_unique<SerializedTree>())
+        : owned_tree_(SerializedTree::createDefault())
         , tree_(owned_tree_.get())
     {}
 
@@ -123,11 +123,11 @@ public:
 
 private:
     /// \return Lazy-created \c "enums" grouping node under this serializer's tree
-    SerializedTreeNode* getEnumsNode_() const
+    Tree::TreeNode* getEnumsNode_() const
     {
         if (!enums_node_)
         {
-            enums_node_ = tree_->createNodes<ElementTreeNode>("dtypes.enums");
+            enums_node_ = tree_->createNodes<>("dtypes.enums");
         }
         return enums_node_;
     }
@@ -139,7 +139,7 @@ private:
     SerializedTree *const tree_;
 
     /// \brief Cached handle to the \c enums child folder node
-    mutable SerializedTreeNode* enums_node_ = nullptr;
+    mutable Tree::TreeNode* enums_node_ = nullptr;
 };
 
 } // namespace simdb::collection

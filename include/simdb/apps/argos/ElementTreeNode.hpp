@@ -11,7 +11,7 @@ class ElementTreeNode : public SerializedTreeNode
 private:
     using SerializedTreeNode::SerializedTreeNode;
 
-    int serialize_(DatabaseManager* db_mgr) override final
+    int serialize_(DatabaseManager* db_mgr) override
     {
         int parent_id = 0;
         if (auto parent = getParentAs<SerializedTreeNode>(false))

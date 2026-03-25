@@ -220,8 +220,6 @@ private:
 
         // Extract all information about collected data types
         dtype_serializer_.serialize(db_mgr);
-        std::cout << "Argos collection data type tree:\n";
-        dtype_serializer_.print(std::cout);
 
         // Create the elements tree. Start with every collectable path:
         //   top.mid.bottom.int_foo

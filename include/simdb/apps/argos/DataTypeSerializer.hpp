@@ -18,7 +18,7 @@ class DataTypeSerializer
 public:
     /// \brief Construct with a new tree.
     DataTypeSerializer()
-        : owned_tree_(std::make_unique<SerializedTree>())
+        : owned_tree_(SerializedTree::createDefault())
         , simple_serializer_(*owned_tree_)
         , enum_serializer_(*owned_tree_)
         , struct_serializer_(*owned_tree_)
@@ -88,12 +88,6 @@ public:
             enum_serializer_.serializeBFS(db_mgr);
             struct_serializer_.serializeBFS(db_mgr);
         });
-    }
-
-    /// \brief Print the merged data-type tree (root and all registered types).
-    void print(std::ostream& os) const
-    {
-        owned_tree_->recursePrint(os);
     }
 
 private:

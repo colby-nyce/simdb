@@ -263,22 +263,6 @@ public:
             return cached_path_;
         }
 
-        /// \brief Print this node and descendants with indentation.
-        /// \param os Output stream.
-        void recursePrint(std::ostream& os, unsigned depth = 0) const
-        {
-            for (unsigned i = 0; i < depth; ++i)
-            {
-                os << "  ";
-            }
-            print_(os);
-            os << "\n";
-            for (const auto& child : children_)
-            {
-                child->recursePrint(os, depth + 1);
-            }
-        }
-
     private:
         TreeNode() = default;
 
@@ -305,13 +289,6 @@ public:
             }
         }
 
-        /// \brief Print this node
-        /// \param os Output stream.
-        virtual void print_(std::ostream& os) const
-        {
-            os << name_;
-        }
-
         std::string name_;
         std::vector<std::unique_ptr<TreeNode>> children_;
         TreeNode* parent_ = nullptr;
@@ -323,17 +300,6 @@ public:
     /// \brief Construct a tree with a default TreeNode root named "root".
     Tree() :
         root_(std::make_unique<TreeNode>("root"))
-    {
-    }
-
-    /// \brief Construct a tree with a user-supplied root node type.
-    /// \tparam RootT Root node type derived from TreeNode.
-    /// \tparam Args Constructor argument types for RootT.
-    /// \param tag Type tag used to select RootT.
-    /// \param args Forwarded constructor args for RootT.
-    template <typename RootT, typename... Args>
-    explicit Tree(std::in_place_type_t<RootT> tag, Args&&... args) :
-        root_(makeRootNode_<RootT>(tag, std::forward<Args>(args)...))
     {
     }
 
@@ -589,7 +555,7 @@ public:
     /// \tparam NodeT Node type used for all path segments.
     /// \param path Dot-delimited path, e.g. "top.mid.leaf".
     /// \return Pointer to the leaf node at \a path.
-    template <typename NodeT>
+    template <typename NodeT = TreeNode>
     NodeT* createNodes(const std::string& path)
     {
         return createNode<NodeT, NodeT>(path);
@@ -739,21 +705,7 @@ public:
         return tryGet(path, false) != nullptr;
     }
 
-    /// \brief Print this node and descendants with indentation.
-    /// \param os Output stream.
-    void recursePrint(std::ostream& os) const
-    {
-        root_->recursePrint(os);
-    }
-
 private:
-    template <typename RootT, typename... Args>
-    static std::unique_ptr<TreeNode> makeRootNode_(std::in_place_type_t<RootT>, Args&&... args)
-    {
-        static_assert(std::is_base_of_v<TreeNode, RootT>, "RootT must derive from Tree::TreeNode");
-        return std::make_unique<RootT>(std::forward<Args>(args)...);
-    }
-
     template <typename RootT>
     static std::unique_ptr<TreeNode> adoptRootNode_(std::unique_ptr<RootT> root)
     {
