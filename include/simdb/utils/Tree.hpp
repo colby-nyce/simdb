@@ -263,19 +263,19 @@ public:
             return cached_path_;
         }
 
-        /// \brief Print this node and descendants with indentation (two spaces per level).
+        /// \brief Print this node and descendants with indentation.
         /// \param os Output stream.
-        /// \param depth Nesting depth; used for indentation (root is 0).
-        virtual void print(std::ostream& os, unsigned depth = 0) const
+        void recursePrint(std::ostream& os, unsigned depth = 0) const
         {
             for (unsigned i = 0; i < depth; ++i)
             {
                 os << "  ";
             }
-            os << name_ << '\n';
+            print_(os);
+            os << "\n";
             for (const auto& child : children_)
             {
-                child->print(os, depth + 1);
+                child->recursePrint(os, depth + 1);
             }
         }
 
@@ -303,6 +303,13 @@ public:
             {
                 throw DBException("Tree node name cannot contain '.': ") << name;
             }
+        }
+
+        /// \brief Print this node
+        /// \param os Output stream.
+        virtual void print_(std::ostream& os) const
+        {
+            os << name_;
         }
 
         std::string name_;
@@ -730,6 +737,13 @@ public:
     bool contains(const std::string& path) const
     {
         return tryGet(path, false) != nullptr;
+    }
+
+    /// \brief Print this node and descendants with indentation.
+    /// \param os Output stream.
+    void recursePrint(std::ostream& os) const
+    {
+        root_->recursePrint(os);
     }
 
 private:

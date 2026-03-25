@@ -45,25 +45,16 @@ public:
         return db_id_;
     }
 
-    void print(std::ostream& os, unsigned depth = 0) const override
+private:
+    void print_(std::ostream& os) const override
     {
-        for (unsigned i = 0; i < depth; ++i)
-        {
-            os << "  ";
-        }
         os << getName();
         if (const int id = getDbId(false); id != 0)
         {
             os << " [db_id=" << id << ']';
         }
-        os << '\n';
-        for (const auto& child : getChildren())
-        {
-            child->print(os, depth + 1);
-        }
     }
 
-private:
     virtual int serialize_(DatabaseManager* db_mgr) = 0;
     int db_id_ = 0;
 };

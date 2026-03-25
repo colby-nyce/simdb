@@ -93,7 +93,7 @@ public:
     /// \brief Print the merged data-type tree (root and all registered types).
     void print(std::ostream& os) const
     {
-        simple_serializer_.getTree()->getRoot()->print(os);
+        owned_tree_->recursePrint(os);
     }
 
 private:
