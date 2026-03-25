@@ -8,10 +8,19 @@
 
 namespace simdb::collection {
 
-class DataTypesSerializer;
+class DataTypeSerializer;
+class SimpleTypesSerializer;
+class EnumSerializer;
+class StructSerializer;
 class StructFieldBase;
 
-template <typename Collector, typename FieldT, auto GetterFunc>
+// Helper to register nested struct types from inside StructField, without
+// requiring StructSerializer to be a complete type at the point StructField
+// is defined in this header.
+template <typename StructT>
+void registerNestedStructType(StructSerializer* serializer);
+
+template <typename Collector, auto GetterFunc>
 class StructField;
 
 /// \class StructFields
@@ -26,7 +35,7 @@ public:
     }
 
 private:
-    template <typename Collector, typename FieldT, auto GetterFunc>
+    template <typename Collector, auto GetterFunc>
     friend class StructField;
     std::vector<StructFieldBase*> fields_;
 };
@@ -42,17 +51,20 @@ public:
     virtual std::string getName() const = 0;
 
     /// \brief Records this field's data type with the shared type registry
-    /// \param serializer Target type registry for the collection pipeline
-    /// \note Implementations may be stubs until DataTypesSerializer is wired in.
-    virtual void registerType(DataTypesSerializer* serializer) const = 0;
+    /// \param simple_serializer Serializer for trivial scalar types
+    /// \param enum_serializer Serializer for enum types
+    /// \param struct_serializer Serializer for struct types (used for nesting)
+    /// \note Implementations may be stubs until DataTypeSerializer is wired in.
+    virtual void registerType(SimpleTypesSerializer* simple_serializer,
+                              EnumSerializer* enum_serializer,
+                              StructSerializer* struct_serializer) const = 0;
 };
 
 /// \class StructField
 /// \brief Concrete field: name, C++ value type, and how to read it from the collector
 /// \tparam Collector Type that owns the value being sampled (often a packet or struct adapter)
-/// \tparam FieldT C++ type of the stored field value
 /// \tparam GetterFunc Non-type template parameter: invocable as \c GetterFunc(collector) yielding \c FieldT
-template <typename Collector, typename FieldT, auto GetterFunc>
+template <typename Collector, auto GetterFunc>
 class StructField : public StructFieldBase
 {
 public:
@@ -69,19 +81,50 @@ public:
         return name_;
     }
 
-    /// \note Stub; no database / schema emission yet
-    void registerType(DataTypesSerializer* serializer) const override final
+    void registerType(SimpleTypesSerializer* simple_serializer,
+                      EnumSerializer* enum_serializer,
+                      StructSerializer* struct_serializer) const override final
     {
-        (void)serializer;
+        using field_t = type_traits::remove_any_pointer_t<type_traits::return_type_t<decltype(GetterFunc)>>;
+        if constexpr (std::is_enum_v<field_t>)
+        {
+            registerEnum_<field_t>(enum_serializer);
+        }
+        else if constexpr (std::is_trivial_v<field_t> && std::is_standard_layout_v<field_t>)
+        {
+            registerSimple_<field_t>(simple_serializer);
+        }
+        else
+        {
+            recurseRegisterStruct_<field_t>(struct_serializer);
+        }
     }
 
-    /// \brief Append the field value for \a collector to the binary stream
     void writeTo(StreamBuffer& buffer, const Collector* collector) const
     {
-        buffer << GetterFunc(collector);
+        buffer << std::invoke(GetterFunc, collector);
     }
 
 private:
+    template <typename SimpleTypeT>
+    void registerSimple_(SimpleTypesSerializer* serializer) const
+    {
+        serializer->template registerSimpleType<SimpleTypeT>();
+    }
+
+    template <typename EnumT>
+    void registerEnum_(EnumSerializer* serializer) const
+    {
+        serializer->template registerEnum<EnumT>();
+    }
+
+    template <typename StructT>
+    void recurseRegisterStruct_(StructSerializer* serializer) const
+    {
+        using struct_t = type_traits::remove_any_pointer_t<StructT>;
+        registerNestedStructType<struct_t>(serializer);
+    }
+
     const std::string name_;
 };
 
@@ -96,8 +139,10 @@ public:
     virtual std::string getName() const = 0;
 
     /// \brief Registers every field's type with the shared serializer
-    /// \note Implementations may be stubs until DataTypesSerializer is wired in.
-    virtual void registerTypes(DataTypesSerializer* serializer) const = 0;
+    /// \note Implementations may be stubs until DataTypeSerializer is wired in.
+    virtual void registerTypes(SimpleTypesSerializer* simple_serializer,
+                               EnumSerializer* enum_serializer,
+                               StructSerializer* struct_serializer) const = 0;
 
 protected:
     StructFields fields_;
@@ -110,12 +155,19 @@ template <typename StructT>
 class StructCollector : public StructCollectorBase
 {
 public:
+    using collected_type = StructT;
+
     std::string getName() const override { return demangle_type<StructT>(); }
 
     /// \note Stub; should iterate \ref StructFields and register each field when complete
-    void registerTypes(DataTypesSerializer* serializer) const override final
+    void registerTypes(SimpleTypesSerializer* simple_serializer,
+                       EnumSerializer* enum_serializer,
+                       StructSerializer* struct_serializer) const override final
     {
-        (void)serializer;
+        for (auto field : fields_.getFields())
+        {
+            field->registerType(simple_serializer, enum_serializer, struct_serializer);
+        }
     }
 };
 
@@ -129,12 +181,16 @@ public:
     StructSerializer()
         : owned_tree_(SerializedTree::createDefault())
         , tree_(owned_tree_.get())
+        , simple_serializer_(*tree_)
+        , enum_serializer_(*tree_)
     {}
 
     /// \brief Construct using another tree. All structs will be placed
     /// under the given tree's "root.dtypes.structs" node.
-    explicit StructSerializer(SerializedTree& tree)
+    StructSerializer(SerializedTree& tree)
         : tree_(&tree)
+        , simple_serializer_(*tree_)
+        , enum_serializer_(*tree_)
     {}
 
     /// \brief Ensure \a StructT participates in type registration (tree node TBD)
@@ -143,8 +199,11 @@ public:
     template <typename StructT>
     void registerStruct()
     {
-        //TODO cnyce
-        //[[maybe_unused]] using struct_t = type_traits::remove_any_pointer_t<StructT>;
+        using struct_t = type_traits::remove_any_pointer_t<StructT>;
+        auto struct_name = demangle_type<struct_t>();
+        auto parent = getStructsNode_();
+        parent->addChild(struct_name);
+        recurseRegisterStructTypes_<struct_t>();
     }
 
     /// \brief Look up the database row id for a registered struct type
@@ -187,6 +246,17 @@ private:
         return structs_node_;
     }
 
+    /// \brief Recursively walk the given struct type and register all data types,
+    /// including support for nested structs
+    template <typename StructT>
+    void recurseRegisterStructTypes_()
+    {
+        using struct_t = type_traits::remove_any_pointer_t<StructT>;
+        using collector_t = typename struct_t::ArgosCollector;
+        auto collector = std::make_unique<collector_t>();
+        collector->registerTypes(&simple_serializer_, &enum_serializer_, this);
+    }
+
     /// \brief Tree storage when this serializer constructs the root (constructor without tree)
     std::unique_ptr<SerializedTree> owned_tree_;
 
@@ -195,16 +265,30 @@ private:
 
     /// \brief Cached handle to the \c structs child folder node
     mutable Tree::TreeNode* structs_node_ = nullptr;
+
+    /// \brief Keep track of simple data types we encounter in our structs, including nested
+    SimpleTypesSerializer simple_serializer_;
+
+    /// \brief Keep track of enums we encounter in our structs, including nested
+    EnumSerializer enum_serializer_;
 };
+
+template <typename StructT>
+inline void registerNestedStructType(StructSerializer* serializer)
+{
+    serializer->template registerStruct<StructT>();
+}
 
 } // namespace simdb::collection
 
-/// \brief Opens a collector class body derived from \ref simdb::collection::StructCollector
-#define ARGOS_COLLECTOR(Class) class Class : public simdb::collection::StructCollector<Class> {
-
-/// \brief Closes an \ref ARGOS_COLLECTOR block (placeholder compile-time check)
-#define END_ARGOS_COLLECTOR(Class) static_assert(std::is_same_v<decltype(this), Class>) };
+/// Pastes after expanding \c b (needed so \c __COUNTER__ is not glued literally by \c ##).
+#define ARGOS_COLLECT_CAT_(a, b) a##b
+#define ARGOS_COLLECT_CAT(a, b)  ARGOS_COLLECT_CAT_(a, b)
 
 /// \brief Declares a \ref simdb::collection::StructField member wired to \c fields_
-#define ARGOS_COLLECT(collectable_name, collectable_getter) \
-    simdb::collection::StructField<collectable_getter> collectable_name_{&fields_};
+/// \details Safe to invoke multiple times per collector class; each expansion gets a unique
+/// member name via \c __COUNTER__.
+#define ARGOS_COLLECT(collectable_name, collectable_getter)                      \
+    simdb::collection::StructField<typename ArgosCollector::collected_type,      \
+                                   collectable_getter>                           \
+        ARGOS_COLLECT_CAT(collectable_, __COUNTER__){&fields_, #collectable_name};

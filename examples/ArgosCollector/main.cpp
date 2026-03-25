@@ -135,11 +135,25 @@ int main(int argc, char** argv)
     auto manual_enum_collector = collections.collectScalarManually<simdb::Colors>(
         "manual.color", "root");
 
-    struct Packet
+    class Packet
     {
-        int intval = 8;
-        std::string strval = "hello";
-        simdb::Colors color = simdb::Colors::RED;
+    private:
+        int intval_ = 8;
+        std::string strval_ = "hello";
+        simdb::Colors color_ = simdb::Colors::RED;
+
+    public:
+        int getInt() const { return intval_; }
+        std::string* getString() { return &strval_; }
+        std::shared_ptr<simdb::Colors> getColor() const { return std::make_shared<simdb::Colors>(color_); }
+
+        class ArgosCollector : public simdb::collection::StructCollector<Packet>
+        {
+        public:
+            ARGOS_COLLECT(intval, &Packet::getInt);
+            ARGOS_COLLECT(strval, &Packet::getString);
+            ARGOS_COLLECT(color,  &Packet::getColor);
+        };
     } packet;
 
     auto auto_packet_collector = collections.collectScalarWithAutoCollection<Packet>(

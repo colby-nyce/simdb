@@ -152,7 +152,7 @@ public:
         /// \param name Child name; must not contain '.'.
         /// \throw DBException If \a name contains '.', if a sibling with the same name exists
         /// but is not a \a NodeT, or if a new child cannot be added.
-        template <typename NodeT>
+        template <typename NodeT = TreeNode>
         NodeT* addChild(const std::string& name)
         {
             static_assert(std::is_base_of_v<TreeNode, NodeT>, "NodeT must derive from Tree::TreeNode");
