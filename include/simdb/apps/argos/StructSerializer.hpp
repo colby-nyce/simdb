@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/apps/argos/ElementTreeNode.hpp"
+#include "simdb/apps/argos/DataTypeDescriptors.hpp"
 #include "simdb/utils/StreamBuffer.hpp"
 #include "simdb/utils/Demangle.hpp"
 
@@ -13,6 +14,32 @@ class SimpleTypesSerializer;
 class EnumSerializer;
 class StructSerializer;
 class StructFieldBase;
+
+/// \class DataTypeVisitor
+/// \brief TODO cnyce
+class DataTypeVisitor
+{
+public:
+    virtual ~DataTypeVisitor() = default;
+    virtual void visitSimpleType(SimpleTypes type) 
+    {
+        (void)type;
+    }
+    virtual void visitEnum(const std::string& demangled_name, EnumIntTypes int_type)
+    {
+        (void)demangled_name;
+        (void)int_type;
+    }
+    virtual void visitEnumField(const std::string& key, const std::string& value)
+    {
+        (void)key;
+        (void)value;
+    }
+    virtual void visitStruct(const std::string& demangled_name)
+    {
+        (void)demangled_name;
+    }
+};
 
 // Helper to register nested struct types from inside StructField, without
 // requiring StructSerializer to be a complete type at the point StructField
@@ -50,14 +77,8 @@ public:
     /// \return Human-readable field name in collected output
     virtual std::string getName() const = 0;
 
-    /// \brief Records this field's data type with the shared type registry
-    /// \param simple_serializer Serializer for trivial scalar types
-    /// \param enum_serializer Serializer for enum types
-    /// \param struct_serializer Serializer for struct types (used for nesting)
-    /// \note Implementations may be stubs until DataTypeSerializer is wired in.
-    virtual void registerType(SimpleTypesSerializer* simple_serializer,
-                              EnumSerializer* enum_serializer,
-                              StructSerializer* struct_serializer) const = 0;
+    /// \brief TODO cnyce
+    virtual void applyVisitor(DataTypeVisitor* visitor) const = 0;
 };
 
 /// \class StructField
@@ -81,22 +102,28 @@ public:
         return name_;
     }
 
-    void registerType(SimpleTypesSerializer* simple_serializer,
-                      EnumSerializer* enum_serializer,
-                      StructSerializer* struct_serializer) const override final
+    void applyVisitor(DataTypeVisitor* visitor) const override final
     {
         using field_t = type_traits::remove_any_pointer_t<type_traits::return_type_t<decltype(GetterFunc)>>;
         if constexpr (std::is_enum_v<field_t>)
         {
-            registerEnum_<field_t>(enum_serializer);
+            using int_t = std::underlying_type_t<field_t>;
+            visitor->visitEnum(demangle_type<field_t>(), enum_type<int_t>::type_enum);
+
+            std::map<std::string, int_t> map;
+            defineEnumMap<field_t>(map);
+            for (const auto& [key, value] : map)
+            {
+                visitor->visitEnumField(key, std::to_string(value));
+            }
         }
         else if constexpr (std::is_trivial_v<field_t> && std::is_standard_layout_v<field_t>)
         {
-            registerSimple_<field_t>(simple_serializer);
+
         }
         else
         {
-            recurseRegisterStruct_<field_t>(struct_serializer);
+
         }
     }
 
@@ -138,6 +165,9 @@ public:
     /// \return Schema name for the struct (typically a demangled type name)
     virtual std::string getName() const = 0;
 
+    /// \brief TODO cnyce
+    virtual void applyVisitor(DataTypeVisitor* visitor) const = 0;
+
     /// \brief Registers every field's type with the shared serializer
     /// \note Implementations may be stubs until DataTypeSerializer is wired in.
     virtual void registerTypes(SimpleTypesSerializer* simple_serializer,
@@ -158,6 +188,15 @@ public:
     using collected_type = StructT;
 
     std::string getName() const override { return demangle_type<StructT>(); }
+
+    /// \brief TODO cnyce
+    void applyVisitor(DataTypeVisitor* visitor) const override final
+    {
+        for (auto field : fields_.getFields())
+        {
+            field->applyVisitor(visitor);
+        }
+    }
 
     /// \note Stub; should iterate \ref StructFields and register each field when complete
     void registerTypes(SimpleTypesSerializer* simple_serializer,

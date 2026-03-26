@@ -4,7 +4,7 @@
 
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/CollectionPipeline.hpp"
-#include "simdb/apps/argos/DataTypeSerializer.hpp"
+#include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/utils/ValidValue.hpp"
 #include "simdb/Exceptions.hpp"
 
@@ -82,7 +82,7 @@ public:
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<AutoScalarCollector<CollectableT>>(collection, heartbeat_, scalar);
         collection->addCollectable(path, collectable, true /*auto collect*/);
-        updateDataTypeTree_<CollectableT>();
+        dtype_inspector_.registerType<CollectableT>();
         return collectable;
     }
 
@@ -96,7 +96,7 @@ public:
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<ScalarCollector<CollectableT>>(collection, heartbeat_);
         collection->addCollectable(path, collectable, false /*manually collect*/);
-        updateDataTypeTree_<CollectableT>();
+        dtype_inspector_.registerType<CollectableT>();
         return collectable;
     }
 
@@ -114,7 +114,7 @@ public:
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<AutoContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, container, expected_capacity);
         collection->addCollectable(path, collectable, true /*auto collect*/);
-        updateDataTypeTree_<typename ContainerT::value_type>();
+        dtype_inspector_.registerType<typename ContainerT::value_type>();
         return collectable;
     }
 
@@ -129,7 +129,7 @@ public:
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<ContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, expected_capacity);
         collection->addCollectable(path, collectable, false /*manually collect*/);
-        updateDataTypeTree_<typename ContainerT::value_type>();
+        dtype_inspector_.registerType<typename ContainerT::value_type>();
         return collectable;
     }
 
@@ -188,21 +188,7 @@ private:
     template <typename ValueType>
     void updateDataTypeTree_()
     {
-        auto serializer = dtype_serializer_.getSerializer<ValueType>();
-        using serializer_t = type_traits::remove_any_pointer_t<decltype(serializer)>;
-
-        if constexpr (std::is_same_v<serializer_t, SimpleTypesSerializer>)
-        {
-            serializer->template registerSimpleType<ValueType>();
-        }
-        else if constexpr (std::is_same_v<serializer_t, EnumSerializer>)
-        {
-            serializer->template registerEnum<ValueType>();
-        }
-        else if constexpr (std::is_same_v<serializer_t, StructSerializer>)
-        {
-            serializer->template registerStruct<ValueType>();
-        }
+        
     }
 
     /// \brief Called when handling the app's postInit()
@@ -219,7 +205,7 @@ private:
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
         // Extract all information about collected data types
-        dtype_serializer_.serialize(db_mgr);
+        dtype_inspector_.serialize(db_mgr);
 
         // Create the elements tree. Start with every collectable path:
         //   top.mid.bottom.int_foo
@@ -260,7 +246,7 @@ private:
     std::map<std::string, size_t> clk_periods_;
     std::unordered_set<std::string> all_collectable_paths_;
     std::unique_ptr<TinyStrings<>> tiny_strings_;
-    DataTypeSerializer dtype_serializer_;
+    DataTypeInspector dtype_inspector_;
 };
 
 } // namespace simdb::collection

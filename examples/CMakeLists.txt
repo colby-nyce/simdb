@@ -9,6 +9,7 @@ add_subdirectory(DatabaseWatchdog)
 add_subdirectory(PipelineSnoopers)
 add_subdirectory(AppFactory)
 add_subdirectory(ArgosCollector)
+add_subdirectory(Cursor)
 
 # TODO cnyce: fix sporadic failures
 #add_subdirectory(MultiPortStages)
