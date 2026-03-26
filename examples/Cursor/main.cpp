@@ -1,4 +1,5 @@
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include "simdb/apps/argos/ArgosCollect.hpp"
 
 #include <cstddef>
 #include <cstring>
@@ -20,21 +21,7 @@ T readScalarFromBuffer(const std::vector<char>& buffer, size_t& offset)
     return value;
 }
 
-struct MockFieldBase
-{
-    virtual ~MockFieldBase() = default;
-    virtual std::string getName() const = 0;
-    virtual std::string getTypeName() const = 0;
-    virtual bool isEnumField() const = 0;
-    virtual bool isStructField() const = 0;
-    virtual cursor::PodTypeKind getPodTypeKind() const = 0;
-    virtual cursor::EnumBackingKind getEnumBackingKind() const = 0;
-    virtual std::vector<cursor::EnumMember> getEnumMembers() const = 0;
-    virtual std::string getStructTypeName() const = 0;
-    virtual std::vector<const MockFieldBase*> getStructFields() const = 0;
-    virtual void writeBufferErased(std::vector<char>&, const void*) const = 0;
-    virtual const void* getStructPtrErased(const void*) const = 0;
-};
+using FieldBase = simdb::collection::cursor::ArgosFieldBase;
 
 enum class Status : uint8_t
 {
@@ -42,7 +29,7 @@ enum class Status : uint8_t
     Passed = 1
 };
 
-struct PodField final : MockFieldBase
+struct PodField final : FieldBase
 {
     PodField(std::string n, std::string t, cursor::PodTypeKind k, size_t off, size_t bytes)
         : name(std::move(n))
@@ -60,7 +47,7 @@ struct PodField final : MockFieldBase
     cursor::EnumBackingKind getEnumBackingKind() const override { return cursor::EnumBackingKind::ui8; }
     std::vector<cursor::EnumMember> getEnumMembers() const override { return {}; }
     std::string getStructTypeName() const override { return {}; }
-    std::vector<const MockFieldBase*> getStructFields() const override { return {}; }
+    std::vector<const FieldBase*> getStructFields() const override { return {}; }
     void writeBufferErased(std::vector<char>& buffer, const void* owner) const override
     {
         const auto* bytes = static_cast<const char*>(owner) + offset;
@@ -75,7 +62,7 @@ struct PodField final : MockFieldBase
     size_t num_bytes = 0;
 };
 
-struct EnumField final : MockFieldBase
+struct EnumField final : FieldBase
 {
     EnumField(std::string n, std::string t, cursor::EnumBackingKind b, std::vector<cursor::EnumMember> m, size_t off, size_t bytes)
         : name(std::move(n))
@@ -94,7 +81,7 @@ struct EnumField final : MockFieldBase
     cursor::EnumBackingKind getEnumBackingKind() const override { return backing; }
     std::vector<cursor::EnumMember> getEnumMembers() const override { return members; }
     std::string getStructTypeName() const override { return {}; }
-    std::vector<const MockFieldBase*> getStructFields() const override { return {}; }
+    std::vector<const FieldBase*> getStructFields() const override { return {}; }
     void writeBufferErased(std::vector<char>& buffer, const void* owner) const override
     {
         const auto* bytes = static_cast<const char*>(owner) + offset;
@@ -110,9 +97,9 @@ struct EnumField final : MockFieldBase
     size_t num_bytes = 0;
 };
 
-struct StructField final : MockFieldBase
+struct StructField final : FieldBase
 {
-    StructField(std::string n, std::string t, std::vector<const MockFieldBase*> f, size_t off)
+    StructField(std::string n, std::string t, std::vector<const FieldBase*> f, size_t off)
         : name(std::move(n))
         , type_name(std::move(t))
         , fields(std::move(f))
@@ -127,7 +114,7 @@ struct StructField final : MockFieldBase
     cursor::EnumBackingKind getEnumBackingKind() const override { return cursor::EnumBackingKind::ui8; }
     std::vector<cursor::EnumMember> getEnumMembers() const override { return {}; }
     std::string getStructTypeName() const override { return type_name; }
-    std::vector<const MockFieldBase*> getStructFields() const override { return fields; }
+    std::vector<const FieldBase*> getStructFields() const override { return fields; }
     void writeBufferErased(std::vector<char>&, const void*) const override {}
     const void* getStructPtrErased(const void* owner) const override
     {
@@ -136,7 +123,7 @@ struct StructField final : MockFieldBase
 
     std::string name;
     std::string type_name;
-    std::vector<const MockFieldBase*> fields;
+    std::vector<const FieldBase*> fields;
     size_t offset = 0;
 };
 
@@ -147,7 +134,7 @@ struct Header
 
     struct ArgosCollector
     {
-        std::vector<const MockFieldBase*> getFields() const
+        std::vector<const FieldBase*> getFields() const
         {
             static const PodField seq{
                 "seq", "uint32_t", cursor::PodTypeKind::ui32, offsetof(Header, seq), sizeof(Header::seq)
@@ -179,7 +166,7 @@ struct Metadata
 
     struct ArgosCollector
     {
-        std::vector<const MockFieldBase*> getFields() const
+        std::vector<const FieldBase*> getFields() const
         {
             static const PodField trace_id{
                 "trace_id", "uint64_t", cursor::PodTypeKind::ui64, offsetof(Metadata, trace_id), sizeof(Metadata::trace_id)
@@ -216,12 +203,11 @@ public:
     void setMetadata(const Metadata& v) { metadata = v; }
 
     struct ArgosCollector
+        : simdb::collection::cursor::ArgosCollectorBase<Packet>
     {
-        std::vector<const MockFieldBase*> getFields() const
+        std::vector<const FieldBase*> getFields() const
         {
-            static const PodField timestamp{
-                "timestamp", "double", cursor::PodTypeKind::d, offsetof(Packet, timestamp), sizeof(Packet::timestamp)
-            };
+            auto fields = simdb::collection::cursor::ArgosCollectorBase<Packet>::getFields();
 
             static const PodField header_seq{
                 "seq", "uint32_t", cursor::PodTypeKind::ui32, offsetof(Header, seq), sizeof(Header::seq)
@@ -262,8 +248,12 @@ public:
                 offsetof(Packet, metadata)
             };
 
-            return {&timestamp, &header, &metadata};
+            fields.push_back(&header);
+            fields.push_back(&metadata);
+            return fields;
         }
+
+        ARGOS_COLLECT(timestamp, &Packet::getTimestamp);
     };
 };
 

@@ -297,7 +297,11 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
             };
         };
 
-        typename value_t::ArgosCollector collector;
+        // IMPORTANT: Writers stored in the hierarchy may capture field pointers.
+        // To keep those pointers valid beyond this function, the collector must
+        // outlive the returned DataTypeHierarchy. For now, keep one static
+        // collector instance per collected type.
+        static typename value_t::ArgosCollector collector;
         node.write_erased = populate_children(node,
                                               collector.getFields(),
                                               populate_children);
