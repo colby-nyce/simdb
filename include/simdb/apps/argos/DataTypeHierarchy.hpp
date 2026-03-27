@@ -1,12 +1,13 @@
 #pragma once
 
 #include "simdb/utils/Demangle.hpp"
+#include "simdb/utils/MoveOnlyFunction.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
 #include <algorithm>
 #include <cstdint>
-#include <functional>
 #include <memory>
+#include <utility>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -14,6 +15,9 @@
 #include <vector>
 
 namespace simdb::collection {
+
+using WriteErased =
+    simdb::utils::MoveOnlyFunction<void(std::vector<char>&, const void*)>;
 
 enum class NodeKind
 {
@@ -72,7 +76,7 @@ struct DataTypeNode
     std::unique_ptr<PodTypeKind> pod_type;
     std::unique_ptr<EnumMeta> enum_meta;
     std::vector<std::unique_ptr<DataTypeNode>> children;
-    std::function<void(std::vector<char>&, const void*)> write_erased;
+    WriteErased write_erased;
 
     // Set by DataTypeInspector::connect(). Used by string writers.
     TinyStrings<>* tiny_strings = nullptr;
@@ -265,10 +269,8 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
 
         auto populate_children = [&](DataTypeNode& parent,
                                      const auto& fields,
-                                     auto&& self) -> std::function<void(std::vector<char>&, const void*)>
+                                     auto&& self) -> WriteErased
         {
-            std::vector<std::function<void(std::vector<char>&, const void*)>> child_writers;
-
             for (const auto* field : fields)
             {
                 if (field == nullptr)
@@ -299,7 +301,8 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                     auto nested_writer = self(*child, field->getStructFields(), self);
                     active_struct_stack.pop_back();
 
-                    child->write_erased = [field, nested_writer](std::vector<char>& buffer, const void* parent_void) {
+                    child->write_erased = [field, nested_writer = std::move(nested_writer)](
+                        std::vector<char>& buffer, const void* parent_void) {
                         const auto nested_ptr = field->getStructPtrErased(parent_void);
                         if (nested_ptr == nullptr)
                         {
@@ -307,7 +310,6 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                         }
                         nested_writer(buffer, nested_ptr);
                     };
-                    child_writers.emplace_back(child->write_erased);
                 }
                 else if (field->isEnumField())
                 {
@@ -319,7 +321,6 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                     child->write_erased = [field](std::vector<char>& buffer, const void* parent_void) {
                         field->writeBufferErased(buffer, parent_void);
                     };
-                    child_writers.emplace_back(child->write_erased);
                 }
                 else
                 {
@@ -329,16 +330,18 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                     child->write_erased = [field](std::vector<char>& buffer, const void* parent_void) {
                         field->writeBufferErased(buffer, parent_void);
                     };
-                    child_writers.emplace_back(child->write_erased);
                 }
 
                 parent.children.emplace_back(std::move(child));
             }
 
-            return [child_writers](std::vector<char>& buffer, const void* owner_void) {
-                for (const auto& writer : child_writers)
+            return [&parent](std::vector<char>& buffer, const void* owner_void) {
+                for (const auto& ch : parent.children)
                 {
-                    writer(buffer, owner_void);
+                    if (ch->write_erased)
+                    {
+                        ch->write_erased(buffer, owner_void);
+                    }
                 }
             };
         };
