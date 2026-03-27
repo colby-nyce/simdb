@@ -29,11 +29,13 @@ public:
         (void)backing_kind;
         (void)name_value_pairs;
     }
-    virtual void visitStructVariable(const std::string& struct_name,
-                                     const std::string& parent_struct_name)
+    virtual void visitStructVariable(const std::string& struct_name)
     {
         (void)struct_name;
-        (void)parent_struct_name;
+    }
+    virtual void endVisitStructVariable(const std::string& struct_name)
+    {
+        (void)struct_name;
     }
 };
 
@@ -115,9 +117,13 @@ private:
         else if (node.kind == NodeKind::Struct)
         {
             const std::string struct_name = node.field_name.empty() ? node.type_name : node.field_name;
-            const std::string parent_struct_name =
-                (node.parent && node.parent->kind == NodeKind::Struct) ? node.parent->type_name : "";
-            visitor.visitStructVariable(struct_name, parent_struct_name);
+            visitor.visitStructVariable(struct_name);
+            for (const auto& child : node.children)
+            {
+                visitRecursive_(*child, visitor);
+            }
+            visitor.endVisitStructVariable(struct_name);
+            return;
         }
 
         for (const auto& child : node.children)
