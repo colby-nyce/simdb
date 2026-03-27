@@ -12,8 +12,33 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 namespace simdb::collection {
+
+namespace detail {
+
+/// Strip one level of smart pointer (and raw pointer) so container \c value_types like
+/// \c std::shared_ptr<T> register the same data-type schema as \c T.
+template <typename T>
+struct dtype_register_element {
+    using type = std::remove_cv_t<std::remove_reference_t<T>>;
+};
+
+template <typename T>
+struct dtype_register_element<std::shared_ptr<T>> : dtype_register_element<T>
+{};
+
+template <typename T>
+struct dtype_register_element<std::unique_ptr<T>> : dtype_register_element<T>
+{};
+
+template <typename T>
+struct dtype_register_element<T*> : dtype_register_element<T>
+{};
+
+} // namespace detail
 
 constexpr inline size_t DEFAULT_HEARTBEAT = 10;
 
@@ -115,7 +140,8 @@ public:
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<AutoContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, container, expected_capacity);
         collection->addCollectable(path, collectable, true /*auto collect*/);
-        dtype_inspector_.registerType<typename ContainerT::value_type>();
+        dtype_inspector_
+            .registerType<typename detail::dtype_register_element<typename ContainerT::value_type>::type>();
         return collectable;
     }
 
@@ -130,7 +156,8 @@ public:
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<ContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, expected_capacity);
         collection->addCollectable(path, collectable, false /*manually collect*/);
-        dtype_inspector_.registerType<typename ContainerT::value_type>();
+        dtype_inspector_
+            .registerType<typename detail::dtype_register_element<typename ContainerT::value_type>::type>();
         return collectable;
     }
 
@@ -168,6 +195,8 @@ private:
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
+        dtype_inspector_.bindDatabase(db_mgr);
+
         // Write data types and their hierarchies (structs / nested structs)
         DataTypeSerializer::serialize(&dtype_inspector_, db_mgr);
     }
@@ -175,8 +204,8 @@ private:
     /// \brief Called when handling the app's preTeardown()
     void onCollectionStopping(DatabaseManager* db_mgr) override
     {
-        // TODO cnyce
         (void)db_mgr;
+        dtype_inspector_.teardown();
     }
 
     /// \brief Called when handling the app's postTeardown()
@@ -191,7 +220,6 @@ private:
     std::map<std::string, std::unique_ptr<Collection>> clk_collections_;
     std::map<std::string, size_t> clk_periods_;
     std::unordered_set<std::string> all_collectable_paths_;
-    std::unique_ptr<TinyStrings<>> tiny_strings_;
     DataTypeInspector dtype_inspector_;
 };
 

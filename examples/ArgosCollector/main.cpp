@@ -2,7 +2,11 @@
 #include "SimDBTester.hpp"
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collections.hpp"
+#include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include "simdb/apps/argos/EnumSerializer.hpp"
 #include "simdb/utils/Tree.hpp"
+
+#include <vector>
 
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
@@ -10,14 +14,18 @@ TEST_INIT;
 // Template specializations
 namespace simdb::collection {
 
-template <> void defineEnumMap<Colors>(std::map<std::string, int>& map)
+template <>
+struct EnumDescriptor<simdb::Colors>
 {
-    map["RED"] = 1;
-    map["GREEN"] = 2;
-    map["BLUE"] = 3;
-    map["WHITE"] = 0;
-    map["TRANSPARENT"] = -1;
-}
+    static std::vector<EnumMember> members()
+    {
+        return {{"RED", 1},
+                {"GREEN", 2},
+                {"BLUE", 3},
+                {"WHITE", 0},
+                {"TRANSPARENT", -1}};
+    }
+};
 
 } // namespace simdb::collection
 
@@ -144,10 +152,10 @@ int main(int argc, char** argv)
 
     public:
         int getInt() const { return intval_; }
-        std::string* getString() { return &strval_; }
-        std::shared_ptr<simdb::Colors> getColor() const { return std::make_shared<simdb::Colors>(color_); }
+        const std::string& getString() const { return strval_; }
+        simdb::Colors getColor() const { return color_; }
 
-        class ArgosCollector : public simdb::collection::StructCollector<Packet>
+        class ArgosCollector : public simdb::collection::ArgosCollectorBase<Packet>
         {
         public:
             ARGOS_COLLECT(intval, &Packet::getInt);

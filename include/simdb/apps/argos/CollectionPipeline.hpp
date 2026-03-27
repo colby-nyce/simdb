@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
+#include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::collection {
 
@@ -144,7 +145,7 @@ public:
 
     /// \brief Return the string intern table used when mapping string values to stable integer IDs for storage.
     /// \return Pointer to the owned \ref TinyStrings instance (valid for the app lifetime).
-    TinyStrings<>* getTinyStrings()
+    simdb::TinyStrings<>* getTinyStrings()
     {
         return &tiny_strings_;
     }
@@ -169,7 +170,7 @@ public:
 
 private:
     DatabaseManager *const db_mgr_;
-    TinyStrings<> tiny_strings_;
+    simdb::TinyStrings<> tiny_strings_;
     CollectionPipelineMeta* meta_handler_ = nullptr;
 };
 

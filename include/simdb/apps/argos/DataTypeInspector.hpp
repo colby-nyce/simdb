@@ -5,6 +5,7 @@
 #include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -65,18 +66,37 @@ public:
 class DataTypeInspector
 {
 public:
+    DataTypeInspector() = default;
+
     explicit DataTypeInspector(DatabaseManager* db_mgr)
-        : tiny_strings_(db_mgr)
-    {}
+    {
+        bindDatabase(db_mgr);
+    }
+
+    void bindDatabase(DatabaseManager* db_mgr)
+    {
+        if (db_mgr == nullptr || tiny_strings_)
+        {
+            return;
+        }
+        tiny_strings_ = std::make_unique<simdb::TinyStrings<>>(db_mgr);
+        for (const auto& [_, hier] : root_hierarchies_)
+        {
+            injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
+        }
+    }
 
     ~DataTypeInspector()
     {
-        if (auto count = tiny_strings_.getUnserializedCount(); count != 0)
+        if (tiny_strings_)
         {
-            std::cout << "WARNING: There " << (count == 1 ? "was" : "were")
-                      << count << " string" << (count == 1 ? "" : "s")
-                      << " not written to the database when a DataTypeInspector"
-                      << " was destroyed." << std::endl;
+            if (auto count = tiny_strings_->getUnserializedCount(); count != 0)
+            {
+                std::cout << "WARNING: There " << (count == 1 ? "was" : "were")
+                          << count << " string" << (count == 1 ? "" : "s")
+                          << " not written to the database when a DataTypeInspector"
+                          << " was destroyed." << std::endl;
+            }
         }
     }
 
@@ -87,15 +107,15 @@ public:
         const auto type_name = simdb::demangle_type<value_t>();
         if (root_hierarchies_.count(type_name))
         {
-            return std::dynamic_pointer_cast<std::shared_ptr<DataTypeHierarchy<Type>>>(
+            return std::dynamic_pointer_cast<DataTypeHierarchy<Type>>(
                 root_hierarchies_.at(type_name));
         }
 
         std::shared_ptr<DataTypeHierarchy<Type>> hier = createDataTypeHier<value_t>();
-        injectTinyStringsIntoFields_(hier->getRoot(), &tiny_strings_);
+        injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
         root_hierarchies_.emplace(type_name, hier);
 
-        return std::dynamic_pointer_cast<std::shared_ptr<DataTypeHierarchy<Type>>>(hier);
+        return hier;
     }
 
     void acceptVisitor(DataTypeNodeVisitor* visitor) const
@@ -114,7 +134,10 @@ public:
 
     void teardown()
     {
-        tiny_strings_.serialize();
+        if (tiny_strings_)
+        {
+            tiny_strings_->serialize();
+        }
     }
 
 private:
@@ -173,7 +196,7 @@ private:
     }
 
     std::map<std::string, std::shared_ptr<DataTypeHierarchyBase>> root_hierarchies_;
-    simdb::TinyStrings<> tiny_strings_;
+    std::unique_ptr<simdb::TinyStrings<>> tiny_strings_;
 };
 
 } // namespace simdb::collection
