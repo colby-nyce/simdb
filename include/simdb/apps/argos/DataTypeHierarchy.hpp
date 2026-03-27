@@ -203,7 +203,6 @@ class DataTypeHierarchyBase
 public:
     virtual ~DataTypeHierarchyBase() = default;
     virtual const DataTypeNode& getRoot() const = 0;
-    virtual void setTinyStrings(TinyStrings<>*) = 0;
 };
 
 template <typename RootT>
@@ -213,11 +212,6 @@ public:
     const DataTypeNode& getRoot() const override
     {
         return root_;
-    }
-
-    void setTinyStrings(TinyStrings<>* tiny_strings) override
-    {
-        setTinyStringsRecursive_(root_, tiny_strings);
     }
 
     void writeBuffer(std::vector<char>& buffer, const RootT* value) const
@@ -237,15 +231,6 @@ private:
     friend std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier();
 
     DataTypeNode root_;
-
-    static void setTinyStringsRecursive_(DataTypeNode& node, TinyStrings<>* tiny_strings)
-    {
-        node.tiny_strings = tiny_strings;
-        for (auto& child : node.children)
-        {
-            setTinyStringsRecursive_(*child, tiny_strings);
-        }
-    }
 };
 
 template <typename T>

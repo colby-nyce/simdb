@@ -40,6 +40,10 @@ public:
 class DataTypeInspector
 {
 public:
+    explicit DataTypeInspector(DatabaseManager* db_mgr)
+        : tiny_strings_(db_mgr)
+    {}
+
     template <typename Type>
     void registerType()
     {
@@ -51,6 +55,7 @@ public:
         }
 
         auto hier = createDataTypeHier<value_t>();
+        injectTinyStringsIntoFields_(hier->getRoot(), &tiny_strings_);
         root_hierarchies_.emplace(type_name, std::move(hier));
     }
 
@@ -63,16 +68,6 @@ public:
         for (const auto& [_, hier] : root_hierarchies_)
         {
             visitRecursive_(hier->getRoot(), *visitor);
-        }
-    }
-
-    void connect(simdb::DatabaseManager* db_mgr)
-    {
-        tiny_strings_ = std::make_unique<simdb::TinyStrings<>>(db_mgr);
-        for (auto& [_, hier] : root_hierarchies_)
-        {
-            hier->setTinyStrings(tiny_strings_.get());
-            injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
         }
     }
 
@@ -121,7 +116,7 @@ private:
     }
 
     static void injectTinyStringsIntoFields_(const DataTypeNode& node,
-                                             TinyStrings<false>* tiny_strings)
+                                             TinyStrings<>* tiny_strings)
     {
         if (node.source_field)
         {
