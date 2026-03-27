@@ -51,10 +51,6 @@ public:
         }
 
         auto hier = createDataTypeHier<value_t>();
-        if (tiny_strings_)
-        {
-            hier->setTinyStrings(tiny_strings_.get());
-        }
         root_hierarchies_.emplace(type_name, std::move(hier));
     }
 
