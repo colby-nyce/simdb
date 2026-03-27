@@ -100,7 +100,8 @@ inline const char* podTypeKindToTypeName(PodTypeKind kind)
     case PodTypeKind::logical: return "bool";
     case PodTypeKind::str: return "std::string";
     }
-    return "unknown";
+    throw DBException("Unknown data type");
+    return nullptr;
 }
 
 namespace detail {
@@ -194,6 +195,7 @@ struct EnumDescriptor
 {
     static std::vector<EnumMember> members()
     {
+        static_assert(false, "Must specialize this template for your enum");
         return {};
     }
 };
@@ -234,7 +236,7 @@ private:
 };
 
 template <typename T>
-std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier()
+inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier()
 {
     using value_t = detail::remove_cvref_t<T>;
     auto hier = std::make_unique<DataTypeHierarchy<value_t>>();
