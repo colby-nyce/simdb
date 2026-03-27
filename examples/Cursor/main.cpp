@@ -85,21 +85,21 @@ struct Metadata
 
 class Packet
 {
-    double timestamp = 0;
-    Header header;
-    Metadata metadata;
-    std::string source;
+    double timestamp_ = 0;
+    Header header_;
+    Metadata metadata_;
+    std::string source_;
 
 public:
-    double getTimestamp() const { return timestamp; }
-    const Header& getHeader() const { return header; }
-    const Metadata& getMetadata() const { return metadata; }
-    const std::string& getSource() const { return source; }
+    double getTimestamp() const { return timestamp_; }
+    const Header& getHeader() const { return header_; }
+    const Metadata& getMetadata() const { return metadata_; }
+    std::string getSource() const { return source_; }
 
-    void setTimestamp(double v) { timestamp = v; }
-    void setHeader(const Header& v) { header = v; }
-    void setMetadata(const Metadata& v) { metadata = v; }
-    void setSource(const std::string& v) { source = v; }
+    void setTimestamp(double v) { timestamp_ = v; }
+    void setHeader(const Header& v) { header_ = v; }
+    void setMetadata(const Metadata& v) { metadata_ = v; }
+    void setSource(const std::string& v) { source_ = v; }
 
     struct ArgosCollector : simdb::collection::ArgosCollectorBase<Packet>
     {
