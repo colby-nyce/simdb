@@ -1,12 +1,9 @@
-// <DataTypeInspector.hpp> -*- C++ -*-
-
 #pragma once
 
-#include "simdb/apps/argos/SerializedTreeNode.hpp"
-#include "simdb/apps/argos/SimpleTypesSerializer.hpp"
-#include "simdb/apps/argos/EnumSerializer.hpp"
-#include "simdb/apps/argos/StructSerializer.hpp"
+#include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include "simdb/apps/argos/ArgosCollect.hpp"
 #include "simdb/utils/Demangle.hpp"
+#include "simdb/utils/TinyStrings.hpp"
 
 #include <map>
 #include <memory>
@@ -15,100 +12,92 @@
 
 namespace simdb::collection {
 
-/// \class DTypeHandler
-/// \brief TODO cnyce
-class DTypeHandler
+class DataTypeNodeVisitor
 {
 public:
-    virtual ~DTypeHandler() = default;
-    virtual void applyVisitor(DataTypeVisitor* visitor) const = 0;
+    virtual ~DataTypeNodeVisitor() = default;
+    virtual void visit(const DataTypeNode& node, int depth) = 0;
 };
 
-/// \class SimpleDTypeHandler
-/// \brief TODO cnyce
-template <typename SimpleTypeT>
-class SimpleDTypeHandler : public DTypeHandler
-{
-public:
-    void applyVisitor(DataTypeVisitor* visitor) const override final
-    {
-        visitor->visitSimpleType(simple_type<SimpleTypeT>::type_enum);
-    }
-};
-
-/// \class EnumHandler
-/// \brief TODO cnyce
-template <typename EnumT>
-class EnumHandler : public DTypeHandler
-{
-public:
-    void applyVisitor(DataTypeVisitor* visitor) const override final
-    {
-        using int_t = std::underlying_type_t<EnumT>;
-        visitor->visitEnum(demangle_type<EnumT>(), enum_type<int_t>::type_enum);
-    }
-};
-
-/// \class StructHandler
-/// \brief TODO cnyce
-template <typename StructT>
-class StructHandler : public DTypeHandler
-{
-public:
-    void applyVisitor(DataTypeVisitor* visitor) const override final
-    {
-        auto struct_name = demangle_type<StructT>();
-        visitor->visitStruct(struct_name);
-
-        using collector_t = typename StructT::ArgosCollector;
-        collector_t collector;
-        collector.applyVisitor(visitor);
-    }
-};
-
-/// \class DataTypeInspector
-/// \brief TODO cnyce
 class DataTypeInspector
 {
 public:
-    /// \brief TODO cnyce
     template <typename Type>
     void registerType()
     {
-        using value_type = type_traits::remove_any_pointer_t<Type>;
-        auto type_name = demangle_type<value_type>();
-        auto& handler = root_dtype_handlers_[type_name];
-        if (!handler)
+        using value_t = std::remove_cv_t<std::remove_reference_t<Type>>;
+        const auto type_name = simdb::demangle_type<value_t>();
+        if (root_hierarchies_.count(type_name))
         {
-            if constexpr (std::is_enum_v<value_type>)
-            {
-                handler = std::make_unique<EnumHandler<value_type>>();
-            }
-            else if constexpr (std::is_trivial_v<value_type> && std::is_standard_layout_v<value_type>)
-            {
-                handler = std::make_unique<SimpleDTypeHandler<value_type>>();
-            }
-            else
-            {
-                handler = std::make_unique<StructHandler<value_type>>();
-            }
+            return;
+        }
+
+        auto hier = createDataTypeHier<value_t>();
+        if (tiny_strings_)
+        {
+            hier->setTinyStrings(tiny_strings_.get());
+        }
+        root_hierarchies_.emplace(type_name, std::move(hier));
+    }
+
+    void acceptVisitor(DataTypeNodeVisitor* visitor) const
+    {
+        if (!visitor)
+        {
+            return;
+        }
+        for (const auto& [_, hier] : root_hierarchies_)
+        {
+            visitRecursive_(hier->getRoot(), *visitor, 0);
         }
     }
 
-    void applyVisitor(DataTypeVisitor* visitor) const
+    void connect(simdb::DatabaseManager* db_mgr)
     {
-        for (auto& [dtype_name, dtype_handler] : root_dtype_handlers_)
+        tiny_strings_ = std::make_unique<simdb::TinyStrings<>>(db_mgr);
+        for (auto& [_, hier] : root_hierarchies_)
         {
-            dtype_handler->applyVisitor(visitor);
+            hier->setTinyStrings(tiny_strings_.get());
+            injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
         }
     }
 
-    void serialize(DatabaseManager*)
+    void teardown()
     {
+        if (tiny_strings_)
+        {
+            tiny_strings_->serialize();
+        }
     }
 
 private:
-    std::map<std::string, std::unique_ptr<DTypeHandler>> root_dtype_handlers_;
+    static void visitRecursive_(const DataTypeNode& node,
+                                DataTypeNodeVisitor& visitor,
+                                int depth)
+    {
+        visitor.visit(node, depth);
+        for (const auto& child : node.children)
+        {
+            visitRecursive_(*child, visitor, depth + 1);
+        }
+    }
+
+    static void injectTinyStringsIntoFields_(const DataTypeNode& node,
+                                             ::simdb::TinyStrings<false>* tiny_strings)
+    {
+        if (node.source_field)
+        {
+            auto* field = static_cast<ArgosFieldBase*>(node.source_field);
+            field->setTinyStrings(tiny_strings);
+        }
+        for (const auto& child : node.children)
+        {
+            injectTinyStringsIntoFields_(*child, tiny_strings);
+        }
+    }
+
+    std::map<std::string, std::unique_ptr<DataTypeHierarchyBase>> root_hierarchies_;
+    std::unique_ptr<simdb::TinyStrings<>> tiny_strings_;
 };
 
 } // namespace simdb::collection

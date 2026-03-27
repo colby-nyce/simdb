@@ -194,36 +194,20 @@ private:
     /// \brief Called when handling the app's postInit()
     void onCollectionStarting(DatabaseManager* db_mgr) override
     {
+        // Write heartbeat
+        db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
+
+        /*
+        // Extract all information about collected data types
+        dtype_inspector_.serialize(db_mgr);
+
         // Create TinyStrings and give it to the collections
         tiny_strings_ = std::make_unique<TinyStrings<>>(db_mgr);
         for (const auto & [clk_name, collection] : clk_collections_)
         {
             collection->setTinyStrings(tiny_strings_.get());
         }
-
-        // Write heartbeat
-        db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
-
-        // Extract all information about collected data types
-        dtype_inspector_.serialize(db_mgr);
-
-        // Create the elements tree. Start with every collectable path:
-        //   top.mid.bottom.int_foo
-        //   top.mid.bottom.string_bar
-        //
-        // Tree:
-        //
-        //   top
-        //     mid
-        //       bottom
-        //         int_foo
-        //         string_bar
-        //SerializedTree element_tree(std::in_place_type<ElementTreeNode>, "root");
-        //for (const auto& path : all_collectable_paths_)
-        //{
-        //    element_tree.createNodes<ElementTreeNode>(path);
-        //}
-        //element_tree.serialize(db_mgr);
+        */
     }
 
     /// \brief Called when handling the app's preTeardown()

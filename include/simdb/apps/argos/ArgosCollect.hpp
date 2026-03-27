@@ -2,6 +2,7 @@
 
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 #include "simdb/utils/Demangle.hpp"
+#include "simdb/utils/TinyStrings.hpp"
 
 #include <functional>
 #include <memory>
@@ -10,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace simdb::collection::cursor {
+namespace simdb::collection {
 
 class ArgosFieldBase
 {
@@ -27,6 +28,7 @@ public:
     virtual std::vector<const ArgosFieldBase*> getStructFields() const = 0;
     virtual void writeBufferErased(std::vector<char>&, const void*) const = 0;
     virtual const void* getStructPtrErased(const void*) const = 0;
+    virtual void setTinyStrings(::simdb::TinyStrings<>*) {}
 };
 
 template <typename CollectedT>
@@ -94,7 +96,7 @@ class ArgosPodField final : public ArgosFieldBase
 public:
     ArgosPodField(ArgosCollectorBase<OwnerT>* owner, const char* name)
         : name_(name)
-        , type_name_(simdb::demangle_type<value_t>())
+        , type_name_(::simdb::demangle_type<value_t>())
     {
         static_assert(!std::is_enum_v<value_t>, "ArgosPodField only supports POD (non-enum) fields");
         owner->addField_(this);
@@ -114,16 +116,32 @@ public:
     void writeBufferErased(std::vector<char>& buffer, const void* owner_void) const override
     {
         const auto* owner = static_cast<const OwnerT*>(owner_void);
-        value_t v = static_cast<value_t>(std::invoke(Getter, owner));
-        const auto* bytes = reinterpret_cast<const char*>(&v);
-        buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
+        if constexpr (std::is_same_v<value_t, std::string>)
+        {
+            if (tiny_strings_ == nullptr)
+            {
+                throw DBException("TinyStrings not set before string collection");
+            }
+            const auto& s = std::invoke(Getter, owner);
+            const uint32_t id = tiny_strings_->getStringID(s);
+            const auto* bytes = reinterpret_cast<const char*>(&id);
+            buffer.insert(buffer.end(), bytes, bytes + sizeof(id));
+        }
+        else
+        {
+            value_t v = static_cast<value_t>(std::invoke(Getter, owner));
+            const auto* bytes = reinterpret_cast<const char*>(&v);
+            buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
+        }
     }
 
     const void* getStructPtrErased(const void*) const override { return nullptr; }
+    void setTinyStrings(::simdb::TinyStrings<>* tiny_strings) override { tiny_strings_ = tiny_strings; }
 
 private:
     std::string name_;
     std::string type_name_;
+    ::simdb::TinyStrings<>* tiny_strings_ = nullptr;
 };
 
 // Enum: getter returns enum type; bytes are the underlying integral representation.
@@ -138,7 +156,7 @@ class ArgosEnumField final : public ArgosFieldBase
 public:
     ArgosEnumField(ArgosCollectorBase<OwnerT>* owner, const char* name)
         : name_(name)
-        , type_name_(simdb::demangle_type<enum_t>())
+        , type_name_(::simdb::demangle_type<enum_t>())
     {
         static_assert(std::is_enum_v<enum_t>, "ArgosEnumField requires an enum getter return type");
         owner->addField_(this);
@@ -185,7 +203,7 @@ class ArgosStructField final : public ArgosFieldBase
 public:
     ArgosStructField(ArgosCollectorBase<OwnerT>* owner, const char* name)
         : name_(name)
-        , struct_type_name_(simdb::demangle_type<nested_t>())
+        , struct_type_name_(::simdb::demangle_type<nested_t>())
     {
         static_assert(!std::is_enum_v<nested_t>, "Use ARGOS_COLLECT_ENUM for enum fields");
         static_assert(detail::has_nested_argos_collector_v<nested_t>,
@@ -229,7 +247,7 @@ private:
     std::string struct_type_name_;
 };
 
-} // namespace simdb::collection::cursor
+} // namespace simdb::collection
 
 // Macro glue
 #define ARGOS_COLLECT_CAT_(a, b) a##b
@@ -237,14 +255,14 @@ private:
 
 // POD-only: registers one getter-based scalar field in the owning ArgosCollector.
 #define ARGOS_COLLECT(field_name, getter_ptr)                                                 \
-    simdb::collection::cursor::ArgosPodField<collected_type, getter_ptr>                      \
+    simdb::collection::ArgosPodField<collected_type, getter_ptr>                              \
         ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name};
 
 #define ARGOS_COLLECT_ENUM(field_name, getter_ptr)                                            \
-    simdb::collection::cursor::ArgosEnumField<collected_type, getter_ptr>                     \
+    simdb::collection::ArgosEnumField<collected_type, getter_ptr>                             \
         ARGOS_COLLECT_CAT(argos_collect_enum_, __COUNTER__){this, #field_name};
 
 #define ARGOS_COLLECT_STRUCT(field_name, getter_ptr)                                          \
-    simdb::collection::cursor::ArgosStructField<collected_type, getter_ptr>                  \
+    simdb::collection::ArgosStructField<collected_type, getter_ptr>                           \
         ARGOS_COLLECT_CAT(argos_collect_struct_, __COUNTER__){this, #field_name};
 

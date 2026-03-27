@@ -60,20 +60,6 @@ public:
         return paths;
     }
 
-    /// \brief Once the CollectionPipeline is available (i.e. the
-    /// database is created), the TinyStrings is available. All
-    /// collectables that have strings in their data types will
-    /// turn the strings into ints, and the mapping automatically
-    /// gets added to the database
-    void setTinyStrings(TinyStrings<>* tiny_strings)
-    {
-        assert(tiny_strings != nullptr);
-        for (auto& collectable : all_collectables_)
-        {
-            collectable->setTinyStrings(tiny_strings);
-        }
-    }
-
     /// \brief Enable collection for the given collectable
     void enableCollection(CollectableBase* collectable)
     {

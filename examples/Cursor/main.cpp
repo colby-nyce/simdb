@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace cursor = simdb::collection::cursor;
+namespace collection = simdb::collection;
 
 namespace {
 
@@ -40,7 +40,7 @@ struct Header
     uint32_t getSeq() const { return seq; }
     Status getStatus() const { return status; }
 
-    struct ArgosCollector : simdb::collection::cursor::ArgosCollectorBase<Header>
+    struct ArgosCollector : simdb::collection::ArgosCollectorBase<Header>
     {
         ARGOS_COLLECT(seq, &Header::getSeq);
         ARGOS_COLLECT_ENUM(status, &Header::getStatus);
@@ -57,7 +57,7 @@ struct Metadata
     bool getValid() const { return valid; }
     Priority getPriority() const { return priority; }
 
-    struct ArgosCollector : simdb::collection::cursor::ArgosCollectorBase<Metadata>
+    struct ArgosCollector : simdb::collection::ArgosCollectorBase<Metadata>
     {
         ARGOS_COLLECT(trace_id, &Metadata::getTraceId);
         ARGOS_COLLECT(valid, &Metadata::getValid);
@@ -80,7 +80,7 @@ public:
     void setHeader(const Header& v) { header = v; }
     void setMetadata(const Metadata& v) { metadata = v; }
 
-    struct ArgosCollector : simdb::collection::cursor::ArgosCollectorBase<Packet>
+    struct ArgosCollector : simdb::collection::ArgosCollectorBase<Packet>
     {
         ARGOS_COLLECT(timestamp, &Packet::getTimestamp);
         ARGOS_COLLECT_STRUCT(header, &Packet::getHeader);
@@ -90,7 +90,7 @@ public:
 
 } // namespace
 
-namespace simdb::collection::cursor {
+namespace simdb::collection {
 
 template <>
 struct EnumDescriptor<Status>
@@ -110,48 +110,48 @@ struct EnumDescriptor<Priority>
     }
 };
 
-} // namespace simdb::collection::cursor
+} // namespace simdb::collection
 
 int main()
 {
-    auto pod = cursor::createDataTypeHier<int16_t>();
-    if (pod->getRoot().kind != cursor::NodeKind::Pod || !pod->getRoot().pod_type ||
-        *pod->getRoot().pod_type != cursor::PodTypeKind::i16)
+    auto pod = collection::createDataTypeHier<int16_t>();
+    if (pod->getRoot().kind != collection::NodeKind::Pod || !pod->getRoot().pod_type ||
+        *pod->getRoot().pod_type != collection::PodTypeKind::i16)
     {
         std::cerr << "POD hierarchy test failed\n";
         return 1;
     }
 
-    auto en = cursor::createDataTypeHier<Status>();
-    if (en->getRoot().kind != cursor::NodeKind::Enum || !en->getRoot().enum_meta)
+    auto en = collection::createDataTypeHier<Status>();
+    if (en->getRoot().kind != collection::NodeKind::Enum || !en->getRoot().enum_meta)
     {
         std::cerr << "Enum hierarchy test failed\n";
         return 1;
     }
-    if (en->getRoot().enum_meta->backing_kind != cursor::EnumBackingKind::ui8 ||
+    if (en->getRoot().enum_meta->backing_kind != collection::EnumBackingKind::ui8 ||
         en->getRoot().enum_meta->members.size() != 2)
     {
         std::cerr << "Enum metadata test failed\n";
         return 1;
     }
 
-    auto packet = cursor::createDataTypeHier<Packet>();
-    if (packet->getRoot().kind != cursor::NodeKind::Struct || packet->getRoot().children.size() != 3)
+    auto packet = collection::createDataTypeHier<Packet>();
+    if (packet->getRoot().kind != collection::NodeKind::Struct || packet->getRoot().children.size() != 3)
     {
         std::cerr << "Struct hierarchy root test failed\n";
         return 1;
     }
 
     const auto& ts = packet->getRoot().children[0];
-    if (ts->field_name != "timestamp" || ts->kind != cursor::NodeKind::Pod || !ts->pod_type ||
-        *ts->pod_type != cursor::PodTypeKind::d)
+    if (ts->field_name != "timestamp" || ts->kind != collection::NodeKind::Pod || !ts->pod_type ||
+        *ts->pod_type != collection::PodTypeKind::d)
     {
         std::cerr << "Timestamp field test failed\n";
         return 1;
     }
 
     const auto& header = packet->getRoot().children[1];
-    if (header->field_name != "header" || header->kind != cursor::NodeKind::Struct || header->children.size() != 2)
+    if (header->field_name != "header" || header->kind != collection::NodeKind::Struct || header->children.size() != 2)
     {
         std::cerr << "Nested struct test failed\n";
         return 1;
@@ -165,7 +165,7 @@ int main()
     }
 
     const auto& header_status = header->children[1];
-    if (header_status->field_name != "status" || header_status->kind != cursor::NodeKind::Enum ||
+    if (header_status->field_name != "status" || header_status->kind != collection::NodeKind::Enum ||
         !header_status->enum_meta || header_status->enum_meta->members.size() != 2)
     {
         std::cerr << "Nested enum field test failed\n";
@@ -173,14 +173,14 @@ int main()
     }
 
     const auto& metadata = packet->getRoot().children[2];
-    if (metadata->field_name != "metadata" || metadata->kind != cursor::NodeKind::Struct || metadata->children.size() != 3)
+    if (metadata->field_name != "metadata" || metadata->kind != collection::NodeKind::Struct || metadata->children.size() != 3)
     {
         std::cerr << "Metadata struct test failed\n";
         return 1;
     }
 
     const auto& metadata_priority = metadata->children[2];
-    if (metadata_priority->field_name != "priority" || metadata_priority->kind != cursor::NodeKind::Enum ||
+    if (metadata_priority->field_name != "priority" || metadata_priority->kind != collection::NodeKind::Enum ||
         !metadata_priority->enum_meta || metadata_priority->enum_meta->members.size() != 2)
     {
         std::cerr << "Metadata enum test failed\n";

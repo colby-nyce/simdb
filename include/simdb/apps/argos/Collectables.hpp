@@ -3,8 +3,6 @@
 #pragma once
 
 #include "simdb/apps/argos/ArgosRecord.hpp"
-//#include "simdb/apps/argos/DataTypesSerializer.hpp"
-#include "simdb/utils/TinyStrings.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 
 namespace simdb::collection {
@@ -19,12 +17,6 @@ public:
 
     /// Get the unique ID for this collection point.
     uint16_t getID() const { return argos_record_.getID(); }
-
-    /// Give us access to the TinyStrings that will be used to serialize string/int mappings
-    void setTinyStrings(TinyStrings<>* tiny_strings)
-    {
-        tiny_strings_ = tiny_strings;
-    }
 
     /// Enable collection
     void enable();
@@ -68,17 +60,6 @@ protected:
     /// for as long as the Status isn't set to DONT_READ.
     ArgosRecord argos_record_{nextID_()};
 
-    /// Let subclasses ask for a string ID, while the TinyStrings keeps track
-    /// of the mapping for later serialization.
-    int getStringID_(const std::string & s)
-    {
-        if (!tiny_strings_)
-        {
-            throw DBException("TinyStrings not set!");
-        }
-        return tiny_strings_->getStringID(s);
-    }
-
 private:
     /// Collection object that owns 'this' collectable
     Collection *const collection_;
@@ -90,10 +71,6 @@ private:
     /// that minification is simply an implementation detail
     /// for performance.
     const size_t heartbeat_;
-
-    /// Helper which keeps track of string-to-int mappings which
-    /// are serialized to the database.
-    TinyStrings<>* tiny_strings_ = nullptr;
 
     /// \brief Enabled flag
     bool enabled_ = true;

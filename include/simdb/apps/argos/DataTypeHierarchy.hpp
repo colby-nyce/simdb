@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simdb/utils/Demangle.hpp"
+#include "simdb/utils/TinyStrings.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -12,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace simdb::collection::cursor {
+namespace simdb::collection {
 
 enum class NodeKind
 {
@@ -46,7 +47,8 @@ enum class PodTypeKind
     ui64,
     d,
     f,
-    logical
+    logical,
+    str
 };
 
 struct EnumMember
@@ -70,6 +72,13 @@ struct DataTypeNode
     std::unique_ptr<EnumMeta> enum_meta;
     std::vector<std::unique_ptr<DataTypeNode>> children;
     std::function<void(std::vector<char>&, const void*)> write_erased;
+
+    // Set by DataTypeInspector::connect(). Used by string writers.
+    ::simdb::TinyStrings<>* tiny_strings = nullptr;
+
+    // Optional backpointer to the originating field descriptor.
+    // DataTypeInspector uses this to inject TinyStrings into field writers.
+    void* source_field = nullptr;
 };
 
 namespace detail {
@@ -107,6 +116,10 @@ constexpr PodTypeKind getPodTypeKind()
 {
     using value_t = remove_cvref_t<PodT>;
 
+    if constexpr (std::is_same_v<value_t, std::string>)
+    {
+        return PodTypeKind::str;
+    }
     if constexpr (std::is_same_v<value_t, char>)
     {
         return PodTypeKind::c;
@@ -163,13 +176,26 @@ struct EnumDescriptor
     }
 };
 
-template <typename RootT>
-class DataTypeHierarchy
+class DataTypeHierarchyBase
 {
 public:
-    const DataTypeNode& getRoot() const
+    virtual ~DataTypeHierarchyBase() = default;
+    virtual const DataTypeNode& getRoot() const = 0;
+    virtual void setTinyStrings(::simdb::TinyStrings<>*) = 0;
+};
+
+template <typename RootT>
+class DataTypeHierarchy : public DataTypeHierarchyBase
+{
+public:
+    const DataTypeNode& getRoot() const override
     {
         return root_;
+    }
+
+    void setTinyStrings(::simdb::TinyStrings<>* tiny_strings) override
+    {
+        setTinyStringsRecursive_(root_, tiny_strings);
     }
 
     void writeBuffer(std::vector<char>& buffer, const RootT* value) const
@@ -189,6 +215,15 @@ private:
     friend std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier();
 
     DataTypeNode root_;
+
+    static void setTinyStringsRecursive_(DataTypeNode& node, ::simdb::TinyStrings<>* tiny_strings)
+    {
+        node.tiny_strings = tiny_strings;
+        for (auto& child : node.children)
+        {
+            setTinyStringsRecursive_(*child, tiny_strings);
+        }
+    }
 };
 
 template <typename T>
@@ -197,7 +232,7 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
     using value_t = detail::remove_cvref_t<T>;
     auto hier = std::make_unique<DataTypeHierarchy<value_t>>();
     auto& node = hier->root_;
-    node.type_name = simdb::demangle_type<value_t>();
+    node.type_name = ::simdb::demangle_type<value_t>();
 
     if constexpr (std::is_enum_v<value_t>)
     {
@@ -235,6 +270,7 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
                 auto child = std::make_unique<DataTypeNode>();
                 child->field_name = field->getName();
                 child->type_name = field->getTypeName();
+                child->source_field = const_cast<void*>(static_cast<const void*>(field));
 
                 if (field->isStructField())
                 {
@@ -245,7 +281,7 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
                                   active_struct_stack.end(),
                                   child->type_name) != active_struct_stack.end())
                     {
-                        throw std::runtime_error(
+                        throw DBException(
                             "Recursive struct cycle detected while building data type hierarchy");
                     }
 
@@ -310,11 +346,27 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
     {
         node.kind = NodeKind::Pod;
         node.pod_type = std::make_unique<PodTypeKind>(detail::getPodTypeKind<value_t>());
-        node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
-            const auto* value = static_cast<const value_t*>(value_void);
-            const auto* bytes = reinterpret_cast<const char*>(value);
-            buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
-        };
+        if constexpr (std::is_same_v<value_t, std::string>)
+        {
+            node.write_erased = [&node](std::vector<char>& buffer, const void* value_void) {
+                if (node.tiny_strings == nullptr)
+                {
+                    throw DBException("TinyStrings not set before string collection");
+                }
+                const auto* s = static_cast<const value_t*>(value_void);
+                const uint32_t id = node.tiny_strings->getStringID(*s);
+                const auto* bytes = reinterpret_cast<const char*>(&id);
+                buffer.insert(buffer.end(), bytes, bytes + sizeof(id));
+            };
+        }
+        else
+        {
+            node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
+                const auto* value = static_cast<const value_t*>(value_void);
+                const auto* bytes = reinterpret_cast<const char*>(value);
+                buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
+            };
+        }
     }
     else
     {
@@ -325,4 +377,4 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
     return hier;
 }
 
-} // namespace simdb::collection::cursor
+} // namespace simdb::collection
