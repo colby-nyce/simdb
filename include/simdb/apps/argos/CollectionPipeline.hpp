@@ -119,6 +119,7 @@ public:
         dtype_nodes_tbl.addColumn("ParentId", dt::int32_t);
         dtype_nodes_tbl.addColumn("Kind", dt::string_t);
         dtype_nodes_tbl.addColumn("Name", dt::string_t);
+        dtype_nodes_tbl.addColumn("Description", dt::string_t);
         dtype_nodes_tbl.addColumn("TypeName", dt::string_t);
         dtype_nodes_tbl.addColumn("EnumBacking", dt::string_t);
 

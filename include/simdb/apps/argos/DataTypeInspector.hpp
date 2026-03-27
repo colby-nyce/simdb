@@ -31,19 +31,25 @@ public:
         (void)root_type_name;
     }
 
-    virtual void visitSimpleVariable(const std::string& var_name, PodTypeKind simple_type)
+    virtual void visitSimpleVariable(
+        const std::string& var_name,
+        const std::string& description,
+        PodTypeKind simple_type)
     {
         (void)var_name;
+        (void)description;
         (void)simple_type;
     }
 
     virtual void visitEnumVariable(
         const std::string& enum_name,
+        const std::string& description,
         const std::string& enum_type_name,
         EnumBackingKind backing_kind,
         const std::vector<std::pair<std::string, std::string>>& name_value_pairs)
     {
         (void)enum_name;
+        (void)description;
         (void)enum_type_name;
         (void)backing_kind;
         (void)name_value_pairs;
@@ -51,9 +57,13 @@ public:
 
     /// \param struct_key Field name for nested structs, or root label for the root struct (see \ref DataTypeInspector).
     /// \param struct_type_name Demangled C++ type name of the struct.
-    virtual void visitStructVariable(const std::string& struct_key, const std::string& struct_type_name)
+    virtual void visitStructVariable(
+        const std::string& struct_key,
+        const std::string& description,
+        const std::string& struct_type_name)
     {
         (void)struct_key;
+        (void)description;
         (void)struct_type_name;
     }
 
@@ -147,7 +157,7 @@ private:
         if (node.kind == NodeKind::Pod && node.pod_type)
         {
             const std::string var_name = node.field_name.empty() ? node.type_name : node.field_name;
-            visitor.visitSimpleVariable(var_name, *node.pod_type);
+            visitor.visitSimpleVariable(var_name, node.description, *node.pod_type);
         }
         else if (node.kind == NodeKind::Enum && node.enum_meta)
         {
@@ -159,6 +169,7 @@ private:
                 name_value_pairs.emplace_back(member.name, std::to_string(member.value));
             }
             visitor.visitEnumVariable(enum_name,
+                                      node.description,
                                       node.type_name,
                                       node.enum_meta->backing_kind,
                                       name_value_pairs);
@@ -166,7 +177,7 @@ private:
         else if (node.kind == NodeKind::Struct)
         {
             const std::string struct_key = node.field_name.empty() ? node.type_name : node.field_name;
-            visitor.visitStructVariable(struct_key, node.type_name);
+            visitor.visitStructVariable(struct_key, node.description, node.type_name);
             for (const auto& child : node.children)
             {
                 visitRecursive_(*child, visitor);

@@ -18,6 +18,8 @@ class ArgosFieldBase
 public:
     virtual ~ArgosFieldBase() = default;
     virtual std::string getName() const = 0;
+    /// Human-readable description for tooling/DB; empty if none was set.
+    virtual std::string getDescription() const { return ""; }
     virtual std::string getTypeName() const = 0;
     virtual bool isEnumField() const = 0;
     virtual bool isStructField() const = 0;
@@ -94,15 +96,17 @@ class ArgosPodField final : public ArgosFieldBase
     using value_t = detail::remove_cvref_t<raw_return_t>;
 
 public:
-    ArgosPodField(ArgosCollectorBase<OwnerT>* owner, const char* name)
+    ArgosPodField(ArgosCollectorBase<OwnerT>* owner, const char* name, const char* description = nullptr)
         : name_(name)
         , type_name_(demangle_type<value_t>())
+        , description_(description && *description ? std::string{description} : std::string{})
     {
         static_assert(!std::is_enum_v<value_t>, "ArgosPodField only supports POD (non-enum) fields");
         owner->addField_(this);
     }
 
     std::string getName() const override { return name_; }
+    std::string getDescription() const override { return description_; }
     std::string getTypeName() const override { return type_name_; }
     bool isEnumField() const override { return false; }
     bool isStructField() const override { return false; }
@@ -146,6 +150,7 @@ public:
 private:
     std::string name_;
     std::string type_name_;
+    std::string description_;
     TinyStrings<>* tiny_strings_ = nullptr;
 };
 
@@ -159,15 +164,17 @@ class ArgosEnumField final : public ArgosFieldBase
     using int_t = std::underlying_type_t<enum_t>;
 
 public:
-    ArgosEnumField(ArgosCollectorBase<OwnerT>* owner, const char* name)
+    ArgosEnumField(ArgosCollectorBase<OwnerT>* owner, const char* name, const char* description = nullptr)
         : name_(name)
         , type_name_(demangle_type<enum_t>())
+        , description_(description && *description ? std::string{description} : std::string{})
     {
         static_assert(std::is_enum_v<enum_t>, "ArgosEnumField requires an enum getter return type");
         owner->addField_(this);
     }
 
     std::string getName() const override { return name_; }
+    std::string getDescription() const override { return description_; }
     std::string getTypeName() const override { return type_name_; }
     bool isEnumField() const override { return true; }
     bool isStructField() const override { return false; }
@@ -190,6 +197,7 @@ public:
 private:
     std::string name_;
     std::string type_name_;
+    std::string description_;
 };
 
 // Nested aggregate: getter returns const Nested& or const Nested* (or non-const pointer).
@@ -206,9 +214,10 @@ class ArgosStructField final : public ArgosFieldBase
         std::remove_cv_t<bare_ret>>;
 
 public:
-    ArgosStructField(ArgosCollectorBase<OwnerT>* owner, const char* name)
+    ArgosStructField(ArgosCollectorBase<OwnerT>* owner, const char* name, const char* description = nullptr)
         : name_(name)
         , struct_type_name_(demangle_type<nested_t>())
+        , description_(description && *description ? std::string{description} : std::string{})
     {
         static_assert(!std::is_enum_v<nested_t>, "Use ARGOS_COLLECT for enum fields");
         static_assert(detail::has_nested_argos_collector_v<nested_t>,
@@ -217,6 +226,7 @@ public:
     }
 
     std::string getName() const override { return name_; }
+    std::string getDescription() const override { return description_; }
     std::string getTypeName() const override { return struct_type_name_; }
     bool isEnumField() const override { return false; }
     bool isStructField() const override { return true; }
@@ -250,6 +260,7 @@ public:
 private:
     std::string name_;
     std::string struct_type_name_;
+    std::string description_;
 };
 
 namespace detail {
@@ -268,11 +279,21 @@ using auto_field_t = std::conditional_t<
 #define ARGOS_COLLECT_CAT_(a, b) a##b
 #define ARGOS_COLLECT_CAT(a, b)  ARGOS_COLLECT_CAT_(a, b)
 
+#define ARGOS_COLLECT_SELECT(_1, _2, _3, IMPL, ...) IMPL
+
 // Scalar field: registers one getter-based scalar field in the owning ArgosCollector.
 // Enums are auto-routed to ArgosEnumField; all other scalar types use ArgosPodField.
-#define ARGOS_COLLECT(field_name, getter_ptr)                                                 \
-    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                       \
-        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name};
+// Optional third argument: const char* description string literal (or other const char*).
+#define ARGOS_COLLECT(...)                                                                                 \
+    ARGOS_COLLECT_SELECT(__VA_ARGS__, ARGOS_COLLECT_3, ARGOS_COLLECT_2)(__VA_ARGS__)
+
+#define ARGOS_COLLECT_2(field_name, getter_ptr)                                                            \
+    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                                    \
+        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name, nullptr};
+
+#define ARGOS_COLLECT_3(field_name, getter_ptr, desc)                                                      \
+    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                                    \
+        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name, desc};
 
 #define ARGOS_COLLECT_STRUCT(field_name, getter_ptr)                                          \
     simdb::collection::ArgosStructField<collected_type, getter_ptr>                           \

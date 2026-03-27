@@ -72,6 +72,7 @@ struct DataTypeNode
     NodeKind kind = NodeKind::Pod;
     DataTypeNode* parent = nullptr;
     std::string field_name;
+    std::string description;
     std::string type_name;
     std::unique_ptr<PodTypeKind> pod_type;
     std::unique_ptr<EnumMeta> enum_meta;
@@ -298,6 +299,7 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                 auto child = std::make_unique<DataTypeNode>();
                 child->parent = &parent;
                 child->field_name = field->getName();
+                child->description = field->getDescription();
                 child->type_name = field->getTypeName();
                 child->source_field = const_cast<void*>(static_cast<const void*>(field));
 

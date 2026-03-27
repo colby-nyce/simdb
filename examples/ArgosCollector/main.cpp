@@ -158,9 +158,9 @@ int main(int argc, char** argv)
         class ArgosCollector : public simdb::collection::ArgosCollectorBase<Packet>
         {
         public:
-            ARGOS_COLLECT(intval, &Packet::getInt);
-            ARGOS_COLLECT(strval, &Packet::getString);
-            ARGOS_COLLECT(color,  &Packet::getColor);
+            ARGOS_COLLECT(intval, &Packet::getInt, "Signed integer payload sample");
+            ARGOS_COLLECT(strval, &Packet::getString, "Short text label carried with the packet");
+            ARGOS_COLLECT(color, &Packet::getColor, "Wire enum: simdb::Colors");
         };
     } packet;
 

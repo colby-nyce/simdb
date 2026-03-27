@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Pretty-print Argos collection SQLite tables: DataTypeSchemas, DataTypeNodes, DataTypeEnumMembers."""
+"""Pretty-print Argos collection SQLite tables: DataTypeSchemas, DataTypeNodes, DataTypeEnumMembers.
+
+DataTypeNodes includes a Description column (after Name) when the DB was created with a recent
+schema; use --description-max-width to allow longer text before truncation (default 96).
+"""
 
 import argparse
 import sqlite3
@@ -16,14 +20,16 @@ def _cell_str(val):
     return str(val)
 
 
-def _column_widths(headers, rows, min_w, max_w):
-    # type: (Sequence[str], Sequence[Sequence[Any]], int, int) -> List[int]
+def _column_widths(headers, rows, min_w, max_w, col_max_overrides=None):
+    # type: (Sequence[str], Sequence[Sequence[Any]], int, int, Any) -> List[int]
+    overrides = col_max_overrides or {}
     widths = []  # type: List[int]
     for col_idx, header in enumerate(headers):
+        cap = int(overrides.get(header, max_w))
         w = max(min_w, len(header))
         for row in rows:
             w = max(w, len(_cell_str(row[col_idx])))
-        widths.append(min(w, max_w))
+        widths.append(min(w, cap))
     return widths
 
 
@@ -36,13 +42,13 @@ def _pad_cell(text, width):
     return text[: width - 3] + "..."
 
 
-def print_fixed_table(title, headers, rows, min_w, max_w):
-    # type: (str, Sequence[str], Sequence[Sequence[Any]], int, int) -> None
+def print_fixed_table(title, headers, rows, min_w, max_w, col_max_overrides=None):
+    # type: (str, Sequence[str], Sequence[Sequence[Any]], int, int, Any) -> None
     if not headers:
         print("\n## {}\n  (no columns)".format(title))
         return
 
-    widths = _column_widths(headers, rows, min_w, max_w)
+    widths = _column_widths(headers, rows, min_w, max_w, col_max_overrides)
     sep_inner = "+".join("-" * (w + 2) for w in widths)
     rule = "+{}+".format(sep_inner)
 
@@ -104,6 +110,13 @@ def main():
         metavar="N",
         help="Maximum column width; longer cells truncated (default: 48)",
     )
+    p.add_argument(
+        "--description-max-width",
+        type=int,
+        default=96,
+        metavar="N",
+        help="Max width for the DataTypeNodes Description column (default: 96)",
+    )
     args = p.parse_args()
 
     if args.min_width < 1 or args.max_width < args.min_width:
@@ -126,7 +139,17 @@ def main():
             cur = conn.execute('PRAGMA table_info("{}")'.format(table.replace('"', '""')))
             columns = [row[1] for row in cur.fetchall()]
             rows = fetch_ordered(conn, table, columns)
-            print_fixed_table(table, columns, rows, args.min_width, args.max_width)
+            col_max_overrides = None
+            if table == "DataTypeNodes" and "Description" in columns:
+                col_max_overrides = {"Description": max(args.max_width, args.description_max_width)}
+            print_fixed_table(
+                table,
+                columns,
+                rows,
+                args.min_width,
+                args.max_width,
+                col_max_overrides=col_max_overrides,
+            )
     finally:
         conn.close()
 

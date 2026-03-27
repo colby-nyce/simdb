@@ -44,7 +44,10 @@ private:
 
         void endRegisteredRootType(const std::string&) override {}
 
-        void visitSimpleVariable(const std::string& var_name, PodTypeKind simple_type) override
+        void visitSimpleVariable(
+            const std::string& var_name,
+            const std::string& description,
+            PodTypeKind simple_type) override
         {
             const int32_t parent_id = parent_node_ids_.empty() ? 0 : parent_node_ids_.back();
             const char* const pod_name = podTypeKindToTypeName(simple_type);
@@ -53,12 +56,14 @@ private:
                                              parent_id,
                                              std::string{"pod"},
                                              var_name,
+                                             description,
                                              std::string{pod_name},
                                              std::string{}));
         }
 
         void visitEnumVariable(
             const std::string& enum_name,
+            const std::string& description,
             const std::string& enum_type_name,
             EnumBackingKind backing_kind,
             const std::vector<std::pair<std::string, std::string>>& name_value_pairs) override
@@ -70,6 +75,7 @@ private:
                                            parent_id,
                                            std::string{"enum"},
                                            enum_name,
+                                           description,
                                            enum_type_name,
                                            std::string{enumBackingKindToString(backing_kind)}));
             const int32_t enum_node_id = node_rec->getId();
@@ -80,7 +86,10 @@ private:
             }
         }
 
-        void visitStructVariable(const std::string& struct_key, const std::string& struct_type_name) override
+        void visitStructVariable(
+            const std::string& struct_key,
+            const std::string& description,
+            const std::string& struct_type_name) override
         {
             const int32_t parent_id = parent_node_ids_.empty() ? 0 : parent_node_ids_.back();
             auto rec =
@@ -89,6 +98,7 @@ private:
                                            parent_id,
                                            std::string{"struct"},
                                            struct_key,
+                                           description,
                                            struct_type_name,
                                            std::string{}));
             parent_node_ids_.push_back(rec->getId());
