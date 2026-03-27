@@ -3,10 +3,12 @@
 #pragma once
 
 #include "simdb/apps/argos/ArgosRecord.hpp"
+#include "simdb/apps/argos/DataTypeHierarchy.hpp"
 #include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 namespace simdb::collection {
@@ -94,11 +96,14 @@ template <typename ScalarT>
 class ScalarCollector : public CollectableBase
 {
 public:
-    ScalarCollector(Collection* collection, size_t heartbeat) :
-        CollectableBase(collection, heartbeat)
-    {}
-
     using ValueType = type_traits::remove_any_pointer_t<ScalarT>;
+
+    ScalarCollector(Collection* collection,
+                    size_t heartbeat,
+                    std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
+        : CollectableBase(collection, heartbeat)
+        , dtype_hierarchy_(std::move(dtype_hierarchy))
+    {}
 
     std::string collectableTypeNameForDb() const override
     {
@@ -129,6 +134,9 @@ public:
             deactivate();
         }
     }
+
+private:
+    std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy_;
 };
 
 /// Same as ScalarCollector, but supports auto-collection using a backpointer
@@ -136,9 +144,14 @@ template <typename ScalarT>
 class AutoScalarCollector : public ScalarCollector<ScalarT>
 {
 public:
+    using ValueType = typename ScalarCollector<ScalarT>::ValueType;
+
     /// \brief Construct with a backpointer to the auto-collected scalar
-    AutoScalarCollector(Collection* collection, size_t heartbeat, const ScalarT* scalar)
-        : ScalarCollector<ScalarT>(collection, heartbeat)
+    AutoScalarCollector(Collection* collection,
+                        size_t heartbeat,
+                        std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy,
+                        const ScalarT* scalar)
+        : ScalarCollector<ScalarT>(collection, heartbeat, std::move(dtype_hierarchy))
         , scalar_(scalar)
     {}
 
@@ -159,12 +172,16 @@ template <typename ContainerT, bool Sparse>
 class ContainerCollector : public CollectableBase
 {
 public:
-    explicit ContainerCollector(Collection* collection, size_t heartbeat, size_t expected_capacity)
+    using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
+
+    explicit ContainerCollector(Collection* collection,
+                                size_t heartbeat,
+                                size_t expected_capacity,
+                                std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
         : CollectableBase(collection, heartbeat)
         , expected_capacity_(expected_capacity)
+        , dtype_hierarchy_(std::move(dtype_hierarchy))
     {}
-
-    using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
 
     std::string collectableTypeNameForDb() const override
     {
@@ -203,6 +220,9 @@ public:
 
 protected:
     const size_t expected_capacity_;
+
+private:
+    std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy_;
 };
 
 /// \class AutoContainerCollector
@@ -213,9 +233,15 @@ template <typename ContainerT, bool Sparse>
 class AutoContainerCollector : public ContainerCollector<ContainerT, Sparse>
 {
 public:
+    using ValueType = typename ContainerCollector<ContainerT, Sparse>::ValueType;
+
     /// \brief Construct with a backpointer to the auto-collected container
-    AutoContainerCollector(Collection* collection, size_t heartbeat, const ContainerT* container, size_t expected_capacity)
-        : ContainerCollector<ContainerT, Sparse>(collection, heartbeat, expected_capacity)
+    AutoContainerCollector(Collection* collection,
+                           size_t heartbeat,
+                           const ContainerT* container,
+                           size_t expected_capacity,
+                           std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
+        : ContainerCollector<ContainerT, Sparse>(collection, heartbeat, expected_capacity, std::move(dtype_hierarchy))
         , container_(container)
     {}
 

@@ -107,10 +107,11 @@ public:
         const CollectableT* scalar)
     {
         verifyNoDupPaths_(path);
-        dtype_inspector_.registerType<CollectableT>();
+        auto dtype_hier = dtype_inspector_.registerType<CollectableT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
-        auto collectable = std::make_shared<AutoScalarCollector<CollectableT>>(collection, heartbeat_, scalar);
+        auto collectable = std::make_shared<AutoScalarCollector<CollectableT>>(
+            collection, heartbeat_, std::move(dtype_hier), scalar);
         collection->addCollectable(path, collectable, true /*auto collect*/);
         return collectable;
     }
@@ -122,10 +123,11 @@ public:
         const std::string& clk_name)
     {
         verifyNoDupPaths_(path);
-        dtype_inspector_.registerType<CollectableT>();
+        auto dtype_hier = dtype_inspector_.registerType<CollectableT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
-        auto collectable = std::make_shared<ScalarCollector<CollectableT>>(collection, heartbeat_);
+        auto collectable =
+            std::make_shared<ScalarCollector<CollectableT>>(collection, heartbeat_, std::move(dtype_hier));
         collection->addCollectable(path, collectable, false /*manually collect*/);
         return collectable;
     }
@@ -142,10 +144,11 @@ public:
     {
         verifyNoDupPaths_(path);
         using ElemT = typename detail::dtype_register_element<typename ContainerT::value_type>::type;
-        dtype_inspector_.registerType<ElemT>();
+        auto dtype_hier = dtype_inspector_.registerType<ElemT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
-        auto collectable = std::make_shared<AutoContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, container, expected_capacity);
+        auto collectable = std::make_shared<AutoContainerCollector<ContainerT, Sparse>>(
+            collection, heartbeat_, container, expected_capacity, std::move(dtype_hier));
         collection->addCollectable(path, collectable, true /*auto collect*/);
         return collectable;
     }
@@ -159,10 +162,11 @@ public:
     {
         verifyNoDupPaths_(path);
         using ElemT = typename detail::dtype_register_element<typename ContainerT::value_type>::type;
-        dtype_inspector_.registerType<ElemT>();
+        auto dtype_hier = dtype_inspector_.registerType<ElemT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
-        auto collectable = std::make_shared<ContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, expected_capacity);
+        auto collectable = std::make_shared<ContainerCollector<ContainerT, Sparse>>(
+            collection, heartbeat_, expected_capacity, std::move(dtype_hier));
         collection->addCollectable(path, collectable, false /*manually collect*/);
         return collectable;
     }
