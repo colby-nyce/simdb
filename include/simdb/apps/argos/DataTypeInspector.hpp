@@ -44,19 +44,33 @@ public:
         : tiny_strings_(db_mgr)
     {}
 
+    ~DataTypeInspector()
+    {
+        if (auto count = tiny_strings_.getUnserializedCount(); count != 0)
+        {
+            std::cout << "WARNING: There " << (count == 1 ? "was" : "were")
+                      << count << " string" << (count == 1 ? "" : "s")
+                      << " not written to the database when a DataTypeInspector"
+                      << " was destroyed." << std::endl;
+        }
+    }
+
     template <typename Type>
-    void registerType()
+    std::shared_ptr<DataTypeHierarchy<Type>> registerType()
     {
         using value_t = std::remove_cv_t<std::remove_reference_t<Type>>;
         const auto type_name = simdb::demangle_type<value_t>();
         if (root_hierarchies_.count(type_name))
         {
-            return;
+            return std::dynamic_pointer_cast<std::shared_ptr<DataTypeHierarchy<Type>>>(
+                root_hierarchies_.at(type_name));
         }
 
-        auto hier = createDataTypeHier<value_t>();
+        std::shared_ptr<DataTypeHierarchy<Type>> hier = createDataTypeHier<value_t>();
         injectTinyStringsIntoFields_(hier->getRoot(), &tiny_strings_);
-        root_hierarchies_.emplace(type_name, std::move(hier));
+        root_hierarchies_.emplace(type_name, hier);
+
+        return std::dynamic_pointer_cast<std::shared_ptr<DataTypeHierarchy<Type>>>(hier);
     }
 
     void acceptVisitor(DataTypeNodeVisitor* visitor) const
@@ -73,10 +87,7 @@ public:
 
     void teardown()
     {
-        if (tiny_strings_)
-        {
-            tiny_strings_->serialize();
-        }
+        tiny_strings_.serialize();
     }
 
 private:
@@ -129,8 +140,8 @@ private:
         }
     }
 
-    std::map<std::string, std::unique_ptr<DataTypeHierarchyBase>> root_hierarchies_;
-    std::unique_ptr<simdb::TinyStrings<>> tiny_strings_;
+    std::map<std::string, std::shared_ptr<DataTypeHierarchyBase>> root_hierarchies_;
+    simdb::TinyStrings<> tiny_strings_;
 };
 
 } // namespace simdb::collection

@@ -113,6 +113,17 @@ public:
         });
     }
 
+    /// Check how many unserialized strings we have.
+    uint32_t getUnserializedCount() const noexcept
+    {
+        DeferredLock<std::mutex> lock(mutex_);
+        if constexpr (MutexProtect)
+        {
+            lock.lock();
+        }
+        return unserialized_map_.size();
+    }
+
 private:
     uint32_t getStringID_(const std::string& s)
     {
@@ -137,7 +148,7 @@ private:
 
     DatabaseManager *const db_mgr_;
     std::unique_ptr<PreparedINSERT> inserter_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 };
 
 } // namespace simdb

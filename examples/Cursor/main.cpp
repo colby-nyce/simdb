@@ -1,4 +1,4 @@
-#include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/apps/argos/ArgosCollect.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
