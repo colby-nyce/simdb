@@ -1,5 +1,6 @@
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 #include "simdb/apps/argos/ArgosCollect.hpp"
+#include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <cstring>
 #include <iostream>
@@ -18,6 +19,20 @@ T readScalarFromBuffer(const std::vector<char>& buffer, size_t& offset)
     std::memcpy(&value, buffer.data() + offset, sizeof(T));
     offset += sizeof(T);
     return value;
+}
+
+void injectTinyStringsIntoFields(const collection::DataTypeNode& node,
+                                 simdb::TinyStrings<>* tiny_strings)
+{
+    if (node.source_field)
+    {
+        auto* field = static_cast<collection::ArgosFieldBase*>(node.source_field);
+        field->setTinyStrings(tiny_strings);
+    }
+    for (const auto& child : node.children)
+    {
+        injectTinyStringsIntoFields(*child, tiny_strings);
+    }
 }
 
 enum class Status : uint8_t
@@ -52,16 +67,19 @@ struct Metadata
     uint64_t trace_id = 0;
     bool valid = false;
     Priority priority = Priority::Low;
+    std::string label;
 
     uint64_t getTraceId() const { return trace_id; }
     bool getValid() const { return valid; }
     Priority getPriority() const { return priority; }
+    const std::string& getLabel() const { return label; }
 
     struct ArgosCollector : simdb::collection::ArgosCollectorBase<Metadata>
     {
         ARGOS_COLLECT(trace_id, &Metadata::getTraceId);
         ARGOS_COLLECT(valid, &Metadata::getValid);
         ARGOS_COLLECT_ENUM(priority, &Metadata::getPriority);
+        ARGOS_COLLECT(label, &Metadata::getLabel);
     };
 };
 
@@ -70,21 +88,25 @@ class Packet
     double timestamp = 0;
     Header header;
     Metadata metadata;
+    std::string source;
 
 public:
     double getTimestamp() const { return timestamp; }
     const Header& getHeader() const { return header; }
     const Metadata& getMetadata() const { return metadata; }
+    const std::string& getSource() const { return source; }
 
     void setTimestamp(double v) { timestamp = v; }
     void setHeader(const Header& v) { header = v; }
     void setMetadata(const Metadata& v) { metadata = v; }
+    void setSource(const std::string& v) { source = v; }
 
     struct ArgosCollector : simdb::collection::ArgosCollectorBase<Packet>
     {
         ARGOS_COLLECT(timestamp, &Packet::getTimestamp);
         ARGOS_COLLECT_STRUCT(header, &Packet::getHeader);
         ARGOS_COLLECT_STRUCT(metadata, &Packet::getMetadata);
+        ARGOS_COLLECT(source, &Packet::getSource);
     };
 };
 
@@ -136,7 +158,7 @@ int main()
     }
 
     auto packet = collection::createDataTypeHier<Packet>();
-    if (packet->getRoot().kind != collection::NodeKind::Struct || packet->getRoot().children.size() != 3)
+    if (packet->getRoot().kind != collection::NodeKind::Struct || packet->getRoot().children.size() != 4)
     {
         std::cerr << "Struct hierarchy root test failed\n";
         return 1;
@@ -173,7 +195,7 @@ int main()
     }
 
     const auto& metadata = packet->getRoot().children[2];
-    if (metadata->field_name != "metadata" || metadata->kind != collection::NodeKind::Struct || metadata->children.size() != 3)
+    if (metadata->field_name != "metadata" || metadata->kind != collection::NodeKind::Struct || metadata->children.size() != 4)
     {
         std::cerr << "Metadata struct test failed\n";
         return 1;
@@ -187,6 +209,22 @@ int main()
         return 1;
     }
 
+    const auto& metadata_label = metadata->children[3];
+    if (metadata_label->field_name != "label" || metadata_label->kind != collection::NodeKind::Pod ||
+        !metadata_label->pod_type || *metadata_label->pod_type != collection::PodTypeKind::str)
+    {
+        std::cerr << "Metadata label test failed\n";
+        return 1;
+    }
+
+    const auto& source = packet->getRoot().children[3];
+    if (source->field_name != "source" || source->kind != collection::NodeKind::Pod ||
+        !source->pod_type || *source->pod_type != collection::PodTypeKind::str)
+    {
+        std::cerr << "Packet source test failed\n";
+        return 1;
+    }
+
     Packet p{};
     p.setTimestamp(3.5);
     Header h{};
@@ -197,13 +235,19 @@ int main()
     m.trace_id = 0xABCD;
     m.valid = true;
     m.priority = Priority::High;
+    m.label = "metadata-label";
     p.setMetadata(m);
+    p.setSource("packet-source");
+
+    simdb::DatabaseManager db_mgr("cursor-example.db", true);
+    simdb::TinyStrings<> tiny_strings(&db_mgr);
+    injectTinyStringsIntoFields(packet->getRoot(), &tiny_strings);
 
     std::vector<char> buffer;
     packet->writeBuffer(buffer, &p);
     const auto expected_size =
         sizeof(double) + sizeof(uint32_t) + sizeof(Status) + sizeof(uint64_t) + sizeof(bool) +
-        sizeof(Priority);
+        sizeof(Priority) + sizeof(uint32_t) + sizeof(uint32_t);
     if (buffer.size() != expected_size)
     {
         std::cerr << "writeBuffer size mismatch\n";
@@ -217,6 +261,8 @@ int main()
     const auto trace_id_buf = readScalarFromBuffer<uint64_t>(buffer, offset);
     const auto valid_buf = readScalarFromBuffer<bool>(buffer, offset);
     const auto priority_raw = readScalarFromBuffer<std::underlying_type_t<Priority>>(buffer, offset);
+    const auto label_id_buf = readScalarFromBuffer<uint32_t>(buffer, offset);
+    const auto source_id_buf = readScalarFromBuffer<uint32_t>(buffer, offset);
 
     if (offset != buffer.size())
     {
@@ -252,6 +298,16 @@ int main()
     if (priority_raw != static_cast<std::underlying_type_t<Priority>>(p.getMetadata().priority))
     {
         std::cerr << "metadata.priority buffer mismatch\n";
+        return 1;
+    }
+    if (label_id_buf != tiny_strings.getStringID(p.getMetadata().label))
+    {
+        std::cerr << "metadata.label buffer mismatch\n";
+        return 1;
+    }
+    if (source_id_buf != tiny_strings.getStringID(p.getSource()))
+    {
+        std::cerr << "packet.source buffer mismatch\n";
         return 1;
     }
 

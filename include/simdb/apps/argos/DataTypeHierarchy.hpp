@@ -142,7 +142,7 @@ constexpr PodTypeKind getPodTypeKind()
     {
         return PodTypeKind::str;
     }
-    if constexpr (std::is_same_v<value_t, char>)
+    else if constexpr (std::is_same_v<value_t, char>)
     {
         return PodTypeKind::c;
     }

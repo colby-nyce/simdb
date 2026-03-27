@@ -122,8 +122,7 @@ public:
             {
                 throw DBException("TinyStrings not set before string collection");
             }
-            const auto& s = std::invoke(Getter, owner);
-            const uint32_t id = tiny_strings_->getStringID(s);
+            const uint32_t id = tiny_strings_->getStringID(std::invoke(Getter, owner));
             const auto* bytes = reinterpret_cast<const char*>(&id);
             buffer.insert(buffer.end(), bytes, bytes + sizeof(id));
         }

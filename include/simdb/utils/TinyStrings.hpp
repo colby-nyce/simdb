@@ -3,7 +3,9 @@
 #pragma once
 
 #include "simdb/sqlite/DatabaseManager.hpp"
+#include "simdb/sqlite/PreparedINSERT.hpp"
 #include "simdb/utils/DeferredLock.hpp"
+#include "simdb/utils/TypeTraits.hpp"
 #include <mutex>
 
 namespace simdb {
@@ -14,22 +16,27 @@ namespace simdb {
 template <bool MutexProtect = false> class TinyStrings
 {
 public:
-    TinyStrings(DatabaseManager* db_mgr, const std::string& table_name = "TinyStringIDs") :
-        db_mgr_(db_mgr),
-        table_name_(table_name)
+    static inline constexpr uint32_t BAD_STRING_ID = 0;
+
+    /// Associate this TinyStrings with the given database.
+    TinyStrings(DatabaseManager* db_mgr) :
+        db_mgr_(db_mgr)
     {
         const auto& schema = db_mgr_->getSchema();
-        if (!schema.hasTable(table_name_))
+        if (!schema.hasTable("TinyStringIDs"))
         {
             Schema append_schema;
             using dt = simdb::SqlDataType;
-            auto& tbl = append_schema.addTable(table_name_);
+            auto& tbl = append_schema.addTable("TinyStringIDs");
             tbl.addColumn("StringValue", dt::string_t);
             tbl.addColumn("StringID", dt::int32_t);
             db_mgr->appendSchema(append_schema);
         }
+
+        inserter_ = db_mgr->prepareINSERT(SQL_TABLE("TinyStringIDs"));
     }
 
+    /// Add or get a string ID for the given string.
     std::pair<uint32_t, bool> insert(const std::string& s)
     {
         DeferredLock<std::mutex> lock(mutex_);
@@ -48,8 +55,36 @@ public:
         }
     }
 
+    /// Get a string ID for the given string.
+    uint32_t getStringID(const std::unique_ptr<std::string>& s)
+    {
+        return getStringID(s.get());
+    }
+
+    /// Get a string ID for the given string.
+    uint32_t getStringID(const std::shared_ptr<std::string>& s)
+    {
+        return getStringID(s.get());
+    }
+
+    /// Get a string ID for the given string.
+    uint32_t getStringID(const std::string* s)
+    {
+        if (s)
+        {
+            return getStringID(*s);
+        }
+        return BAD_STRING_ID;
+    }
+
+    /// std::string overload
     uint32_t getStringID(const std::string& s)
     {
+        if (s.empty())
+        {
+            return BAD_STRING_ID;
+        }
+
         DeferredLock<std::mutex> lock(mutex_);
         if constexpr (MutexProtect)
         {
@@ -71,8 +106,7 @@ public:
 
             for (const auto& [string_id, string_val] : unserialized_map_)
             {
-                db_mgr_->INSERT(SQL_TABLE(table_name_), SQL_COLUMNS("StringValue", "StringID"),
-                                SQL_VALUES(string_val, string_id));
+                inserter_->createRecordWithColValues(string_val, string_id);
             }
 
             unserialized_map_.clear();
@@ -85,7 +119,7 @@ private:
         auto iter = map_->find(s);
         if (iter == map_->end())
         {
-            uint32_t id = map_->size();
+            uint32_t id = map_->size() + 1;
             map_->insert({s, id});
             unserialized_map_.insert({id, s});
             return id;
@@ -101,8 +135,8 @@ private:
     string_map_t map_ = std::make_shared<std::unordered_map<std::string, uint32_t>>();
     unserialized_string_map_t unserialized_map_;
 
-    DatabaseManager* db_mgr_;
-    std::string table_name_;
+    DatabaseManager *const db_mgr_;
+    std::unique_ptr<PreparedINSERT> inserter_;
     std::mutex mutex_;
 };
 
