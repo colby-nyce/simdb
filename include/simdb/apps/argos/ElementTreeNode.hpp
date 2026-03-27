@@ -21,7 +21,7 @@ private:
 
         auto record = db_mgr->INSERT(
             SQL_TABLE("ElementTreeNodes"),
-            SQL_VALUES(getName(), parent_id));
+            SQL_VALUES(parent_id, getName()));
 
         return record->getId();
     }

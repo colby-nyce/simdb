@@ -63,7 +63,7 @@ public:
 private:
     int serialize_(DatabaseManager* db_mgr) override final
     {
-        auto record = db_mgr->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_VALUES(getName(), 0));
+        auto record = db_mgr->INSERT(SQL_TABLE("ElementTreeNodes"), SQL_VALUES(0, getName()));
         return record->getId();
     };
 };

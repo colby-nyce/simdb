@@ -162,8 +162,8 @@ void testSerializeNodes()
     using dt = simdb::SqlDataType;
 
     auto& tbl = schema.addTable("ElementTreeNodes");
-    tbl.addColumn("ElementName", dt::string_t);
-    tbl.addColumn("ParentElemID", dt::int32_t);
+    tbl.addColumn("ParentId", dt::int32_t);
+    tbl.addColumn("Name", dt::string_t);
 
     db_mgr.appendSchema(schema);
     tree.serialize(&db_mgr);
@@ -173,11 +173,11 @@ void testSerializeNodes()
     int id;
     query->select("Id", id);
 
-    std::string actual_name;
-    query->select("ElementName", actual_name);
-
     int actual_parent_id = 0;
-    query->select("ParentElemID", actual_parent_id);
+    query->select("ParentId", actual_parent_id);
+
+    std::string actual_name;
+    query->select("Name", actual_name);
 
     auto results = query->getResultSet();
     auto expect = [&](const std::string& expected_name, int expected_parent_id)

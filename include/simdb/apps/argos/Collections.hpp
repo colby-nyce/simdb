@@ -6,9 +6,11 @@
 #include "simdb/apps/argos/CollectionPipeline.hpp"
 #include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/apps/argos/DataTypeSerializer.hpp"
+#include "simdb/utils/Tree.hpp"
 #include "simdb/utils/ValidValue.hpp"
 #include "simdb/Exceptions.hpp"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -105,10 +107,11 @@ public:
         const CollectableT* scalar)
     {
         verifyNoDupPaths_(path);
+        dtype_inspector_.registerType<CollectableT>();
+        collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<AutoScalarCollector<CollectableT>>(collection, heartbeat_, scalar);
         collection->addCollectable(path, collectable, true /*auto collect*/);
-        dtype_inspector_.registerType<CollectableT>();
         return collectable;
     }
 
@@ -119,10 +122,11 @@ public:
         const std::string& clk_name)
     {
         verifyNoDupPaths_(path);
+        dtype_inspector_.registerType<CollectableT>();
+        collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<ScalarCollector<CollectableT>>(collection, heartbeat_);
         collection->addCollectable(path, collectable, false /*manually collect*/);
-        dtype_inspector_.registerType<CollectableT>();
         return collectable;
     }
 
@@ -137,11 +141,12 @@ public:
         size_t expected_capacity)
     {
         verifyNoDupPaths_(path);
+        using ElemT = typename detail::dtype_register_element<typename ContainerT::value_type>::type;
+        dtype_inspector_.registerType<ElemT>();
+        collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<AutoContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, container, expected_capacity);
         collection->addCollectable(path, collectable, true /*auto collect*/);
-        dtype_inspector_
-            .registerType<typename detail::dtype_register_element<typename ContainerT::value_type>::type>();
         return collectable;
     }
 
@@ -153,11 +158,12 @@ public:
         size_t expected_capacity)
     {
         verifyNoDupPaths_(path);
+        using ElemT = typename detail::dtype_register_element<typename ContainerT::value_type>::type;
+        dtype_inspector_.registerType<ElemT>();
+        collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<ContainerCollector<ContainerT, Sparse>>(collection, heartbeat_, expected_capacity);
         collection->addCollectable(path, collectable, false /*manually collect*/);
-        dtype_inspector_
-            .registerType<typename detail::dtype_register_element<typename ContainerT::value_type>::type>();
         return collectable;
     }
 
@@ -195,6 +201,22 @@ private:
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
+        db_mgr->safeTransaction([&]() {
+            std::map<simdb::Tree::TreeNode*, int> db_ids;
+            collectables_tree_.dfs([&](simdb::Tree::TreeNode* node) {
+                auto parent_id = 0;
+                if (auto* parent = node->getParent())
+                {
+                    parent_id = db_ids.at(parent);
+                }
+                auto rec = db_mgr->INSERT(
+                    SQL_TABLE("ElementTreeNodes"),
+                    SQL_VALUES(parent_id, node->getName()));
+                db_ids[node] = rec->getId();
+                return true; // keep going
+            });
+        });
+
         dtype_inspector_.bindDatabase(db_mgr);
 
         // Write data types and their hierarchies (structs / nested structs)
@@ -221,6 +243,7 @@ private:
     std::map<std::string, size_t> clk_periods_;
     std::unordered_set<std::string> all_collectable_paths_;
     DataTypeInspector dtype_inspector_;
+    simdb::Tree collectables_tree_;
 };
 
 } // namespace simdb::collection

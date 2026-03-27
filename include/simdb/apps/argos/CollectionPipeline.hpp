@@ -100,8 +100,8 @@ public:
         clks_tbl.addColumn("Period", dt::int32_t);
 
         auto& elem_tns_tbl = schema.addTable("ElementTreeNodes");
+        elem_tns_tbl.addColumn("ParentId", dt::int32_t);
         elem_tns_tbl.addColumn("Name", dt::string_t);
-        elem_tns_tbl.addColumn("ParentID", dt::int32_t);
 
         auto& collectable_tns_tbl = schema.addTable("CollectableTreeNodes");
         collectable_tns_tbl.addColumn("ElementTreeNodeID", dt::int32_t);
