@@ -3,7 +3,6 @@
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collections.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
-#include "simdb/apps/argos/EnumSerializer.hpp"
 #include "simdb/utils/Tree.hpp"
 
 #include <vector>

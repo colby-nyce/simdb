@@ -1,7 +1,4 @@
 #include "SimDBTester.hpp"
-#include "simdb/apps/argos/ElementTreeNode.hpp"
-#include "simdb/apps/argos/SimpleTypesSerializer.hpp"
-#include "simdb/apps/argos/EnumSerializer.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 
 TEST_INIT;
