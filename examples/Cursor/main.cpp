@@ -47,38 +47,48 @@ enum class Priority : uint16_t
     High = 2
 };
 
-struct Header
+class Header
 {
-    uint32_t seq = 0;
-    Status status = Status::Failed;
+    uint32_t seq_ = 0;
+    Status status_ = Status::Failed;
 
-    uint32_t getSeq() const { return seq; }
-    Status getStatus() const { return status; }
+public:
+    uint32_t getSeq() const { return seq_; }
+    Status getStatus() const { return status_; }
+
+    void setSeq(uint32_t seq) { seq_ = seq; }
+    void setStatus(Status status) { status_ = status; }
 
     struct ArgosCollector : simdb::collection::ArgosCollectorBase<Header>
     {
         ARGOS_COLLECT(seq, &Header::getSeq);
-        ARGOS_COLLECT_ENUM(status, &Header::getStatus);
+        ARGOS_COLLECT(status, &Header::getStatus);
     };
 };
 
-struct Metadata
+class Metadata
 {
-    uint64_t trace_id = 0;
-    bool valid = false;
-    Priority priority = Priority::Low;
-    std::string label;
+    uint64_t trace_id_ = 0;
+    bool valid_ = false;
+    Priority priority_ = Priority::Low;
+    std::string label_;
 
-    uint64_t getTraceId() const { return trace_id; }
-    bool getValid() const { return valid; }
-    Priority getPriority() const { return priority; }
-    const std::string& getLabel() const { return label; }
+public:
+    uint64_t getTraceId() const { return trace_id_; }
+    bool getValid() const { return valid_; }
+    Priority getPriority() const { return priority_; }
+    const std::string& getLabel() const { return label_; }
+
+    void setTraceId(uint64_t trace_id) { trace_id_ = trace_id; }
+    void setValid(bool valid) { valid_ = valid; }
+    void setPriority(Priority priority) { priority_ = priority; }
+    void setLabel(const std::string& label) { label_ = label; }
 
     struct ArgosCollector : simdb::collection::ArgosCollectorBase<Metadata>
     {
         ARGOS_COLLECT(trace_id, &Metadata::getTraceId);
         ARGOS_COLLECT(valid, &Metadata::getValid);
-        ARGOS_COLLECT_ENUM(priority, &Metadata::getPriority);
+        ARGOS_COLLECT(priority, &Metadata::getPriority);
         ARGOS_COLLECT(label, &Metadata::getLabel);
     };
 };
@@ -228,14 +238,14 @@ int main()
     Packet p{};
     p.setTimestamp(3.5);
     Header h{};
-    h.seq = 42;
-    h.status = Status::Passed;
+    h.setSeq(42);
+    h.setStatus(Status::Passed);
     p.setHeader(h);
     Metadata m{};
-    m.trace_id = 0xABCD;
-    m.valid = true;
-    m.priority = Priority::High;
-    m.label = "metadata-label";
+    m.setTraceId(0xABCD);
+    m.setValid(true);
+    m.setPriority(Priority::High);
+    m.setLabel("metadata-label");
     p.setMetadata(m);
     p.setSource("packet-source");
 
@@ -275,32 +285,32 @@ int main()
         std::cerr << "timestamp buffer mismatch\n";
         return 1;
     }
-    if (seq_buf != p.getHeader().seq)
+    if (seq_buf != p.getHeader().getSeq())
     {
         std::cerr << "header.seq buffer mismatch\n";
         return 1;
     }
-    if (status_raw != static_cast<std::underlying_type_t<Status>>(p.getHeader().status))
+    if (status_raw != static_cast<std::underlying_type_t<Status>>(p.getHeader().getStatus()))
     {
         std::cerr << "header.status buffer mismatch\n";
         return 1;
     }
-    if (trace_id_buf != p.getMetadata().trace_id)
+    if (trace_id_buf != p.getMetadata().getTraceId())
     {
         std::cerr << "metadata.trace_id buffer mismatch\n";
         return 1;
     }
-    if (valid_buf != static_cast<uint8_t>(p.getMetadata().valid ? 1u : 0u))
+    if (valid_buf != static_cast<uint8_t>(p.getMetadata().getValid() ? 1u : 0u))
     {
         std::cerr << "metadata.valid buffer mismatch\n";
         return 1;
     }
-    if (priority_raw != static_cast<std::underlying_type_t<Priority>>(p.getMetadata().priority))
+    if (priority_raw != static_cast<std::underlying_type_t<Priority>>(p.getMetadata().getPriority()))
     {
         std::cerr << "metadata.priority buffer mismatch\n";
         return 1;
     }
-    if (label_id_buf != tiny_strings.getStringID(p.getMetadata().label))
+    if (label_id_buf != tiny_strings.getStringID(p.getMetadata().getLabel()))
     {
         std::cerr << "metadata.label buffer mismatch\n";
         return 1;

@@ -210,7 +210,7 @@ public:
         : name_(name)
         , struct_type_name_(demangle_type<nested_t>())
     {
-        static_assert(!std::is_enum_v<nested_t>, "Use ARGOS_COLLECT_ENUM for enum fields");
+        static_assert(!std::is_enum_v<nested_t>, "Use ARGOS_COLLECT for enum fields");
         static_assert(detail::has_nested_argos_collector_v<nested_t>,
                       "Nested type must define nested ArgosCollector");
         owner->addField_(this);
@@ -252,20 +252,27 @@ private:
     std::string struct_type_name_;
 };
 
+namespace detail {
+
+template <typename OwnerT, auto Getter>
+using auto_field_t = std::conditional_t<
+    std::is_enum_v<remove_cvref_t<typename getter_traits<Getter>::return_t>>,
+    ArgosEnumField<OwnerT, Getter>,
+    ArgosPodField<OwnerT, Getter>>;
+
+} // namespace detail
+
 } // namespace simdb::collection
 
 // Macro glue
 #define ARGOS_COLLECT_CAT_(a, b) a##b
 #define ARGOS_COLLECT_CAT(a, b)  ARGOS_COLLECT_CAT_(a, b)
 
-// POD-only: registers one getter-based scalar field in the owning ArgosCollector.
+// Scalar field: registers one getter-based scalar field in the owning ArgosCollector.
+// Enums are auto-routed to ArgosEnumField; all other scalar types use ArgosPodField.
 #define ARGOS_COLLECT(field_name, getter_ptr)                                                 \
-    simdb::collection::ArgosPodField<collected_type, getter_ptr>                              \
+    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                       \
         ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name};
-
-#define ARGOS_COLLECT_ENUM(field_name, getter_ptr)                                            \
-    simdb::collection::ArgosEnumField<collected_type, getter_ptr>                             \
-        ARGOS_COLLECT_CAT(argos_collect_enum_, __COUNTER__){this, #field_name};
 
 #define ARGOS_COLLECT_STRUCT(field_name, getter_ptr)                                          \
     simdb::collection::ArgosStructField<collected_type, getter_ptr>                           \
