@@ -28,7 +28,7 @@ public:
     virtual std::vector<const ArgosFieldBase*> getStructFields() const = 0;
     virtual void writeBufferErased(std::vector<char>&, const void*) const = 0;
     virtual const void* getStructPtrErased(const void*) const = 0;
-    virtual void setTinyStrings(::simdb::TinyStrings<>*) {}
+    virtual void setTinyStrings(TinyStrings<>*) {}
 };
 
 template <typename CollectedT>
@@ -96,7 +96,7 @@ class ArgosPodField final : public ArgosFieldBase
 public:
     ArgosPodField(ArgosCollectorBase<OwnerT>* owner, const char* name)
         : name_(name)
-        , type_name_(::simdb::demangle_type<value_t>())
+        , type_name_(demangle_type<value_t>())
     {
         static_assert(!std::is_enum_v<value_t>, "ArgosPodField only supports POD (non-enum) fields");
         owner->addField_(this);
@@ -136,12 +136,12 @@ public:
     }
 
     const void* getStructPtrErased(const void*) const override { return nullptr; }
-    void setTinyStrings(::simdb::TinyStrings<>* tiny_strings) override { tiny_strings_ = tiny_strings; }
+    void setTinyStrings(TinyStrings<>* tiny_strings) override { tiny_strings_ = tiny_strings; }
 
 private:
     std::string name_;
     std::string type_name_;
-    ::simdb::TinyStrings<>* tiny_strings_ = nullptr;
+    TinyStrings<>* tiny_strings_ = nullptr;
 };
 
 // Enum: getter returns enum type; bytes are the underlying integral representation.
@@ -156,7 +156,7 @@ class ArgosEnumField final : public ArgosFieldBase
 public:
     ArgosEnumField(ArgosCollectorBase<OwnerT>* owner, const char* name)
         : name_(name)
-        , type_name_(::simdb::demangle_type<enum_t>())
+        , type_name_(demangle_type<enum_t>())
     {
         static_assert(std::is_enum_v<enum_t>, "ArgosEnumField requires an enum getter return type");
         owner->addField_(this);
@@ -203,7 +203,7 @@ class ArgosStructField final : public ArgosFieldBase
 public:
     ArgosStructField(ArgosCollectorBase<OwnerT>* owner, const char* name)
         : name_(name)
-        , struct_type_name_(::simdb::demangle_type<nested_t>())
+        , struct_type_name_(demangle_type<nested_t>())
     {
         static_assert(!std::is_enum_v<nested_t>, "Use ARGOS_COLLECT_ENUM for enum fields");
         static_assert(detail::has_nested_argos_collector_v<nested_t>,

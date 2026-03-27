@@ -75,7 +75,7 @@ struct DataTypeNode
     std::function<void(std::vector<char>&, const void*)> write_erased;
 
     // Set by DataTypeInspector::connect(). Used by string writers.
-    ::simdb::TinyStrings<>* tiny_strings = nullptr;
+    TinyStrings<>* tiny_strings = nullptr;
 
     // Optional backpointer to the originating field descriptor.
     // DataTypeInspector uses this to inject TinyStrings into field writers.
@@ -203,7 +203,7 @@ class DataTypeHierarchyBase
 public:
     virtual ~DataTypeHierarchyBase() = default;
     virtual const DataTypeNode& getRoot() const = 0;
-    virtual void setTinyStrings(::simdb::TinyStrings<>*) = 0;
+    virtual void setTinyStrings(TinyStrings<>*) = 0;
 };
 
 template <typename RootT>
@@ -215,7 +215,7 @@ public:
         return root_;
     }
 
-    void setTinyStrings(::simdb::TinyStrings<>* tiny_strings) override
+    void setTinyStrings(TinyStrings<>* tiny_strings) override
     {
         setTinyStringsRecursive_(root_, tiny_strings);
     }
@@ -238,7 +238,7 @@ private:
 
     DataTypeNode root_;
 
-    static void setTinyStringsRecursive_(DataTypeNode& node, ::simdb::TinyStrings<>* tiny_strings)
+    static void setTinyStringsRecursive_(DataTypeNode& node, TinyStrings<>* tiny_strings)
     {
         node.tiny_strings = tiny_strings;
         for (auto& child : node.children)
@@ -254,7 +254,7 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
     using value_t = detail::remove_cvref_t<T>;
     auto hier = std::make_unique<DataTypeHierarchy<value_t>>();
     auto& node = hier->root_;
-    node.type_name = ::simdb::demangle_type<value_t>();
+    node.type_name = demangle_type<value_t>();
 
     if constexpr (std::is_enum_v<value_t>)
     {

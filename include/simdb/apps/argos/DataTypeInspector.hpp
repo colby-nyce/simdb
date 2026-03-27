@@ -125,7 +125,7 @@ private:
     }
 
     static void injectTinyStringsIntoFields_(const DataTypeNode& node,
-                                             ::simdb::TinyStrings<false>* tiny_strings)
+                                             TinyStrings<false>* tiny_strings)
     {
         if (node.source_field)
         {
