@@ -66,6 +66,7 @@ struct EnumMeta
 struct DataTypeNode
 {
     NodeKind kind = NodeKind::Pod;
+    DataTypeNode* parent = nullptr;
     std::string field_name;
     std::string type_name;
     std::unique_ptr<PodTypeKind> pod_type;
@@ -80,6 +81,27 @@ struct DataTypeNode
     // DataTypeInspector uses this to inject TinyStrings into field writers.
     void* source_field = nullptr;
 };
+
+inline const char* podTypeKindToTypeName(PodTypeKind kind)
+{
+    switch (kind)
+    {
+    case PodTypeKind::c: return "char";
+    case PodTypeKind::i8: return "int8_t";
+    case PodTypeKind::ui8: return "uint8_t";
+    case PodTypeKind::i16: return "int16_t";
+    case PodTypeKind::ui16: return "uint16_t";
+    case PodTypeKind::i32: return "int32_t";
+    case PodTypeKind::ui32: return "uint32_t";
+    case PodTypeKind::i64: return "int64_t";
+    case PodTypeKind::ui64: return "uint64_t";
+    case PodTypeKind::d: return "double";
+    case PodTypeKind::f: return "float";
+    case PodTypeKind::logical: return "bool";
+    case PodTypeKind::str: return "std::string";
+    }
+    return "unknown";
+}
 
 namespace detail {
 
@@ -268,6 +290,7 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
                 }
 
                 auto child = std::make_unique<DataTypeNode>();
+                child->parent = &parent;
                 child->field_name = field->getName();
                 child->type_name = field->getTypeName();
                 child->source_field = const_cast<void*>(static_cast<const void*>(field));
