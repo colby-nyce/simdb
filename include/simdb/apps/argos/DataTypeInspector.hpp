@@ -12,30 +12,53 @@
 
 namespace simdb::collection {
 
+/// \class TODO cnyce
 class DataTypeNodeVisitor
 {
 public:
     virtual ~DataTypeNodeVisitor() = default;
+
+    /// \brief Called before traversing each root hierarchy registered with \ref DataTypeInspector::registerType.
+    virtual void beginRegisteredRootType(const std::string& root_type_name)
+    {
+        (void)root_type_name;
+    }
+
+    /// \brief Called after traversing a root hierarchy.
+    virtual void endRegisteredRootType(const std::string& root_type_name)
+    {
+        (void)root_type_name;
+    }
+
     virtual void visitSimpleVariable(const std::string& var_name, PodTypeKind simple_type)
     {
         (void)var_name;
         (void)simple_type;
     }
-    virtual void visitEnumVariable(const std::string& enum_name,
-                                   EnumBackingKind backing_kind,
-                                   const std::vector<std::pair<std::string, std::string>>& name_value_pairs)
+
+    virtual void visitEnumVariable(
+        const std::string& enum_name,
+        const std::string& enum_type_name,
+        EnumBackingKind backing_kind,
+        const std::vector<std::pair<std::string, std::string>>& name_value_pairs)
     {
         (void)enum_name;
+        (void)enum_type_name;
         (void)backing_kind;
         (void)name_value_pairs;
     }
-    virtual void visitStructVariable(const std::string& struct_name)
+
+    /// \param struct_key Field name for nested structs, or root label for the root struct (see \ref DataTypeInspector).
+    /// \param struct_type_name Demangled C++ type name of the struct.
+    virtual void visitStructVariable(const std::string& struct_key, const std::string& struct_type_name)
     {
-        (void)struct_name;
+        (void)struct_key;
+        (void)struct_type_name;
     }
-    virtual void endVisitStructVariable(const std::string& struct_name)
+
+    virtual void endVisitStructVariable(const std::string& struct_key)
     {
-        (void)struct_name;
+        (void)struct_key;
     }
 };
 
@@ -81,9 +104,11 @@ public:
         {
             return;
         }
-        for (const auto& [_, hier] : root_hierarchies_)
+        for (const auto& [root_type_name, hier] : root_hierarchies_)
         {
+            visitor->beginRegisteredRootType(root_type_name);
             visitRecursive_(hier->getRoot(), *visitor);
+            visitor->endRegisteredRootType(root_type_name);
         }
     }
 
@@ -111,18 +136,19 @@ private:
                 name_value_pairs.emplace_back(member.name, std::to_string(member.value));
             }
             visitor.visitEnumVariable(enum_name,
+                                      node.type_name,
                                       node.enum_meta->backing_kind,
                                       name_value_pairs);
         }
         else if (node.kind == NodeKind::Struct)
         {
-            const std::string struct_name = node.field_name.empty() ? node.type_name : node.field_name;
-            visitor.visitStructVariable(struct_name);
+            const std::string struct_key = node.field_name.empty() ? node.type_name : node.field_name;
+            visitor.visitStructVariable(struct_key, node.type_name);
             for (const auto& child : node.children)
             {
                 visitRecursive_(*child, visitor);
             }
-            visitor.endVisitStructVariable(struct_name);
+            visitor.endVisitStructVariable(struct_key);
             return;
         }
 

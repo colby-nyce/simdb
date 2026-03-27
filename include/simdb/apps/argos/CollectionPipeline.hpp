@@ -84,7 +84,8 @@ public:
         CollectionPipelineMeta* meta_handler_ = nullptr;
     };
 
-    /// \brief Declare SQLite tables used by Argos collection (globals, clocks, element/collectable trees, dtypes, structs, enums, string map, records, queue sizes).
+    /// \brief Declare SQLite tables used by Argos collection (globals, clocks, element/collectable trees,
+    /// data-type metadata, string map, records, queue sizes).
     /// \param schema Schema object to extend.
     static void defineSchema(Schema& schema)
     {
@@ -109,32 +110,21 @@ public:
         collectable_tns_tbl.addColumn("AutoCollected", dt::int32_t);
         collectable_tns_tbl.setColumnDefaultValue("AutoCollected", 0);
 
-        auto& collected_dtypes_tbl = schema.addTable("CollectedDataTypes");
-        collected_dtypes_tbl.addColumn("DemangledName", dt::string_t);
-        collected_dtypes_tbl.addColumn("NumBytes", dt::int32_t);
+        auto& dtype_schemas_tbl = schema.addTable("DataTypeSchemas");
+        dtype_schemas_tbl.addColumn("RootTypeName", dt::string_t);
 
-        //TODO cnyce: add tables that are designed better for queues, e.g.
-        //capacity and sparse flags
+        auto& dtype_nodes_tbl = schema.addTable("DataTypeNodes");
+        dtype_nodes_tbl.addColumn("SchemaId", dt::int32_t);
+        dtype_nodes_tbl.addColumn("ParentId", dt::int32_t);
+        dtype_nodes_tbl.addColumn("Kind", dt::string_t);
+        dtype_nodes_tbl.addColumn("Name", dt::string_t);
+        dtype_nodes_tbl.addColumn("TypeName", dt::string_t);
+        dtype_nodes_tbl.addColumn("EnumBacking", dt::string_t);
 
-        auto& struct_fields_tbl = schema.addTable("StructFields");
-        struct_fields_tbl.addColumn("StructName", dt::string_t);
-        struct_fields_tbl.addColumn("FieldName", dt::string_t);
-        struct_fields_tbl.addColumn("FieldType", dt::string_t);
-        struct_fields_tbl.addColumn("FormatCode", dt::int32_t);
-        struct_fields_tbl.addColumn("IsAutoColorizeKey", dt::int32_t);
-        struct_fields_tbl.addColumn("IsDisplayedByDefault", dt::int32_t);
-        struct_fields_tbl.setColumnDefaultValue("IsAutoColorizeKey", 0);
-        struct_fields_tbl.setColumnDefaultValue("IsDisplayedByDefault", 1);
-
-        auto& enums_tbl = schema.addTable("Enums");
-        enums_tbl.addColumn("EnumName", dt::string_t);
-        enums_tbl.addColumn("IntType", dt::string_t);
-
-        auto& enum_fields_tbl = schema.addTable("EnumFields");
-        enum_fields_tbl.addColumn("EnumID", dt::int32_t);
-        enum_fields_tbl.addColumn("FieldName", dt::string_t);
-        enum_fields_tbl.addColumn("FieldValUInt64", dt::uint64_t);
-        enum_fields_tbl.addColumn("FieldValInt64", dt::int64_t);
+        auto& dtype_enum_members_tbl = schema.addTable("DataTypeEnumMembers");
+        dtype_enum_members_tbl.addColumn("EnumNodeId", dt::int32_t);
+        dtype_enum_members_tbl.addColumn("MemberName", dt::string_t);
+        dtype_enum_members_tbl.addColumn("MemberValue", dt::string_t);
 
         auto& string_map_tbl = schema.addTable("StringMap");
         string_map_tbl.addColumn("IntVal", dt::int32_t);

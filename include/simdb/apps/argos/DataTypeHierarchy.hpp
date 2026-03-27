@@ -108,6 +108,23 @@ inline const char* podTypeKindToTypeName(PodTypeKind kind)
     return nullptr;
 }
 
+inline const char* enumBackingKindToString(EnumBackingKind kind)
+{
+    switch (kind)
+    {
+    case EnumBackingKind::i8: return "int8_t";
+    case EnumBackingKind::ui8: return "uint8_t";
+    case EnumBackingKind::i16: return "int16_t";
+    case EnumBackingKind::ui16: return "uint16_t";
+    case EnumBackingKind::i32: return "int32_t";
+    case EnumBackingKind::ui32: return "uint32_t";
+    case EnumBackingKind::i64: return "int64_t";
+    case EnumBackingKind::ui64: return "uint64_t";
+    }
+    throw DBException("Unknown enum backing kind");
+    return nullptr;
+}
+
 namespace detail {
 
 template <typename T>

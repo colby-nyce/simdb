@@ -5,6 +5,7 @@
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/CollectionPipeline.hpp"
 #include "simdb/apps/argos/DataTypeInspector.hpp"
+#include "simdb/apps/argos/DataTypeSerializer.hpp"
 #include "simdb/utils/ValidValue.hpp"
 #include "simdb/Exceptions.hpp"
 
@@ -161,53 +162,14 @@ private:
         return it->second.get();
     }
 
-    /// \brief Walk the given data type recursively and update the data
-    /// type tree. This tree looks something like this:
-    ///
-    ///   root
-    ///     dtypes
-    ///       simple
-    ///       i
-    ///       q
-    ///       enums
-    ///         Status
-    ///           FAILED
-    ///           PASSED
-    ///         Colors
-    ///           RED
-    ///           GREEN
-    ///           BLUE
-    ///       structs
-    ///         MyFoo
-    ///           q
-    ///           Status
-    ///         MyBar
-    ///           i
-    ///           Colors
-    ///           MyFoo
-    template <typename ValueType>
-    void updateDataTypeTree_()
-    {
-        
-    }
-
     /// \brief Called when handling the app's postInit()
     void onCollectionStarting(DatabaseManager* db_mgr) override
     {
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
-        /*
-        // Extract all information about collected data types
-        dtype_inspector_.serialize(db_mgr);
-
-        // Create TinyStrings and give it to the collections
-        tiny_strings_ = std::make_unique<TinyStrings<>>(db_mgr);
-        for (const auto & [clk_name, collection] : clk_collections_)
-        {
-            collection->setTinyStrings(tiny_strings_.get());
-        }
-        */
+        // Write data types and their hierarchies (structs / nested structs)
+        DataTypeSerializer::serialize(&dtype_inspector_, db_mgr);
     }
 
     /// \brief Called when handling the app's preTeardown()
