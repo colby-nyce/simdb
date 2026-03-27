@@ -96,18 +96,18 @@ public:
 class Packet
 {
     double timestamp_ = 0;
-    Header header_;
+    std::shared_ptr<Header> header_ = std::make_shared<Header>();
     Metadata metadata_;
     std::string source_;
 
 public:
     double getTimestamp() const { return timestamp_; }
-    const Header& getHeader() const { return header_; }
+    const Header* getHeader() const { return header_.get(); }
     const Metadata& getMetadata() const { return metadata_; }
     std::string getSource() const { return source_; }
 
     void setTimestamp(double v) { timestamp_ = v; }
-    void setHeader(const Header& v) { header_ = v; }
+    void setHeader(const Header& v) { header_ = std::make_shared<Header>(v); }
     void setMetadata(const Metadata& v) { metadata_ = v; }
     void setSource(const std::string& v) { source_ = v; }
 
@@ -285,12 +285,12 @@ int main()
         std::cerr << "timestamp buffer mismatch\n";
         return 1;
     }
-    if (seq_buf != p.getHeader().getSeq())
+    if (seq_buf != p.getHeader()->getSeq())
     {
         std::cerr << "header.seq buffer mismatch\n";
         return 1;
     }
-    if (status_raw != static_cast<std::underlying_type_t<Status>>(p.getHeader().getStatus()))
+    if (status_raw != static_cast<std::underlying_type_t<Status>>(p.getHeader()->getStatus()))
     {
         std::cerr << "header.status buffer mismatch\n";
         return 1;
