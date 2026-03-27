@@ -369,11 +369,23 @@ std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier
         }
         else
         {
-            node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
-                const auto* value = static_cast<const value_t*>(value_void);
-                const auto* bytes = reinterpret_cast<const char*>(value);
-                buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
-            };
+            if constexpr (std::is_same_v<value_t, bool>)
+            {
+                node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
+                    const auto* value = static_cast<const value_t*>(value_void);
+                    const uint8_t v = (*value) ? 1u : 0u;
+                    const auto* bytes = reinterpret_cast<const char*>(&v);
+                    buffer.insert(buffer.end(), bytes, bytes + sizeof(v));
+                };
+            }
+            else
+            {
+                node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
+                    const auto* value = static_cast<const value_t*>(value_void);
+                    const auto* bytes = reinterpret_cast<const char*>(value);
+                    buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
+                };
+            }
         }
     }
     else

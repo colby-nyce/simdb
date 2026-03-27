@@ -246,7 +246,7 @@ int main()
     std::vector<char> buffer;
     packet->writeBuffer(buffer, &p);
     const auto expected_size =
-        sizeof(double) + sizeof(uint32_t) + sizeof(Status) + sizeof(uint64_t) + sizeof(bool) +
+        sizeof(double) + sizeof(uint32_t) + sizeof(Status) + sizeof(uint64_t) + sizeof(uint8_t) +
         sizeof(Priority) + sizeof(uint32_t) + sizeof(uint32_t);
     if (buffer.size() != expected_size)
     {
@@ -259,7 +259,7 @@ int main()
     const auto seq_buf = readScalarFromBuffer<uint32_t>(buffer, offset);
     const auto status_raw = readScalarFromBuffer<std::underlying_type_t<Status>>(buffer, offset);
     const auto trace_id_buf = readScalarFromBuffer<uint64_t>(buffer, offset);
-    const auto valid_buf = readScalarFromBuffer<bool>(buffer, offset);
+    const auto valid_buf = readScalarFromBuffer<uint8_t>(buffer, offset);
     const auto priority_raw = readScalarFromBuffer<std::underlying_type_t<Priority>>(buffer, offset);
     const auto label_id_buf = readScalarFromBuffer<uint32_t>(buffer, offset);
     const auto source_id_buf = readScalarFromBuffer<uint32_t>(buffer, offset);
@@ -290,7 +290,7 @@ int main()
         std::cerr << "metadata.trace_id buffer mismatch\n";
         return 1;
     }
-    if (valid_buf != p.getMetadata().valid)
+    if (valid_buf != static_cast<uint8_t>(p.getMetadata().valid ? 1u : 0u))
     {
         std::cerr << "metadata.valid buffer mismatch\n";
         return 1;

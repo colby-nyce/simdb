@@ -126,6 +126,12 @@ public:
             const auto* bytes = reinterpret_cast<const char*>(&id);
             buffer.insert(buffer.end(), bytes, bytes + sizeof(id));
         }
+        else if constexpr (std::is_same_v<value_t, bool>)
+        {
+            const uint8_t v = std::invoke(Getter, owner) ? 1u : 0u;
+            const auto* bytes = reinterpret_cast<const char*>(&v);
+            buffer.insert(buffer.end(), bytes, bytes + sizeof(v));
+        }
         else
         {
             value_t v = static_cast<value_t>(std::invoke(Getter, owner));
