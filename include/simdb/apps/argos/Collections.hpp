@@ -202,19 +202,55 @@ private:
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
 
         db_mgr->safeTransaction([&]() {
-            std::map<simdb::Tree::TreeNode*, int> db_ids;
+            std::map<simdb::Tree::TreeNode*, int> element_db_ids;
             collectables_tree_.dfs([&](simdb::Tree::TreeNode* node) {
                 auto parent_id = 0;
                 if (auto* parent = node->getParent())
                 {
-                    parent_id = db_ids.at(parent);
+                    parent_id = element_db_ids.at(parent);
                 }
                 auto rec = db_mgr->INSERT(
                     SQL_TABLE("ElementTreeNodes"),
                     SQL_VALUES(parent_id, node->getName()));
-                db_ids[node] = rec->getId();
-                return true; // keep going
+                element_db_ids[node] = rec->getId();
+                return true;
             });
+
+            std::map<std::string, int> clock_db_ids;
+            for (const auto& [clk_name, period] : clk_periods_)
+            {
+                auto coll_it = clk_collections_.find(clk_name);
+                if (coll_it == clk_collections_.end() || !coll_it->second)
+                {
+                    continue;
+                }
+                auto clk_rec = db_mgr->INSERT(
+                    SQL_TABLE("Clocks"),
+                    SQL_VALUES(clk_name, static_cast<int32_t>(period)));
+                clock_db_ids[clk_name] = clk_rec->getId();
+            }
+
+            for (const auto& [clk_name, collection_ptr] : clk_collections_)
+            {
+                if (!collection_ptr)
+                {
+                    continue;
+                }
+                const int clock_id = clock_db_ids.at(clk_name);
+                for (const auto& path : collection_ptr->getCollectablePaths())
+                {
+                    auto* elem_node = collectables_tree_.tryGet(path, true);
+                    const int elem_tree_id = element_db_ids.at(elem_node);
+                    const auto* coll = collection_ptr->getCollectable(path);
+                    (void)db_mgr->INSERT(
+                        SQL_TABLE("CollectableTreeNodes"),
+                        SQL_VALUES(
+                            elem_tree_id,
+                            clock_id,
+                            coll->collectableTypeNameForDb(),
+                            coll->collectableAutoCollectedForDb()));
+                }
+            }
         });
 
         dtype_inspector_.bindDatabase(db_mgr);

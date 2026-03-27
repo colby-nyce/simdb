@@ -3,7 +3,11 @@
 #pragma once
 
 #include "simdb/apps/argos/ArgosRecord.hpp"
+#include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/TypeTraits.hpp"
+
+#include <cstdint>
+#include <string>
 
 namespace simdb::collection {
 
@@ -36,6 +40,12 @@ public:
         (void)buf;
         throw DBException("This collectable does not support auto-collection");
     }
+
+    /// Demangled element type for scalars, or element demangle + \c _contig_capacityN / \c _sparse_capacityN for queues.
+    virtual std::string collectableTypeNameForDb() const = 0;
+
+    /// \c 1 if this collectable was registered for auto-collection, else \c 0 (matches \c CollectableTreeNodes.AutoCollected).
+    virtual int32_t collectableAutoCollectedForDb() const = 0;
 
 protected:
     CollectableBase(Collection* collection, size_t heartbeat)
@@ -90,6 +100,13 @@ public:
 
     using ValueType = type_traits::remove_any_pointer_t<ScalarT>;
 
+    std::string collectableTypeNameForDb() const override
+    {
+        return simdb::demangle_type<ValueType>();
+    }
+
+    int32_t collectableAutoCollectedForDb() const override { return 0; }
+
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename CollectedT>
     std::enable_if_t<std::is_same_v<CollectedT, ValueType>, void>
@@ -131,6 +148,8 @@ public:
         (void)buf;
     }
 
+    int32_t collectableAutoCollectedForDb() const override { return 1; }
+
 private:
     const ScalarT *const scalar_;
 };
@@ -146,6 +165,18 @@ public:
     {}
 
     using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
+
+    std::string collectableTypeNameForDb() const override
+    {
+        std::string base = simdb::demangle_type<ValueType>();
+        if constexpr (Sparse)
+        {
+            return base + "_sparse_capacity" + std::to_string(expected_capacity_);
+        }
+        return base + "_contig_capacity" + std::to_string(expected_capacity_);
+    }
+
+    int32_t collectableAutoCollectedForDb() const override { return 0; }
 
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename CollectedT>
@@ -193,6 +224,8 @@ public:
     {
         (void)buf;
     }
+
+    int32_t collectableAutoCollectedForDb() const override { return 1; }
 
 private:
     const ContainerT *const container_;

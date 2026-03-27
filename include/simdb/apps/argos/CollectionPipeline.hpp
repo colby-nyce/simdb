@@ -95,22 +95,6 @@ public:
         auto& globals_tbl = schema.addTable("CollectionGlobals");
         globals_tbl.addColumn("Heartbeat", dt::int32_t);
 
-        auto& clks_tbl = schema.addTable("Clocks");
-        clks_tbl.addColumn("Name", dt::string_t);
-        clks_tbl.addColumn("Period", dt::int32_t);
-
-        auto& elem_tns_tbl = schema.addTable("ElementTreeNodes");
-        elem_tns_tbl.addColumn("ParentId", dt::int32_t);
-        elem_tns_tbl.addColumn("Name", dt::string_t);
-
-        auto& collectable_tns_tbl = schema.addTable("CollectableTreeNodes");
-        collectable_tns_tbl.addColumn("ElementTreeNodeID", dt::int32_t);
-        collectable_tns_tbl.addColumn("ClockID", dt::int32_t);
-        collectable_tns_tbl.addColumn("DataType", dt::string_t);
-        collectable_tns_tbl.addColumn("Location", dt::string_t);
-        collectable_tns_tbl.addColumn("AutoCollected", dt::int32_t);
-        collectable_tns_tbl.setColumnDefaultValue("AutoCollected", 0);
-
         auto& dtype_schemas_tbl = schema.addTable("DataTypeSchemas");
         dtype_schemas_tbl.addColumn("RootTypeName", dt::string_t);
 
@@ -128,9 +112,19 @@ public:
         dtype_enum_members_tbl.addColumn("MemberName", dt::string_t);
         dtype_enum_members_tbl.addColumn("MemberValue", dt::string_t);
 
-        auto& string_map_tbl = schema.addTable("StringMap");
-        string_map_tbl.addColumn("IntVal", dt::int32_t);
-        string_map_tbl.addColumn("String", dt::string_t);
+        auto& clks_tbl = schema.addTable("Clocks");
+        clks_tbl.addColumn("Name", dt::string_t);
+        clks_tbl.addColumn("Period", dt::int32_t);
+
+        auto& elem_tns_tbl = schema.addTable("ElementTreeNodes");
+        elem_tns_tbl.addColumn("ParentId", dt::int32_t);
+        elem_tns_tbl.addColumn("Name", dt::string_t);
+
+        auto& collectable_tns_tbl = schema.addTable("CollectableTreeNodes");
+        collectable_tns_tbl.addColumn("ElementTreeNodeID", dt::int32_t);
+        collectable_tns_tbl.addColumn("ClockID", dt::int32_t);
+        collectable_tns_tbl.addColumn("TypeName", dt::string_t);
+        collectable_tns_tbl.addColumn("AutoCollected", dt::int32_t);
 
         auto& collection_records_tbl = schema.addTable("CollectionRecords");
         collection_records_tbl.addColumn("Tick", dt::uint64_t);

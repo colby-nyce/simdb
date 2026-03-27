@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
-"""Pretty-print Argos collection SQLite tables: DataTypeSchemas, DataTypeNodes, DataTypeEnumMembers.
+"""Pretty-print all rows from tables in a SQLite database (read-only).
 
-DataTypeNodes includes a Description column (after Name) when the DB was created with a recent
-schema; use --description-max-width to allow longer text before truncation (default 96).
+By default every non-internal table is dumped in name order (skips sqlite_* and
+names starting with internal$). Use --table / -t
+(one or more times) to restrict output. Wider cells in any column named
+Description can use --description-max-width.
 """
 
 import argparse
 import sqlite3
 import sys
-from typing import Any, List, Sequence, Tuple
-
-TABLES = ("DataTypeSchemas", "DataTypeNodes", "DataTypeEnumMembers")
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
-def _cell_str(val):
-    # type: (Any) -> str
+def _cell_str(val: Any) -> str:
     if val is None:
         return ""
     return str(val)
 
 
-def _column_widths(headers, rows, min_w, max_w, col_max_overrides=None):
-    # type: (Sequence[str], Sequence[Sequence[Any]], int, int, Any) -> List[int]
+def _column_widths(
+    headers: Sequence[str],
+    rows: Sequence[Sequence[Any]],
+    min_w: int,
+    max_w: int,
+    col_max_overrides=None,
+):
+    # type: (Sequence[str], Sequence[Sequence[Any]], int, int, Optional[Dict[str, int]]) -> List[int]
     overrides = col_max_overrides or {}
-    widths = []  # type: List[int]
+    widths: List[int] = []
     for col_idx, header in enumerate(headers):
         cap = int(overrides.get(header, max_w))
         w = max(min_w, len(header))
@@ -33,8 +38,7 @@ def _column_widths(headers, rows, min_w, max_w, col_max_overrides=None):
     return widths
 
 
-def _pad_cell(text, width):
-    # type: (str, int) -> str
+def _pad_cell(text: str, width: int) -> str:
     if len(text) <= width:
         return text.ljust(width)
     if width <= 3:
@@ -43,7 +47,7 @@ def _pad_cell(text, width):
 
 
 def print_fixed_table(title, headers, rows, min_w, max_w, col_max_overrides=None):
-    # type: (str, Sequence[str], Sequence[Sequence[Any]], int, int, Any) -> None
+    # type: (str, List[str], Sequence[Sequence[Any]], int, int, Optional[Dict[str, int]]) -> None
     if not headers:
         print("\n## {}\n  (no columns)".format(title))
         return
@@ -73,8 +77,16 @@ def table_exists(conn, name):
     return cur.fetchone() is not None
 
 
-def _quote_ident(ident):
-    # type: (str) -> str
+def list_user_tables(conn):
+    # type: (sqlite3.Connection) -> List[str]
+    cur = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' "
+        "AND name NOT GLOB 'internal$*' ORDER BY name"
+    )
+    return [row[0] for row in cur.fetchall()]
+
+
+def _quote_ident(ident: str) -> str:
     return '"{}"'.format(ident.replace('"', '""'))
 
 
@@ -82,19 +94,36 @@ def fetch_ordered(conn, table, columns):
     # type: (sqlite3.Connection, str, Sequence[str]) -> List[Tuple[Any, ...]]
     cols_sql = ", ".join(_quote_ident(c) for c in columns)
     order = "Id" if "Id" in columns else columns[0]
-    sql = "SELECT {} FROM {} ORDER BY {}".format(cols_sql, _quote_ident(table), _quote_ident(order))
+    sql = "SELECT {} FROM {} ORDER BY {}".format(
+        cols_sql, _quote_ident(table), _quote_ident(order)
+    )
     cur = conn.execute(sql)
     return cur.fetchall()
+
+
+def _dedupe_preserve(names):
+    # type: (Sequence[str]) -> List[str]
+    seen = set()  # type: set
+    out = []  # type: List[str]
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
 
 
 def main():
     # type: () -> int
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("db", help="Path to SQLite database file (read-only open).")
     p.add_argument(
-        "db",
-        nargs="?",
-        default="test.db",
-        help="Path to SimDB SQLite file (default: test.db in current directory)",
+        "--table",
+        "-t",
+        action="append",
+        dest="tables",
+        metavar="NAME",
+        default=None,
+        help="Dump only this table (repeat for multiple tables).",
     )
     p.add_argument(
         "--min-width",
@@ -115,7 +144,7 @@ def main():
         type=int,
         default=96,
         metavar="N",
-        help="Max width for the DataTypeNodes Description column (default: 96)",
+        help="Extra width ceiling for any column named Description (default: 96)",
     )
     args = p.parse_args()
 
@@ -130,21 +159,36 @@ def main():
         return 1
 
     try:
-        for table in TABLES:
-            if not table_exists(conn, table):
-                print(
-                    "\n## {}\n  (table missing — run collector to create schema)".format(table)
-                )
-                continue
+        if args.tables:
+            tables_to_dump = _dedupe_preserve(args.tables)
+            for name in tables_to_dump:
+                if not table_exists(conn, name):
+                    print(
+                        "error: no such table {!r} in {!r}".format(name, args.db),
+                        file=sys.stderr,
+                    )
+                    return 1
+        else:
+            tables_to_dump = list_user_tables(conn)
+            if not tables_to_dump:
+                print("(no user tables in {!r})".format(args.db))
+                return 0
+
+        for table in tables_to_dump:
             cur = conn.execute('PRAGMA table_info("{}")'.format(table.replace('"', '""')))
             columns = [row[1] for row in cur.fetchall()]
+            if not columns:
+                print("\n## {}\n  (table exists but has no columns)".format(table))
+                continue
             rows = fetch_ordered(conn, table, columns)
             col_max_overrides = None
-            if table == "DataTypeNodes" and "Description" in columns:
-                col_max_overrides = {"Description": max(args.max_width, args.description_max_width)}
+            if "Description" in columns:
+                col_max_overrides = {
+                    "Description": max(args.max_width, args.description_max_width)
+                }
             print_fixed_table(
                 table,
-                columns,
+                list(columns),
                 rows,
                 args.min_width,
                 args.max_width,
