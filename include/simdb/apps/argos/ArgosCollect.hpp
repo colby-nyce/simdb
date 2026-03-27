@@ -4,6 +4,7 @@
 #include "simdb/utils/Demangle.hpp"
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -70,6 +71,16 @@ struct getter_traits<Getter>
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
+template <typename T, typename = void>
+struct has_nested_argos_collector : std::false_type {};
+
+template <typename T>
+struct has_nested_argos_collector<T, std::void_t<typename remove_cvref_t<T>::ArgosCollector>> : std::true_type
+{};
+
+template <typename T>
+inline constexpr bool has_nested_argos_collector_v = has_nested_argos_collector<T>::value;
+
 } // namespace detail
 
 // POD-only field implementation: invokes a getter and memcpy's returned scalar bytes.
@@ -115,6 +126,109 @@ private:
     std::string type_name_;
 };
 
+// Enum: getter returns enum type; bytes are the underlying integral representation.
+// Symbol names / values for the schema come from EnumDescriptor<EnumT>::members().
+template <typename OwnerT, auto Getter>
+class ArgosEnumField final : public ArgosFieldBase
+{
+    using traits = detail::getter_traits<Getter>;
+    using enum_t = detail::remove_cvref_t<typename traits::return_t>;
+    using int_t = std::underlying_type_t<enum_t>;
+
+public:
+    ArgosEnumField(ArgosCollectorBase<OwnerT>* owner, const char* name)
+        : name_(name)
+        , type_name_(simdb::demangle_type<enum_t>())
+    {
+        static_assert(std::is_enum_v<enum_t>, "ArgosEnumField requires an enum getter return type");
+        owner->addField_(this);
+    }
+
+    std::string getName() const override { return name_; }
+    std::string getTypeName() const override { return type_name_; }
+    bool isEnumField() const override { return true; }
+    bool isStructField() const override { return false; }
+    PodTypeKind getPodTypeKind() const override { return PodTypeKind::i32; }
+    EnumBackingKind getEnumBackingKind() const override { return detail::getBackingKind<int_t>(); }
+    std::vector<EnumMember> getEnumMembers() const override { return EnumDescriptor<enum_t>::members(); }
+    std::string getStructTypeName() const override { return {}; }
+    std::vector<const ArgosFieldBase*> getStructFields() const override { return {}; }
+
+    void writeBufferErased(std::vector<char>& buffer, const void* owner_void) const override
+    {
+        const auto* owner = static_cast<const OwnerT*>(owner_void);
+        const int_t raw = static_cast<int_t>(std::invoke(Getter, owner));
+        const auto* bytes = reinterpret_cast<const char*>(&raw);
+        buffer.insert(buffer.end(), bytes, bytes + sizeof(int_t));
+    }
+
+    const void* getStructPtrErased(const void*) const override { return nullptr; }
+
+private:
+    std::string name_;
+    std::string type_name_;
+};
+
+// Nested aggregate: getter returns const Nested& or const Nested* (or non-const pointer).
+// Nested must define nested ArgosCollector : ArgosCollectorBase<Nested>.
+template <typename OwnerT, auto Getter>
+class ArgosStructField final : public ArgosFieldBase
+{
+    using traits = detail::getter_traits<Getter>;
+    using raw_ret = typename traits::return_t;
+    using bare_ret = std::remove_reference_t<raw_ret>;
+    using nested_t = std::conditional_t<
+        std::is_pointer_v<std::remove_cv_t<bare_ret>>,
+        std::remove_pointer_t<std::remove_cv_t<bare_ret>>,
+        std::remove_cv_t<bare_ret>>;
+
+public:
+    ArgosStructField(ArgosCollectorBase<OwnerT>* owner, const char* name)
+        : name_(name)
+        , struct_type_name_(simdb::demangle_type<nested_t>())
+    {
+        static_assert(!std::is_enum_v<nested_t>, "Use ARGOS_COLLECT_ENUM for enum fields");
+        static_assert(detail::has_nested_argos_collector_v<nested_t>,
+                      "Nested type must define nested ArgosCollector");
+        owner->addField_(this);
+    }
+
+    std::string getName() const override { return name_; }
+    std::string getTypeName() const override { return struct_type_name_; }
+    bool isEnumField() const override { return false; }
+    bool isStructField() const override { return true; }
+    PodTypeKind getPodTypeKind() const override { return PodTypeKind::i32; }
+    EnumBackingKind getEnumBackingKind() const override { return EnumBackingKind::i32; }
+    std::vector<EnumMember> getEnumMembers() const override { return {}; }
+    std::string getStructTypeName() const override { return struct_type_name_; }
+
+    std::vector<const ArgosFieldBase*> getStructFields() const override
+    {
+        static typename nested_t::ArgosCollector nested_schema;
+        return nested_schema.getFields();
+    }
+
+    void writeBufferErased(std::vector<char>&, const void*) const override {}
+
+    const void* getStructPtrErased(const void* owner_void) const override
+    {
+        const auto* owner = static_cast<const OwnerT*>(owner_void);
+        if constexpr (std::is_pointer_v<bare_ret>)
+        {
+            return std::invoke(Getter, owner);
+        } else
+        {
+            // Invoking the getter here yields an lvalue into `*owner`; do not
+            // assign it to `auto` (that would copy temporaries and dangle).
+            return static_cast<const void*>(std::addressof(std::invoke(Getter, owner)));
+        }
+    }
+
+private:
+    std::string name_;
+    std::string struct_type_name_;
+};
+
 } // namespace simdb::collection::cursor
 
 // Macro glue
@@ -125,4 +239,12 @@ private:
 #define ARGOS_COLLECT(field_name, getter_ptr)                                                 \
     simdb::collection::cursor::ArgosPodField<collected_type, getter_ptr>                      \
         ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name};
+
+#define ARGOS_COLLECT_ENUM(field_name, getter_ptr)                                            \
+    simdb::collection::cursor::ArgosEnumField<collected_type, getter_ptr>                     \
+        ARGOS_COLLECT_CAT(argos_collect_enum_, __COUNTER__){this, #field_name};
+
+#define ARGOS_COLLECT_STRUCT(field_name, getter_ptr)                                          \
+    simdb::collection::cursor::ArgosStructField<collected_type, getter_ptr>                  \
+        ARGOS_COLLECT_CAT(argos_collect_struct_, __COUNTER__){this, #field_name};
 
