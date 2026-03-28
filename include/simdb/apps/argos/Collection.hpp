@@ -218,6 +218,8 @@ private:
         }
     }
 
+    /// \brief Ensure we can still create the timestamp; once domain collections
+    /// are added we can no longer change the timestamp
     void ensureTimestampReconfigurable_() const
     {
         if (!collections_.empty())
