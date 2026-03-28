@@ -1,7 +1,7 @@
 #include "RandUtils.hpp"
 #include "SimDBTester.hpp"
 #include "simdb/apps/AppManager.hpp"
-#include "simdb/apps/argos/Collections.hpp"
+#include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 #include "simdb/utils/Tree.hpp"
 
@@ -125,21 +125,23 @@ private:
 
 int main(int argc, char** argv)
 {
-    simdb::collection::Collections collections;
-    collections.addCollection<uint64_t>("root", 1);
+    Sim sim;
+    simdb::collection::Collection<uint64_t> collection;
+    collection.addCollection("root", 1);
+    collection.timestampWith([&sim]() { return sim.getCurrentTick(); });
 
     int intval = 5;
-    auto auto_int_collector = collections.collectScalarWithAutoCollection<int>(
+    auto auto_int_collector = collection.collectScalarWithAutoCollection<int>(
         "auto.int", "root", &intval);
 
-    auto manual_int_collector = collections.collectScalarManually<int>(
+    auto manual_int_collector = collection.collectScalarManually<int>(
         "manual.int", "root");
 
     auto color = simdb::Colors::GREEN;
-    auto auto_enum_collector = collections.collectScalarWithAutoCollection<simdb::Colors>(
+    auto auto_enum_collector = collection.collectScalarWithAutoCollection<simdb::Colors>(
         "auto.color", "root", &color);
 
-    auto manual_enum_collector = collections.collectScalarManually<simdb::Colors>(
+    auto manual_enum_collector = collection.collectScalarManually<simdb::Colors>(
         "manual.color", "root");
 
     class Packet
@@ -163,19 +165,19 @@ int main(int argc, char** argv)
         };
     } packet;
 
-    auto auto_packet_collector = collections.collectScalarWithAutoCollection<Packet>(
+    auto auto_packet_collector = collection.collectScalarWithAutoCollection<Packet>(
         "auto.packet", "root", &packet);
 
-    auto manual_packet_collector = collections.collectScalarManually<Packet>(
+    auto manual_packet_collector = collection.collectScalarManually<Packet>(
         "manual.packet", "root");
 
     using PacketQueue = std::vector<std::shared_ptr<Packet>>;
     PacketQueue packet_queue;
 
-    auto auto_packet_q_collector = collections.collectContainerWithAutoCollection<PacketQueue, false>(
+    auto auto_packet_q_collector = collection.collectContainerWithAutoCollection<PacketQueue, false>(
         "auto.packet_q", "root", &packet_queue, 8);
 
-    auto manual_packet_q_collector = collections.collectContainerManually<PacketQueue, false>(
+    auto manual_packet_q_collector = collection.collectContainerManually<PacketQueue, false>(
         "manual.packet_q", "root", 8);
 
     simdb::AppManagers app_mgrs;
@@ -184,7 +186,7 @@ int main(int argc, char** argv)
     auto& app_mgr = app_mgrs.createAppManager("test.db");
     app_mgr.enableApp<simdb::collection::CollectionPipeline>();
 
-    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collections, &collections);
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
     app_mgrs.createEnabledApps();
     app_mgrs.createSchemas();
     app_mgrs.postInit(argc, argv);

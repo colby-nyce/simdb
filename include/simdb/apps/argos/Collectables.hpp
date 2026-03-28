@@ -14,7 +14,7 @@
 
 namespace simdb::collection {
 
-class Collection;
+class DomainCollection;
 
 /// Base class for all collectables.
 class CollectableBase
@@ -56,7 +56,7 @@ public:
     virtual int32_t collectableAutoCollectedForDb() const = 0;
 
 protected:
-    CollectableBase(Collection* collection, size_t heartbeat)
+    CollectableBase(DomainCollection* collection, size_t heartbeat)
         : collection_(collection)
         , heartbeat_(heartbeat)
     {}
@@ -86,7 +86,7 @@ protected:
 
 private:
     /// Collection object that owns 'this' collectable
-    Collection *const collection_;
+    DomainCollection *const collection_;
 
     /// Heartbeat value for this collection point. This is the
     /// maximum number of cycles SimDB will attempt to perform
@@ -103,7 +103,7 @@ private:
     PipelineStagerBase* stager_ = nullptr;
 
     /// \note Friendship needed to the enabled_ flag can be set
-    friend class Collection;
+    friend class DomainCollection;
 };
 
 /// Template class for all scalar types (POD, struct-like, string, enum, bool)
@@ -113,7 +113,7 @@ class ScalarCollector : public CollectableBase
 public:
     using ValueType = type_traits::remove_any_pointer_t<ScalarT>;
 
-    ScalarCollector(Collection* collection,
+    ScalarCollector(DomainCollection* collection,
                     size_t heartbeat,
                     std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
         : CollectableBase(collection, heartbeat)
@@ -166,7 +166,7 @@ public:
     using ValueType = typename ScalarCollector<ScalarT>::ValueType;
 
     /// \brief Construct with a backpointer to the auto-collected scalar
-    AutoScalarCollector(Collection* collection,
+    AutoScalarCollector(DomainCollection* collection,
                         size_t heartbeat,
                         std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy,
                         const ScalarT* scalar)
@@ -193,7 +193,7 @@ class ContainerCollector : public CollectableBase
 public:
     using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
 
-    explicit ContainerCollector(Collection* collection,
+    explicit ContainerCollector(DomainCollection* collection,
                                 size_t heartbeat,
                                 size_t expected_capacity,
                                 std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
@@ -310,7 +310,7 @@ public:
     using ValueType = typename ContainerCollector<ContainerT, Sparse>::ValueType;
 
     /// \brief Construct with a backpointer to the auto-collected container
-    AutoContainerCollector(Collection* collection,
+    AutoContainerCollector(DomainCollection* collection,
                            size_t heartbeat,
                            const ContainerT* container,
                            size_t expected_capacity,

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/apps/argos/Collection.hpp"
+#include "simdb/apps/argos/DomainCollection.hpp"
 #include "simdb/apps/argos/CollectionPipeline.hpp"
 #include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/apps/argos/DataTypeSerializer.hpp"
@@ -45,10 +45,9 @@ struct dtype_register_element<T*> : dtype_register_element<T>
 constexpr inline size_t DEFAULT_HEARTBEAT = 10;
 
 /// \class Collections
-/// \brief This class holds separate Collection's for each clock
+/// \brief This class holds separate DomainCollection's for each clock
 /// domain across all collectables.
-class Collections : public CollectionPipelineMeta
-                  , public StageInterface
+class Collections : public CollectionPipelineHelper
 {
 public:
     /// \brief Construct
@@ -86,7 +85,7 @@ public:
                 << "already has a collection with period " << clk_periods_[clk_name];
         }
 
-        auto& collection = clk_collections_[clk_name];
+        auto& collection = collections_[clk_name];
         if (!collection)
         {
             collection = std::make_unique<TimestampedCollection<TimeT>>();
@@ -175,7 +174,7 @@ public:
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
     void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head)
     {
-        for (auto& [_, collection] : clk_collections_)
+        for (auto& [_, collection] : collections_)
         {
             collection->connectToPipeline(pipeline_head);
         }
@@ -194,10 +193,10 @@ private:
 
     /// \brief Return the collection for the given clock
     /// \throw Throws if not found and must_exist=true
-    Collection* getCollection_(const std::string& clk_name, bool must_exist = false) const
+    DomainCollection* getCollection_(const std::string& clk_name, bool must_exist = false) const
     {
-        auto it = clk_collections_.find(clk_name);
-        if (it == clk_collections_.end())
+        auto it = collections_.find(clk_name);
+        if (it == collections_.end())
         {
             if (must_exist)
             {
@@ -210,7 +209,7 @@ private:
     }
 
     /// \brief Called when handling the app's postInit()
-    void writePostInitMeta(DatabaseManager* db_mgr) override
+    void writeMetaOnPostInit(DatabaseManager* db_mgr) override
     {
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
@@ -233,8 +232,8 @@ private:
             std::map<std::string, int> clock_db_ids;
             for (const auto& [clk_name, period] : clk_periods_)
             {
-                auto coll_it = clk_collections_.find(clk_name);
-                if (coll_it == clk_collections_.end() || !coll_it->second)
+                auto coll_it = collections_.find(clk_name);
+                if (coll_it == collections_.end() || !coll_it->second)
                 {
                     continue;
                 }
@@ -244,7 +243,7 @@ private:
                 clock_db_ids[clk_name] = clk_rec->getId();
             }
 
-            for (const auto& [clk_name, collection_ptr] : clk_collections_)
+            for (const auto& [clk_name, collection_ptr] : collections_)
             {
                 if (!collection_ptr)
                 {
@@ -275,7 +274,7 @@ private:
 
     void openStage(ConcurrentQueue<Payload>* pipeline_head) override
     {
-        for (auto& [_, collection] : clk_collections_)
+        for (auto& [_, collection] : collections_)
         {
             collection->connectToPipeline(pipeline_head);
         }
@@ -283,7 +282,7 @@ private:
 
     void flushStageToPipeline() override
     {
-        for (auto& [_, collection] : clk_collections_)
+        for (auto& [_, collection] : collections_)
         {
             collection->flushToPipeline();
         }
@@ -291,7 +290,7 @@ private:
 
     const size_t heartbeat_;
     const std::vector<std::string> default_enabled_paths_;
-    std::map<std::string, std::unique_ptr<Collection>> clk_collections_;
+    std::map<std::string, std::unique_ptr<DomainCollection>> collections_;
     std::map<std::string, size_t> clk_periods_;
     std::unordered_set<std::string> all_collectable_paths_;
     DataTypeInspector dtype_inspector_;

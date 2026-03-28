@@ -9,28 +9,13 @@
 
 namespace simdb::collection {
 
-/// \class CollectionPipelineMeta
-/// \brief Callback interface for collection lifecycle tied to a \ref CollectionPipeline app.
-///
-/// Implementations run while the pipeline app is active: after \ref App postInit, before preTeardown,
-/// and after postTeardown. Use these hooks to build trees, register collectables, or flush state to
-/// \a db_mgr.
-class CollectionPipelineMeta
+/// \class CollectionPipelineHelper
+/// \brief TODO cnyce: try to refactor and get rid of this class
+class CollectionPipelineHelper
 {
 public:
-    virtual ~CollectionPipelineMeta() = default;
-
-    /// \brief Called when collection starts (pipeline \ref App postInit).
-    /// \param db_mgr Database manager for the current run.
-    virtual void writePostInitMeta(DatabaseManager* db_mgr) = 0;
-};
-
-/// \class StageInterface
-/// \brief TODO cnyce
-class StageInterface
-{
-public:
-    virtual ~StageInterface() = default;
+    virtual ~CollectionPipelineHelper() = default;
+    virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
     virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;
     virtual void flushStageToPipeline() = 0;
 };
@@ -47,11 +32,10 @@ public:
     /// \brief Construct the collection pipeline app.
     /// \param db_mgr Database manager used for schema and persistence.
     /// \param handler Non-owning callbacks; must remain valid for the lifetime of this app (typically supplied via \ref AppFactory::parameterize).
-    CollectionPipeline(DatabaseManager* db_mgr, CollectionPipelineMeta* meta_handler, StageInterface* stage_if)
+    CollectionPipeline(DatabaseManager* db_mgr, CollectionPipelineHelper* pipeline_helper)
         : db_mgr_(db_mgr)
         , tiny_strings_(db_mgr)
-        , meta_handler_(meta_handler)
-        , stage_if_(stage_if)
+        , pipeline_helper_(pipeline_helper)
     {}
 
     /// \class AppFactory
@@ -61,22 +45,19 @@ public:
     public:
         using AppT = CollectionPipeline;
 
-        /// \brief Set the meta handler passed to every \ref createApp result.
-        /// \param handler Implementation receiving collection lifecycle callbacks; must not be null when \ref createApp is called.
-        void parameterize(CollectionPipelineMeta* meta_handler, StageInterface* stage_if)
+        /// \brief TODO cnyce: get rid of this after refactor if possible
+        void parameterize(CollectionPipelineHelper* pipeline_helper)
         {
-            meta_handler_ = meta_handler;
-            stage_if_ = stage_if;
+            pipeline_helper_ = pipeline_helper;
         }
 
-        /// \brief Allocate a new pipeline app bound to the parameterized meta handler.
+        /// \brief Allocate a new pipeline app.
         /// \param db_mgr Database manager for the new app.
         /// \return New \ref CollectionPipeline; ownership follows the app framework contract.
-        /// \note Debug builds assert if \ref meta_handler_ was never set via \ref parameterize.
         AppT* createApp(DatabaseManager* db_mgr) override
         {
-            assert(meta_handler_ != nullptr);
-            return new AppT(db_mgr, meta_handler_, stage_if_);
+            assert(pipeline_helper_ != nullptr);
+            return new AppT(db_mgr, pipeline_helper_);
         }
 
         /// \brief Populate \a schema with the same tables as \ref CollectionPipeline::defineSchema.
@@ -87,11 +68,8 @@ public:
         }
 
     private:
-        /// \brief Handler wired into each created app; set by \ref parameterize.
-        CollectionPipelineMeta* meta_handler_ = nullptr;
-
-        /// \brief Stage open/flush interface.
-        StageInterface* stage_if_ = nullptr;
+        /// \brief TODO cnyce
+        CollectionPipelineHelper* pipeline_helper_ = nullptr;
     };
 
     /// \brief Declare SQLite tables used by Argos collection (globals, clocks, element/collectable trees,
@@ -167,19 +145,19 @@ public:
         pipeline->noMoreBindings();
 
         auto pipeline_head = pipeline->getInPortQueue<collection::Payload>("compressor.input_queue");
-        stage_if_->openStage(pipeline_head);
+        pipeline_helper_->openStage(pipeline_head);
     }
 
-    /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writePostInitMeta.
+    /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writeMetaOnPostInit.
     void postInit(int, char**) override
     {
-        meta_handler_->writePostInitMeta(db_mgr_);
+        pipeline_helper_->writeMetaOnPostInit(db_mgr_);
     }
 
     /// \brief Run before teardown; invokes \ref CollectionPipelineMeta::onCollectionStopping.
     void preTeardown() override
     {
-        stage_if_->flushStageToPipeline();
+        pipeline_helper_->flushStageToPipeline();
     }
 
 private:
@@ -225,8 +203,7 @@ private:
 
     DatabaseManager *const db_mgr_;
     simdb::TinyStrings<> tiny_strings_;
-    CollectionPipelineMeta *const meta_handler_;
-    StageInterface *const stage_if_;
+    CollectionPipelineHelper* pipeline_helper_ = nullptr;
 };
 
 } // namespace simdb::collection
