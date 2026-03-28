@@ -188,6 +188,16 @@ template <typename T, size_t N> struct is_contiguous<std::array<T, N>> : std::tr
 {
 };
 
+template <typename T> struct is_std_vector : std::false_type
+{
+};
+
+template <typename T, typename Alloc> struct is_std_vector<std::vector<T, Alloc>> : std::true_type
+{
+};
+
+template <typename T> constexpr auto is_std_vector_v = is_std_vector<T>::value;
+
 // TypeAt<N, Ts...> gets the N-th type in the parameter pack Ts...
 template <std::size_t N, typename... Ts> struct TypeAt;
 

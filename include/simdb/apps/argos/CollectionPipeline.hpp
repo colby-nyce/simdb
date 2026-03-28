@@ -3,6 +3,8 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
+#include "simdb/pipeline/PipelineManager.hpp"
+#include "simdb/apps/argos/PipelineStager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::collection {
@@ -20,15 +22,17 @@ public:
 
     /// \brief Called when collection starts (pipeline \ref App postInit).
     /// \param db_mgr Database manager for the current run.
-    virtual void onCollectionStarting(DatabaseManager* db_mgr) = 0;
+    virtual void writePostInitMeta(DatabaseManager* db_mgr) = 0;
+};
 
-    /// \brief Called when collection is stopping (pipeline \ref App preTeardown).
-    /// \param db_mgr Database manager for the current run.
-    virtual void onCollectionStopping(DatabaseManager* db_mgr) = 0;
-
-    /// \brief Called after collection has stopped (pipeline \ref App postTeardown).
-    /// \param db_mgr Database manager for the current run.
-    virtual void onCollectionStopped(DatabaseManager* db_mgr) = 0;
+/// \class StageInterface
+/// \brief TODO cnyce
+class StageInterface
+{
+public:
+    virtual ~StageInterface() = default;
+    virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;
+    virtual void flushStageToPipeline() = 0;
 };
 
 /// \class CollectionPipeline
@@ -43,10 +47,11 @@ public:
     /// \brief Construct the collection pipeline app.
     /// \param db_mgr Database manager used for schema and persistence.
     /// \param handler Non-owning callbacks; must remain valid for the lifetime of this app (typically supplied via \ref AppFactory::parameterize).
-    CollectionPipeline(DatabaseManager* db_mgr, CollectionPipelineMeta* handler)
+    CollectionPipeline(DatabaseManager* db_mgr, CollectionPipelineMeta* meta_handler, StageInterface* stage_if)
         : db_mgr_(db_mgr)
         , tiny_strings_(db_mgr)
-        , meta_handler_(handler)
+        , meta_handler_(meta_handler)
+        , stage_if_(stage_if)
     {}
 
     /// \class AppFactory
@@ -58,9 +63,10 @@ public:
 
         /// \brief Set the meta handler passed to every \ref createApp result.
         /// \param handler Implementation receiving collection lifecycle callbacks; must not be null when \ref createApp is called.
-        void parameterize(CollectionPipelineMeta* handler)
+        void parameterize(CollectionPipelineMeta* meta_handler, StageInterface* stage_if)
         {
-            meta_handler_ = handler;
+            meta_handler_ = meta_handler;
+            stage_if_ = stage_if;
         }
 
         /// \brief Allocate a new pipeline app bound to the parameterized meta handler.
@@ -70,7 +76,7 @@ public:
         AppT* createApp(DatabaseManager* db_mgr) override
         {
             assert(meta_handler_ != nullptr);
-            return new AppT(db_mgr, meta_handler_);
+            return new AppT(db_mgr, meta_handler_, stage_if_);
         }
 
         /// \brief Populate \a schema with the same tables as \ref CollectionPipeline::defineSchema.
@@ -83,6 +89,9 @@ public:
     private:
         /// \brief Handler wired into each created app; set by \ref parameterize.
         CollectionPipelineMeta* meta_handler_ = nullptr;
+
+        /// \brief Stage open/flush interface.
+        StageInterface* stage_if_ = nullptr;
     };
 
     /// \brief Declare SQLite tables used by Argos collection (globals, clocks, element/collectable trees,
@@ -145,28 +154,79 @@ public:
         return &tiny_strings_;
     }
 
-    /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::onCollectionStarting.
+    /// \brief Create the pipeline to process collected data.
+    void createPipeline(pipeline::PipelineManager* pipeline_mgr) override
+    {
+        auto pipeline = pipeline_mgr->createPipeline(NAME, this);
+
+        pipeline->addStage<Compressor>("compressor");
+        pipeline->addStage<Writer>("writer");
+        pipeline->noMoreStages();
+
+        pipeline->bind("compressor.output_queue", "writer.input_queue");
+        pipeline->noMoreBindings();
+
+        auto pipeline_head = pipeline->getInPortQueue<collection::Payload>("compressor.input_queue");
+        stage_if_->openStage(pipeline_head);
+    }
+
+    /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writePostInitMeta.
     void postInit(int, char**) override
     {
-        meta_handler_->onCollectionStarting(db_mgr_);
+        meta_handler_->writePostInitMeta(db_mgr_);
     }
 
     /// \brief Run before teardown; invokes \ref CollectionPipelineMeta::onCollectionStopping.
     void preTeardown() override
     {
-        meta_handler_->onCollectionStopping(db_mgr_);
-    }
-
-    /// \brief Run after teardown; invokes \ref CollectionPipelineMeta::onCollectionStopped.
-    void postTeardown() override
-    {
-        meta_handler_->onCollectionStopped(db_mgr_);
+        stage_if_->flushStageToPipeline();
     }
 
 private:
+    class Compressor : public pipeline::Stage
+    {
+    public:
+        Compressor()
+        {
+            addInPort_<collection::Payload>("input_queue", input_queue_);
+            addOutPort_<collection::Payload>("output_queue", output_queue_);
+        }
+
+    private:
+        pipeline::PipelineAction run_(bool force) override
+        {
+            // TODO cnyce
+            (void)force;
+            return pipeline::PipelineAction::SLEEP;
+        }
+
+        ConcurrentQueue<collection::Payload>* input_queue_ = nullptr;
+        ConcurrentQueue<collection::Payload>* output_queue_ = nullptr;
+    };
+
+    class Writer : public pipeline::DatabaseStage<CollectionPipeline>
+    {
+    public:
+        Writer()
+        {
+            addInPort_<collection::Payload>("input_queue", input_queue_);
+        }
+
+    private:
+        pipeline::PipelineAction run_(bool force) override
+        {
+            // TODO cnyce
+            (void)force;
+            return pipeline::PipelineAction::SLEEP;
+        }
+
+        ConcurrentQueue<collection::Payload>* input_queue_ = nullptr;
+    };
+
     DatabaseManager *const db_mgr_;
     simdb::TinyStrings<> tiny_strings_;
-    CollectionPipelineMeta* meta_handler_ = nullptr;
+    CollectionPipelineMeta *const meta_handler_;
+    StageInterface *const stage_if_;
 };
 
 } // namespace simdb::collection

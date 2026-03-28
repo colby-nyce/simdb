@@ -48,6 +48,7 @@ constexpr inline size_t DEFAULT_HEARTBEAT = 10;
 /// \brief This class holds separate Collection's for each clock
 /// domain across all collectables.
 class Collections : public CollectionPipelineMeta
+                  , public StageInterface
 {
 public:
     /// \brief Construct
@@ -171,6 +172,15 @@ public:
         return collectable;
     }
 
+    /// \brief Connect the collectables to the CollectorPipeline's main input queue
+    void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head)
+    {
+        for (auto& [_, collection] : clk_collections_)
+        {
+            collection->connectToPipeline(pipeline_head);
+        }
+    }
+
 private:
     /// \brief Verify that all collectables are uniquely owned by clock-specific
     /// TimestampedCollection's
@@ -200,7 +210,7 @@ private:
     }
 
     /// \brief Called when handling the app's postInit()
-    void onCollectionStarting(DatabaseManager* db_mgr) override
+    void writePostInitMeta(DatabaseManager* db_mgr) override
     {
         // Write heartbeat
         db_mgr->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
@@ -263,18 +273,20 @@ private:
         DataTypeSerializer::serialize(&dtype_inspector_, db_mgr);
     }
 
-    /// \brief Called when handling the app's preTeardown()
-    void onCollectionStopping(DatabaseManager* db_mgr) override
+    void openStage(ConcurrentQueue<Payload>* pipeline_head) override
     {
-        (void)db_mgr;
-        dtype_inspector_.teardown();
+        for (auto& [_, collection] : clk_collections_)
+        {
+            collection->connectToPipeline(pipeline_head);
+        }
     }
 
-    /// \brief Called when handling the app's postTeardown()
-    void onCollectionStopped(DatabaseManager* db_mgr) override
+    void flushStageToPipeline() override
     {
-        // TODO cnyce
-        (void)db_mgr;
+        for (auto& [_, collection] : clk_collections_)
+        {
+            collection->flushToPipeline();
+        }
     }
 
     const size_t heartbeat_;

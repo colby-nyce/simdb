@@ -184,7 +184,7 @@ int main(int argc, char** argv)
     auto& app_mgr = app_mgrs.createAppManager("test.db");
     app_mgr.enableApp<simdb::collection::CollectionPipeline>();
 
-    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collections);
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collections, &collections);
     app_mgrs.createEnabledApps();
     app_mgrs.createSchemas();
     app_mgrs.postInit(argc, argv);

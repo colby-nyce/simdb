@@ -92,21 +92,30 @@ public:
         collectable->enabled_ = false;
     }
 
-    /// \brief Run auto-collection on all collectables that are enabled for it.
-    void runAutoCollection()
+    /// \brief Connect the collectables to the CollectorPipeline's main input queue
+    virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
+
+    /// \brief Flush all staged data to the pipeline on preTeardown()
+    virtual void flushToPipeline() = 0;
+
+    /// \brief Collect everything and send it down the pipeline
+    void performCollection()
     {
-        std::vector<char> buffer;
         for (auto collectable : all_auto_collectables_)
         {
-            collectable->autoCollect(buffer);
+            collectable->autoCollect();
         }
-
-        // TODO cnyce: pipeline
     }
 
 protected:
     /// Not meant to be directly instantiated
     Collection() = default;
+
+    /// Get all collectables
+    const auto& getCollectables_() const
+    {
+        return all_collectables_;
+    }
 
 private:
     bool isAutoCollectable_(CollectableBase* collectable) const
@@ -134,8 +143,24 @@ public:
     /// \brief Use a C-style function pointer to get the current time
     void timestampWith(std::function<TimeT()> fn) { timestamp_ = std::make_unique<Timestamp<TimeT>>(fn); }
 
+    /// \brief Connect the collectables to the CollectorPipeline's main input queue
+    void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override final
+    {
+        stager_ = std::make_unique<PipelineStager<TimeT>>(timestamp_.get(), pipeline_head);
+        for (auto& collectable : getCollectables_())
+        {
+            collectable->connectToPipeline(stager_.get());
+        }
+    }
+
+    void flushToPipeline() override final
+    {
+        stager_->flush();
+    }
+
 private:
     std::unique_ptr<Timestamp<TimeT>> timestamp_;
+    std::unique_ptr<PipelineStager<TimeT>> stager_;
 };
 
 inline void CollectableBase::enable()

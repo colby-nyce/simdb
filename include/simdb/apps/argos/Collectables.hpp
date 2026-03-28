@@ -4,6 +4,7 @@
 
 #include "simdb/apps/argos/ArgosRecord.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include "simdb/apps/argos/PipelineStager.hpp"
 #include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 
@@ -24,6 +25,12 @@ public:
     /// Get the unique ID for this collection point.
     uint16_t getID() const { return argos_record_.getID(); }
 
+    /// \brief Connect to the CollectorPipeline's main input queue
+    void connectToPipeline(PipelineStagerBase* stager)
+    {
+        stager_ = stager;
+    }
+
     /// Enable collection
     void enable();
 
@@ -36,10 +43,9 @@ public:
         argos_record_.deactivate();
     }
 
-    /// Run auto-collection and add the data bytes to the output buffer.
-    virtual void autoCollect(std::vector<char> & buf)
+    /// Run auto-collection for this collectable
+    virtual void autoCollect()
     {
-        (void)buf;
         throw DBException("This collectable does not support auto-collection");
     }
 
@@ -72,6 +78,12 @@ protected:
     /// for as long as the Status isn't set to DONT_READ.
     ArgosRecord argos_record_{nextID_()};
 
+    /// Stage collected bytes for pipeline processing.
+    void stage_(std::vector<char>&& bytes)
+    {
+        stager_->stage(std::move(bytes));
+    }
+
 private:
     /// Collection object that owns 'this' collectable
     Collection *const collection_;
@@ -86,6 +98,9 @@ private:
 
     /// \brief Enabled flag
     bool enabled_ = true;
+
+    /// \brief Main entry point into the pipeline
+    PipelineStagerBase* stager_ = nullptr;
 
     /// \note Friendship needed to the enabled_ flag can be set
     friend class Collection;
@@ -113,17 +128,21 @@ public:
     int32_t collectableAutoCollectedForDb() const override { return 0; }
 
     /// \brief On-demand collection, also called by auto-collecting subclass
-    template <typename CollectedT>
-    std::enable_if_t<std::is_same_v<CollectedT, ValueType>, void>
-    collect(const ValueType & value)
+    template <typename T = ScalarT>
+    std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
+    collect(const T& value)
     {
-        (void)value;
+        std::vector<char> bytes;
+        StreamBuffer buffer(bytes);
+        buffer << getID();
+        dtype_hierarchy_->writeBuffer(bytes, value);
+        stage_(std::move(bytes));
     }
 
     /// \brief Pointer-version of collect()
-    template <typename CollectedT>
-    std::enable_if_t<type_traits::is_any_pointer_v<CollectedT>, void>
-    collect(typename std::add_const<CollectedT>::type value)
+    template <typename T = ScalarT>
+    std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
+    collect(const T& value)
     {
         if (value)
         {
@@ -155,10 +174,10 @@ public:
         , scalar_(scalar)
     {}
 
-    /// Run auto-collection and add the data bytes to the output buffer.
-    void autoCollect(std::vector<char> & buf) override
+    /// Run auto-collection for this collectable
+    void autoCollect() override
     {
-        (void)buf;
+        this->collect(*scalar_);
     }
 
     int32_t collectableAutoCollectedForDb() const override { return 1; }
@@ -196,17 +215,30 @@ public:
     int32_t collectableAutoCollectedForDb() const override { return 0; }
 
     /// \brief On-demand collection, also called by auto-collecting subclass
-    template <typename CollectedT>
-    std::enable_if_t<std::is_same_v<CollectedT, ContainerT>, void>
-    collect(typename std::add_const<CollectedT>::type container)
+    template <typename T = ContainerT>
+    std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
+    collect(const T& container)
     {
-        (void)container;
+        std::vector<char> bytes;
+        StreamBuffer buffer(bytes);
+        buffer << getID();
+
+        appendSize_(buffer, container);
+
+        auto it = container.begin();
+        while (it++ != container.end())
+        {
+
+        }
+
+        //dtype_hierarchy_->writeBuffer(buf, value);
+        stage_(std::move(bytes));
     }
 
     /// \brief Pointer-version of collect()
-    template <typename CollectedT>
-    std::enable_if_t<type_traits::is_any_pointer_v<CollectedT>, void>
-    collect(typename std::add_const<CollectedT>::type container)
+    template <typename T = ContainerT>
+    std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
+    collect(const T& container)
     {
         if (container)
         {
@@ -222,6 +254,48 @@ protected:
     const size_t expected_capacity_;
 
 private:
+    template <bool sparse = Sparse>
+    std::enable_if_t<sparse, void>
+    appendSize_(StreamBuffer& buffer, const ContainerT& container) const
+    {
+        uint64_t size = 0;
+        for (auto it = container.begin(), end = container.end(); it != end; ++it)
+        {
+            if constexpr (type_traits::is_std_vector_v<ContainerT>)
+            {
+                if (*it)
+                {
+                    ++size;
+                }
+            }
+            else
+            {
+                if (it.isValid())
+                {
+                    ++size;
+                }
+            }
+        }
+
+        if (size > UINT16_MAX)
+        {
+            throw DBException("Queue too large to collect; uint16_t exceeded");
+        }
+        buffer << (uint16_t)size;
+    }
+
+    template <bool sparse = Sparse>
+    std::enable_if_t<!sparse, void>
+    appendSize_(StreamBuffer& buffer, const ContainerT& container) const
+    {
+        auto size = container.size();
+        if (size > UINT16_MAX)
+        {
+            throw DBException("Queue too large to collect; uint16_t exceeded");
+        }
+        buffer << (uint16_t)size;
+    }
+
     std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy_;
 };
 
@@ -245,10 +319,10 @@ public:
         , container_(container)
     {}
 
-    /// Run auto-collection and add the data bytes to the output buffer.
-    void autoCollect(std::vector<char> & buf) override
+    /// Run auto-collection for this collectable
+    void autoCollect() override
     {
-        (void)buf;
+        this->collect(*container_);
     }
 
     int32_t collectableAutoCollectedForDb() const override { return 1; }

@@ -8,6 +8,32 @@
 
 namespace simdb::collection {
 
+/// \class TimePointBase
+/// \brief Type-agnostic base class which holds onto timestamp snapshots
+class TimePointBase
+{
+public:
+    /// Apply the stored type-specific time value to the INSERT at column 0
+    virtual void apply(PreparedINSERT* inserter) const = 0;
+};
+
+/// \class TimePoint
+/// \brief Type-specific timestamp snapshot
+template <typename TimeT> class TimePoint : public TimePointBase
+{
+public:
+    explicit TimePoint(const TimeT time) : time_(time) {}
+
+    /// Apply the stored type-specific time value to the INSERT at column 0
+    void apply(PreparedINSERT* inserter) const override final
+    {
+        inserter->setColumnValue(0, time_.getValue());
+    }
+
+private:
+    const TimeT time_;
+};
+
 /// \class Timestamp
 /// \brief Type-specific timestamp that can get current time values via
 /// a backpointer, C-style function, or a std::function
@@ -53,22 +79,23 @@ public:
     }
 
     /// Store the current type-specific time value
-    void snapshot()
+    std::unique_ptr<TimePointBase> snapshot()
     {
+        TimeT time = 0;
         if (backpointer_)
         {
-            time_ = *backpointer_;
-        } else if (cfuncpointer_)
-        {
-            time_ = cfuncpointer_();
-        } else
-        {
-            time_ = stdfunction_();
+            time = *backpointer_;
         }
+        else if (cfuncpointer_)
+        {
+            time = cfuncpointer_();
+        }
+        else
+        {
+            time = stdfunction_();
+        }
+        return std::make_unique<TimePoint<TimeT>>(time);
     }
-
-    /// Apply the stored type-specific time value to the INSERT at column 0
-    void apply(PreparedINSERT* inserter) const { inserter->setColumnValue(0, time_.getValue()); }
 
 private:
     const TimeT* backpointer_ = nullptr;

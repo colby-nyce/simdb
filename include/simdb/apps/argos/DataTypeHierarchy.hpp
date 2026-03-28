@@ -238,15 +238,11 @@ public:
         return root_;
     }
 
-    void writeBuffer(std::vector<char>& buffer, const RootT* value) const
+    void writeBuffer(std::vector<char>& buffer, const RootT& value) const
     {
-        if (value == nullptr)
-        {
-            return;
-        }
         if (root_.write_erased)
         {
-            root_.write_erased(buffer, value);
+            root_.write_erased(buffer, &value);
         }
     }
 
