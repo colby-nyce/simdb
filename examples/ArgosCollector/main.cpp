@@ -127,8 +127,8 @@ int main(int argc, char** argv)
 {
     Sim sim;
     simdb::collection::Collection<uint64_t> collection;
-    collection.addCollection("root", 1);
     collection.timestampWith([&sim]() { return sim.getCurrentTick(); });
+    collection.addCollection("root", 1);
 
     int intval = 5;
     auto auto_int_collector = collection.collectScalarWithAutoCollection<int>(

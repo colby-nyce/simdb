@@ -48,8 +48,6 @@ constexpr inline size_t DEFAULT_HEARTBEAT = 10;
 /// \brief Holds one \ref TimeT for all clock domains and a \ref TimestampedCollection per domain.
 template <typename TimeT> class Collection : public CollectionPipelineHelper
 {
-    enum class TimestampSourceKind { None, Backpointer, CFunction, StdFunction };
-
 public:
     /// \brief Construct
     /// \param heartbeat Size/speed tunable parameter; gives the max number
@@ -72,33 +70,27 @@ public:
     }
 
     /// \brief Use a backpointer to get the current time for every clock domain.
+    /// \throw DBException if any clock domain has already been added via addCollection().
     void timestampWith(const TimeT* backpointer)
     {
-        ts_source_kind_ = TimestampSourceKind::Backpointer;
-        ts_backpointer_ = backpointer;
-        ts_cfunc_ = nullptr;
-        ts_stdfunction_ = nullptr;
-        propagateTimestampToAllDomains_();
+        ensureTimestampReconfigurable_();
+        timestamp_ = std::make_shared<Timestamp<TimeT>>(backpointer);
     }
 
     /// \brief Use a C-style function pointer to get the current time for every clock domain.
+    /// \throw DBException if any clock domain has already been added via addCollection().
     void timestampWith(TimeT (*fn)())
     {
-        ts_source_kind_ = TimestampSourceKind::CFunction;
-        ts_cfunc_ = fn;
-        ts_backpointer_ = nullptr;
-        ts_stdfunction_ = nullptr;
-        propagateTimestampToAllDomains_();
+        ensureTimestampReconfigurable_();
+        timestamp_ = std::make_shared<Timestamp<TimeT>>(fn);
     }
 
     /// \brief Use a \c std::function to get the current time for every clock domain.
+    /// \throw DBException if any clock domain has already been added via addCollection().
     void timestampWith(std::function<TimeT()> fn)
     {
-        ts_source_kind_ = TimestampSourceKind::StdFunction;
-        ts_stdfunction_ = std::move(fn);
-        ts_backpointer_ = nullptr;
-        ts_cfunc_ = nullptr;
-        propagateTimestampToAllDomains_();
+        ensureTimestampReconfigurable_();
+        timestamp_ = std::make_shared<Timestamp<TimeT>>(std::move(fn));
     }
 
     /// \brief Add a collection for one clock domain
@@ -115,12 +107,16 @@ public:
                 << "already has a collection with period " << clk_periods_[clk_name];
         }
 
+        if (!timestamp_)
+        {
+            throw DBException("Must call timestampWith() before addCollection()");
+        }
+
         auto& collection = collections_[clk_name];
         if (!collection)
         {
-            collection = std::make_unique<TimestampedCollection<TimeT>>();
+            collection = std::make_unique<TimestampedCollection<TimeT>>(timestamp_);
             clk_periods_[clk_name] = clk_period;
-            applyTimestampToDomain_(*collection);
         }
     }
 
@@ -222,32 +218,11 @@ private:
         }
     }
 
-    void applyTimestampToDomain_(TimestampedCollection<TimeT>& dom)
+    void ensureTimestampReconfigurable_() const
     {
-        switch (ts_source_kind_)
+        if (!collections_.empty())
         {
-        case TimestampSourceKind::Backpointer:
-            dom.timestampWith(ts_backpointer_);
-            break;
-        case TimestampSourceKind::CFunction:
-            dom.timestampWith(ts_cfunc_);
-            break;
-        case TimestampSourceKind::StdFunction:
-            dom.timestampWith(ts_stdfunction_);
-            break;
-        case TimestampSourceKind::None:
-            break;
-        }
-    }
-
-    void propagateTimestampToAllDomains_()
-    {
-        for (auto& [_, dom] : collections_)
-        {
-            if (dom)
-            {
-                applyTimestampToDomain_(*dom);
-            }
+            throw DBException("timestampWith() cannot be called after addCollection()");
         }
     }
 
@@ -356,10 +331,7 @@ private:
     DataTypeInspector dtype_inspector_;
     simdb::Tree collectables_tree_;
 
-    TimestampSourceKind ts_source_kind_ = TimestampSourceKind::None;
-    const TimeT* ts_backpointer_ = nullptr;
-    TimeT (*ts_cfunc_)() = nullptr;
-    std::function<TimeT()> ts_stdfunction_;
+    std::shared_ptr<Timestamp<TimeT>> timestamp_;
 };
 
 } // namespace simdb::collection

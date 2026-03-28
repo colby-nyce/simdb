@@ -2,14 +2,12 @@
 
 #pragma once
 
-#include <functional>
+#include <memory>
 
 #include "simdb/apps/argos/Timestamps.hpp"
 #include "simdb/apps/argos/Collectables.hpp"
 
 namespace simdb::collection {
-
-template <typename TimeT> class Collection;
 
 /// \class DomainCollection
 /// \brief Manages a set of collectables in one "domain" e.g. clock domain
@@ -136,19 +134,11 @@ private:
 /// \brief Collection with time values of a specific type e.g. double, uint64_t, ...
 template <typename TimeT> class TimestampedCollection : public DomainCollection
 {
-    friend class Collection<TimeT>;
-
-protected:
-    /// \brief Use a backpointer to get the current time
-    void timestampWith(const TimeT* backpointer) { timestamp_ = std::make_unique<Timestamp<TimeT>>(backpointer); }
-
-    /// \brief Use a C-style function pointer to get the current time
-    void timestampWith(TimeT (*fn)()) { timestamp_ = std::make_unique<Timestamp<TimeT>>(fn); }
-
-    /// \brief Use a \c std::function to get the current time
-    void timestampWith(std::function<TimeT()> fn) { timestamp_ = std::make_unique<Timestamp<TimeT>>(std::move(fn)); }
-
 public:
+    explicit TimestampedCollection(std::shared_ptr<Timestamp<TimeT>> timestamp) :
+        timestamp_(std::move(timestamp))
+    {}
+
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
     void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override final
     {
@@ -165,7 +155,7 @@ public:
     }
 
 private:
-    std::unique_ptr<Timestamp<TimeT>> timestamp_;
+    std::shared_ptr<Timestamp<TimeT>> timestamp_;
     std::unique_ptr<PipelineStager<TimeT>> stager_;
 };
 
