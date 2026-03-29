@@ -129,7 +129,7 @@ public:
     {
         auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
-        pipeline->addStage<Organizer>("organizer");
+        pipeline->addStage<Organizer>("organizer", collection_->getHeartbeat());
         pipeline->addStage<Compressor>("compressor");
         pipeline->addStage<Writer>("writer");
         pipeline->noMoreStages();
@@ -149,11 +149,39 @@ public:
     }
 
 private:
+    class AutoCollectorHandler
+    {
+    public:
+        AutoCollectorHandler(size_t heartbeat, std::vector<char>&& bytes)
+            : heartbeat_(heartbeat)
+            , bytes_(std::move(bytes))
+        {}
+
+        void setBytes(std::vector<char>&& bytes)
+        {
+            bytes_ = std::move(bytes);
+            counter_ = 0;
+        }
+
+        void appendToAutoCollection(std::vector<char>& auto_collected)
+        {
+            if (counter_++ % heartbeat_ == 0)
+            {
+                auto_collected.insert(auto_collected.end(), bytes_.begin(), bytes_.end());
+            }
+        }
+
+    private:
+        const size_t heartbeat_;
+        size_t counter_ = 0;
+        std::vector<char> bytes_;
+    };
+
     class Organizer : public pipeline::Stage
     {
     public:
-
-        Organizer()
+        Organizer(size_t heartbeat)
+            : heartbeat_(heartbeat)
         {
             addInPort_<Payload>("input_queue", input_queue_);
             addOutPort_<Payload>("output_queue", output_queue_);
@@ -166,6 +194,21 @@ private:
             Payload payload;
             while (input_queue_->try_pop(payload))
             {
+                if (payload.auto_collected)
+                {
+                    const char* raw = payload.bytes.data();
+                    const auto cid = *reinterpret_cast<const uint16_t*>(raw);
+                    auto& handler = auto_collector_handlers_[cid];
+                    if (!handler)
+                    {
+                        handler = std::make_unique<AutoCollectorHandler>(heartbeat_, std::move(payload.bytes));
+                    }
+                    else
+                    {
+                        handler->setBytes(std::move(payload.bytes));
+                    }
+                }
+
                 // Try to buffer the incoming payload (only able to if it's for the same time point)
                 if (!payload_queue_.empty() && payload_queue_.back().time_point->equals(payload.time_point.get(), true))
                 {
@@ -205,6 +248,11 @@ private:
             while (payload_queue_.size() > target_size)
             {
                 auto payload = std::move(payload_queue_.front());
+                for (const auto& [_, handler] : auto_collector_handlers_)
+                {
+                    handler->appendToAutoCollection(payload.bytes);
+                }
+
                 output_queue_->emplace(std::move(payload));
                 payload_queue_.pop();
                 flushed = true;
@@ -212,9 +260,11 @@ private:
             return flushed;
         }
 
+        const size_t heartbeat_;
         ConcurrentQueue<Payload>* input_queue_ = nullptr;
         ConcurrentQueue<Payload>* output_queue_ = nullptr;
         std::queue<Payload> payload_queue_;
+        std::unordered_map<uint16_t, std::unique_ptr<AutoCollectorHandler>> auto_collector_handlers_;
     };
 
     class Compressor : public pipeline::Stage

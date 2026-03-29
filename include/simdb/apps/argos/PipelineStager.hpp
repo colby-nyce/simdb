@@ -11,13 +11,14 @@ struct Payload
 {
     std::shared_ptr<TimePointBase> time_point;
     std::vector<char> bytes;
+    bool auto_collected;
 };
 
 class PipelineStagerBase
 {
 public:
     virtual ~PipelineStagerBase() = default;
-    virtual void stage(std::vector<char>&& bytes) = 0;
+    virtual void stage(std::vector<char>&& bytes, bool auto_collected) = 0;
 };
 
 template <typename TimeT>
@@ -30,9 +31,9 @@ public:
         , pipeline_head_(pipeline_head)
     {}
 
-    void stage(std::vector<char>&& bytes) override
+    void stage(std::vector<char>&& bytes, bool auto_collected) override
     {
-        Payload payload{timestamp_->snapshot(), std::move(bytes)};
+        Payload payload{timestamp_->snapshot(), std::move(bytes), auto_collected};
         pipeline_head_->emplace(std::move(payload));
     }
 

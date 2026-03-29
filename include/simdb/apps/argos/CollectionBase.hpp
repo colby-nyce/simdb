@@ -13,6 +13,7 @@ class CollectionBase
 {
 public:
     virtual ~CollectionBase() = default;
+    virtual size_t getHeartbeat() const = 0;
     virtual SqlDataType getSqlTimeType() const = 0;
     virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
     virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;

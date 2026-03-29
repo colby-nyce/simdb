@@ -79,9 +79,9 @@ protected:
     ArgosRecord argos_record_{nextID_()};
 
     /// Stage collected bytes for pipeline processing.
-    void stage_(std::vector<char>&& bytes)
+    void stage_(std::vector<char>&& bytes, bool auto_collected)
     {
-        stager_->stage(std::move(bytes));
+        stager_->stage(std::move(bytes), auto_collected);
     }
 
 private:
@@ -130,23 +130,23 @@ public:
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename T = ScalarT>
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
-    collect(const T& value)
+    collect(const T& value, bool auto_collected = false)
     {
         std::vector<char> bytes;
         StreamBuffer buffer(bytes);
         buffer << getID();
         dtype_hierarchy_->writeBuffer(bytes, value);
-        stage_(std::move(bytes));
+        stage_(std::move(bytes), auto_collected);
     }
 
     /// \brief Pointer-version of collect()
     template <typename T = ScalarT>
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
-    collect(const T& value)
+    collect(const T& value, bool auto_collected)
     {
         if (value)
         {
-            collect(*value);
+            collect(*value, auto_collected);
         }
         else
         {
@@ -177,7 +177,7 @@ public:
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
-        this->collect(*scalar_);
+        this->collect(*scalar_, true /*auto collected*/);
     }
 
     int32_t collectableAutoCollectedForDb() const override { return 1; }
@@ -217,7 +217,7 @@ public:
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename T = ContainerT>
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
-    collect(const T& container)
+    collect(const T& container, bool auto_collected = false)
     {
         std::vector<char> bytes;
         StreamBuffer buffer(bytes);
@@ -228,21 +228,21 @@ public:
         auto it = container.begin();
         while (it++ != container.end())
         {
-
+            // TODO cnyce
         }
 
         //dtype_hierarchy_->writeBuffer(buf, value);
-        stage_(std::move(bytes));
+        stage_(std::move(bytes), auto_collected);
     }
 
     /// \brief Pointer-version of collect()
     template <typename T = ContainerT>
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
-    collect(const T& container)
+    collect(const T& container, bool auto_collected = false)
     {
         if (container)
         {
-            collect(*container);
+            collect(*container, auto_collected);
         }
         else
         {
@@ -322,7 +322,7 @@ public:
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
-        this->collect(*container_);
+        this->collect(*container_, true /*auto collected*/);
     }
 
     int32_t collectableAutoCollectedForDb() const override { return 1; }

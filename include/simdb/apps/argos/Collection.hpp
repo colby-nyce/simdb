@@ -246,6 +246,12 @@ private:
         return it->second.get();
     }
 
+    /// \brief Return the collection heartbeat
+    size_t getHeartbeat() const override
+    {
+        return heartbeat_;
+    }
+
     /// \brief Called when the app is created
     SqlDataType getSqlTimeType() const override
     {
