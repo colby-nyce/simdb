@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/apps/argos/CollectionBase.hpp"
 #include "simdb/apps/argos/DomainCollection.hpp"
 #include "simdb/apps/argos/CollectionPipeline.hpp"
 #include "simdb/apps/argos/DataTypeInspector.hpp"
@@ -46,7 +47,7 @@ constexpr inline size_t DEFAULT_HEARTBEAT = 10;
 
 /// \class Collection
 /// \brief Holds one \ref TimeT for all clock domains and a \ref TimeDomainCollection per clock.
-template <typename TimeT> class Collection : public CollectionPipelineHelper
+template <typename TimeT> class Collection : public CollectionBase
 {
 public:
     /// \brief Construct

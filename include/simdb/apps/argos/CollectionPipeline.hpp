@@ -4,22 +4,11 @@
 
 #include "simdb/apps/App.hpp"
 #include "simdb/pipeline/PipelineManager.hpp"
+#include "simdb/apps/argos/CollectionBase.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::collection {
-
-/// \class CollectionPipelineHelper
-/// \brief TODO cnyce: try to refactor and get rid of this class
-class CollectionPipelineHelper
-{
-public:
-    virtual ~CollectionPipelineHelper() = default;
-    virtual SqlDataType getSqlTimeType() const = 0;
-    virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
-    virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;
-    virtual void flushStageToPipeline() = 0;
-};
 
 /// \class CollectionPipeline
 /// \brief SimDB \ref App that registers collection metadata schema and forwards lifecycle events to a \ref CollectionPipelineMeta handler.
@@ -33,7 +22,7 @@ public:
     /// \brief Construct the collection pipeline app.
     /// \param db_mgr Database manager used for schema and persistence.
     /// \param handler Non-owning callbacks; must remain valid for the lifetime of this app (typically supplied via \ref AppFactory::parameterize).
-    CollectionPipeline(DatabaseManager* db_mgr, CollectionPipelineHelper* pipeline_helper)
+    CollectionPipeline(DatabaseManager* db_mgr, CollectionBase* pipeline_helper)
         : db_mgr_(db_mgr)
         , tiny_strings_(db_mgr)
         , pipeline_helper_(pipeline_helper)
@@ -47,7 +36,7 @@ public:
         using AppT = CollectionPipeline;
 
         /// \brief TODO cnyce: get rid of this after refactor if possible
-        void parameterize(CollectionPipelineHelper* pipeline_helper)
+        void parameterize(CollectionBase* pipeline_helper)
         {
             pipeline_helper_ = pipeline_helper;
         }
@@ -72,7 +61,7 @@ public:
 
     private:
         /// \brief TODO cnyce
-        CollectionPipelineHelper* pipeline_helper_ = nullptr;
+        CollectionBase* pipeline_helper_ = nullptr;
     };
 
     /// \brief Declare SQLite tables used by Argos collection (globals, clocks, element/collectable trees,
@@ -206,7 +195,7 @@ private:
 
     DatabaseManager *const db_mgr_;
     simdb::TinyStrings<> tiny_strings_;
-    CollectionPipelineHelper* pipeline_helper_ = nullptr;
+    CollectionBase* pipeline_helper_ = nullptr;
 };
 
 } // namespace simdb::collection
