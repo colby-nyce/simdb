@@ -97,9 +97,6 @@ public:
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
     virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
 
-    /// \brief Flush all staged data to the pipeline on preTeardown()
-    virtual void flushToPipeline() = 0;
-
     /// \brief Collect everything and send it down the pipeline
     void performCollection()
     {
@@ -145,11 +142,6 @@ public:
         {
             collectable->connectToPipeline(stager_.get());
         }
-    }
-
-    void flushToPipeline() override final
-    {
-        stager_->flush();
     }
 
 private:

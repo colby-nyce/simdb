@@ -15,6 +15,9 @@ class TimePointBase
 public:
     /// Apply the stored type-specific time value to the INSERT at column 0
     virtual void apply(PreparedINSERT* inserter) const = 0;
+
+    /// Check if the current time is later than ours.
+    virtual bool comesBefore(const TimePointBase* time_point) const = 0;
 };
 
 /// \class TimePoint
@@ -27,7 +30,17 @@ public:
     /// Apply the stored type-specific time value to the INSERT at column 0
     void apply(PreparedINSERT* inserter) const override final
     {
-        inserter->setColumnValue(0, time_.getValue());
+        inserter->setColumnValue(0, time_);
+    }
+
+    /// Check if the current time is later than ours.
+    bool comesBefore(const TimePointBase* time_point) const override final
+    {
+        if (auto typed_time_point = dynamic_cast<const TimePoint<TimeT>*>(time_point))
+        {
+            return time_ < typed_time_point->time_;
+        }
+        throw DBException("Dynamic cast failed");
     }
 
 private:
@@ -79,7 +92,7 @@ public:
     }
 
     /// Store the current type-specific time value
-    std::unique_ptr<TimePointBase> snapshot()
+    std::shared_ptr<TimePointBase> snapshot()
     {
         TimeT time = 0;
         if (backpointer_)
@@ -94,7 +107,7 @@ public:
         {
             time = stdfunction_();
         }
-        return std::make_unique<TimePoint<TimeT>>(time);
+        return std::make_shared<TimePoint<TimeT>>(time);
     }
 
 private:

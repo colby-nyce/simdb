@@ -16,7 +16,6 @@ public:
     virtual SqlDataType getSqlTimeType() const = 0;
     virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
     virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;
-    virtual void flushStageToPipeline() = 0;
 };
 
 } // namespace simdb::collection

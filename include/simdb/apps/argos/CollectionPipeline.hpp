@@ -7,6 +7,7 @@
 #include "simdb/apps/argos/CollectionBase.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
 #include "simdb/utils/TinyStrings.hpp"
+#include "simdb/utils/Compress.hpp"
 
 namespace simdb::collection {
 
@@ -128,14 +129,16 @@ public:
     {
         auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
+        pipeline->addStage<Organizer>("organizer");
         pipeline->addStage<Compressor>("compressor");
         pipeline->addStage<Writer>("writer");
         pipeline->noMoreStages();
 
+        pipeline->bind("organizer.output_queue", "compressor.input_queue");
         pipeline->bind("compressor.output_queue", "writer.input_queue");
         pipeline->noMoreBindings();
 
-        auto pipeline_head = pipeline->getInPortQueue<collection::Payload>("compressor.input_queue");
+        auto pipeline_head = pipeline->getInPortQueue<Payload>("organizer.input_queue");
         collection_->openStage(pipeline_head);
     }
 
@@ -145,32 +148,104 @@ public:
         collection_->writeMetaOnPostInit(db_mgr_);
     }
 
-    /// \brief Run before teardown; invokes \ref CollectionPipelineMeta::onCollectionStopping.
-    void preTeardown() override
-    {
-        collection_->flushStageToPipeline();
-    }
-
 private:
-    class Compressor : public pipeline::Stage
+    class Organizer : public pipeline::Stage
     {
     public:
-        Compressor()
+
+        Organizer()
         {
-            addInPort_<collection::Payload>("input_queue", input_queue_);
-            addOutPort_<collection::Payload>("output_queue", output_queue_);
+            addInPort_<Payload>("input_queue", input_queue_);
+            addOutPort_<Payload>("output_queue", output_queue_);
         }
 
     private:
         pipeline::PipelineAction run_(bool force) override
         {
-            // TODO cnyce
-            (void)force;
+            Payload payload;
+            if (input_queue_->try_pop(payload))
+            {
+                // Don't have anything buffered yet? Buffer now.
+                if (!pending_payload_)
+                {
+                    pending_payload_ = std::make_unique<Payload>(std::move(payload));
+
+                    // Flush to the pipeline if forced
+                    if (force)
+                    {
+                        flushToPipeline_();
+                    }
+                    return pipeline::PipelineAction::PROCEED;
+                }
+
+                // Try to buffer the incoming payload (only able to if it's for the same time point)
+                if (pending_payload_->time_point->comesBefore(payload.time_point.get()))
+                {
+                    // We can't buffer it. Flush to the pipeline and then buffer the incoming payload.
+                    flushToPipeline_();
+                    pending_payload_ = std::make_unique<Payload>(std::move(payload));
+                }
+                else
+                {
+                    // We can buffer it.
+                    auto& dst = pending_payload_->bytes;
+                    const auto& src = payload.bytes;
+                    dst.insert(dst.end(), src.begin(), src.end());
+                }
+
+                // Flush to the pipeline if forced
+                if (force)
+                {
+                    flushToPipeline_();
+                }
+
+                return pipeline::PipelineAction::PROCEED;
+            }
+
             return pipeline::PipelineAction::SLEEP;
         }
 
-        ConcurrentQueue<collection::Payload>* input_queue_ = nullptr;
-        ConcurrentQueue<collection::Payload>* output_queue_ = nullptr;
+        void flushToPipeline_()
+        {
+            if (pending_payload_)
+            {
+                //output_queue_->emplace(std::move(*pending_payload_));
+                pending_payload_.reset();
+            }
+        }
+
+        ConcurrentQueue<Payload>* input_queue_ = nullptr;
+        ConcurrentQueue<Payload>* output_queue_ = nullptr;
+        std::unique_ptr<Payload> pending_payload_;
+    };
+
+    class Compressor : public pipeline::Stage
+    {
+    public:
+        Compressor()
+        {
+            addInPort_<Payload>("input_queue", input_queue_);
+            addOutPort_<Payload>("output_queue", output_queue_);
+        }
+
+    private:
+        pipeline::PipelineAction run_(bool) override
+        {
+            Payload payload;
+            if (input_queue_->try_pop(payload))
+            {
+                Payload compressed;
+                compressed.time_point = payload.time_point;
+                compressData(payload.bytes, compressed.bytes);
+                output_queue_->emplace(std::move(compressed));
+                return pipeline::PipelineAction::PROCEED;
+            }
+
+            return pipeline::PipelineAction::SLEEP;
+        }
+
+        ConcurrentQueue<Payload>* input_queue_ = nullptr;
+        ConcurrentQueue<Payload>* output_queue_ = nullptr;
     };
 
     class Writer : public pipeline::DatabaseStage<CollectionPipeline>
@@ -178,18 +253,27 @@ private:
     public:
         Writer()
         {
-            addInPort_<collection::Payload>("input_queue", input_queue_);
+            addInPort_<Payload>("input_queue", input_queue_);
         }
 
     private:
-        pipeline::PipelineAction run_(bool force) override
+        pipeline::PipelineAction run_(bool) override
         {
-            // TODO cnyce
-            (void)force;
+            Payload payload;
+            if (input_queue_->try_pop(payload))
+            {
+                /*auto inserter = getTableInserter_("Collection")
+                auto inserter = getTableInserter_("TimedstampedData");
+                payload.time_point->apply(inserter);
+                inserter->setColumnValue(1, payload.bytes);
+                inserter->createRecord();*/
+                return pipeline::PipelineAction::PROCEED;
+            }
+
             return pipeline::PipelineAction::SLEEP;
         }
 
-        ConcurrentQueue<collection::Payload>* input_queue_ = nullptr;
+        ConcurrentQueue<Payload>* input_queue_ = nullptr;
     };
 
     DatabaseManager *const db_mgr_;

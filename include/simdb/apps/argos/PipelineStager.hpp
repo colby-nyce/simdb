@@ -9,7 +9,7 @@ namespace simdb::collection {
 
 struct Payload
 {
-    std::unique_ptr<TimePointBase> time_point;
+    std::shared_ptr<TimePointBase> time_point;
     std::vector<char> bytes;
 };
 
@@ -18,7 +18,6 @@ class PipelineStagerBase
 public:
     virtual ~PipelineStagerBase() = default;
     virtual void stage(std::vector<char>&& bytes) = 0;
-    virtual void flush() = 0;
 };
 
 template <typename TimeT>
@@ -33,13 +32,8 @@ public:
 
     void stage(std::vector<char>&& bytes) override
     {
-        // TODO cnyce
-        (void)bytes;
-    }
-
-    void flush() override
-    {
-        // TODO cnyce
+        Payload payload{timestamp_->snapshot(), std::move(bytes)};
+        pipeline_head_->emplace(std::move(payload));
     }
 
 private:

@@ -76,6 +76,7 @@ public:
     {
         ensureTimestampReconfigurable_();
         timestamp_ = std::make_shared<Timestamp<TimeT>>(backpointer);
+        // TODO cnyce: create stager here?
     }
 
     /// \brief Use a C-style function pointer to get the current time for every clock domain.
@@ -344,18 +345,14 @@ private:
 
     void openStage(ConcurrentQueue<Payload>* pipeline_head) override
     {
-        for (auto& [_, collection] : collections_)
-        {
-            collection->connectToPipeline(pipeline_head);
-        }
+        // TODO cnyce
+        (void)pipeline_head;
     }
 
-    void flushStageToPipeline() override
+    /// \brief Collect everything and send it down the pipeline
+    void performCollection()
     {
-        for (auto& [_, collection] : collections_)
-        {
-            collection->flushToPipeline();
-        }
+        // TODO cnyce
     }
 
     const size_t heartbeat_;
@@ -365,8 +362,8 @@ private:
     std::unordered_set<std::string> all_collectable_paths_;
     DataTypeInspector dtype_inspector_;
     simdb::Tree collectables_tree_;
-
     std::shared_ptr<Timestamp<TimeT>> timestamp_;
+    std::unique_ptr<PipelineStager<TimeT>> stager_;
 };
 
 } // namespace simdb::collection
