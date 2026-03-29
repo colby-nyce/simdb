@@ -15,6 +15,7 @@ class CollectionPipelineHelper
 {
 public:
     virtual ~CollectionPipelineHelper() = default;
+    virtual SqlDataType getSqlTimeType() const = 0;
     virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
     virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;
     virtual void flushStageToPipeline() = 0;
@@ -65,6 +66,8 @@ public:
         void defineSchema(Schema& schema) const override
         {
             AppT::defineSchema(schema);
+            auto& timestamps_tbl = schema.addTable("Timestamps");
+            timestamps_tbl.addColumn("Timestamp", pipeline_helper_->getSqlTimeType());
         }
 
     private:

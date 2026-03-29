@@ -245,6 +245,38 @@ private:
         return it->second.get();
     }
 
+    /// \brief Called when the app is created
+    SqlDataType getSqlTimeType() const override
+    {
+        if constexpr (std::is_same_v<TimeT, uint64_t>)
+        {
+            return SqlDataType::uint64_t;
+        }
+        else if constexpr (std::is_same_v<TimeT, int64_t>)
+        {
+            return SqlDataType::int64_t;
+        }
+        else if constexpr (std::is_same_v<TimeT, uint32_t>)
+        {
+            return SqlDataType::uint32_t;
+        }
+        else if constexpr (std::is_same_v<TimeT, int32_t>)
+        {
+            return SqlDataType::int32_t;
+        }
+        else if constexpr (std::is_floating_point_v<TimeT>)
+        {
+            return SqlDataType::double_t;
+        }
+        else
+        {
+            static_assert(std::is_integral_v<TimeT>);
+            static_assert(std::is_unsigned_v<TimeT>);
+            static_assert(sizeof(TimeT) <= sizeof(int32_t));
+            return SqlDataType::int32_t;
+        }
+    }
+
     /// \brief Called when handling the app's postInit()
     void writeMetaOnPostInit(DatabaseManager* db_mgr) override
     {
