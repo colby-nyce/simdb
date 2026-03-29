@@ -45,7 +45,7 @@ struct dtype_register_element<T*> : dtype_register_element<T>
 constexpr inline size_t DEFAULT_HEARTBEAT = 10;
 
 /// \class Collection
-/// \brief Holds one \ref TimeT for all clock domains and a \ref TimestampedCollection per domain.
+/// \brief Holds one \ref TimeT for all clock domains and a \ref TimeDomainCollection per clock.
 template <typename TimeT> class Collection : public CollectionPipelineHelper
 {
 public:
@@ -115,7 +115,7 @@ public:
         auto& collection = collections_[clk_name];
         if (!collection)
         {
-            collection = std::make_unique<TimestampedCollection<TimeT>>(timestamp_);
+            collection = std::make_unique<TimeDomainCollection<TimeT>>(timestamp_);
             clk_periods_[clk_name] = clk_period;
         }
     }
@@ -209,7 +209,7 @@ public:
 
 private:
     /// \brief Verify that all collectables are uniquely owned by clock-specific
-    /// TimestampedCollection's
+    /// \ref TimeDomainCollection instances
     void verifyNoDupPaths_(const std::string& path)
     {
         if (!all_collectable_paths_.insert(path).second)
@@ -359,7 +359,7 @@ private:
 
     const size_t heartbeat_;
     const std::vector<std::string> default_enabled_paths_;
-    std::map<std::string, std::unique_ptr<TimestampedCollection<TimeT>>> collections_;
+    std::map<std::string, std::unique_ptr<TimeDomainCollection<TimeT>>> collections_;
     std::map<std::string, size_t> clk_periods_;
     std::unordered_set<std::string> all_collectable_paths_;
     DataTypeInspector dtype_inspector_;

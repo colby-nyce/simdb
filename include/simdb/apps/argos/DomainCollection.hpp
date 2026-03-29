@@ -10,7 +10,8 @@
 namespace simdb::collection {
 
 /// \class DomainCollection
-/// \brief Manages a set of collectables in one "domain" e.g. clock domain
+/// \brief Non-template base that \ref CollectableBase points at; \ref TimeDomainCollection is the
+/// concrete per-clock implementation with timestamp + stager.
 class DomainCollection
 {
 public:
@@ -109,10 +110,8 @@ public:
     }
 
 protected:
-    /// Not meant to be directly instantiated
     DomainCollection() = default;
 
-    /// Get all collectables
     const auto& getCollectables_() const
     {
         return all_collectables_;
@@ -130,16 +129,15 @@ private:
     std::map<std::string, std::shared_ptr<CollectableBase>> collectables_by_path_;
 };
 
-/// \class TimestampedCollection
-/// \brief Collection with time values of a specific type e.g. double, uint64_t, ...
-template <typename TimeT> class TimestampedCollection : public DomainCollection
+/// \class TimeDomainCollection
+/// \brief One clock domain: collectables plus shared \ref Timestamp and pipeline stager.
+template <typename TimeT> class TimeDomainCollection : public DomainCollection
 {
 public:
-    explicit TimestampedCollection(std::shared_ptr<Timestamp<TimeT>> timestamp) :
+    explicit TimeDomainCollection(std::shared_ptr<Timestamp<TimeT>> timestamp) :
         timestamp_(std::move(timestamp))
     {}
 
-    /// \brief Connect the collectables to the CollectorPipeline's main input queue
     void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override final
     {
         stager_ = std::make_unique<PipelineStager<TimeT>>(timestamp_.get(), pipeline_head);
