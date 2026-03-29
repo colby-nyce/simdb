@@ -22,10 +22,10 @@ public:
     /// \brief Construct the collection pipeline app.
     /// \param db_mgr Database manager used for schema and persistence.
     /// \param handler Non-owning callbacks; must remain valid for the lifetime of this app (typically supplied via \ref AppFactory::parameterize).
-    CollectionPipeline(DatabaseManager* db_mgr, CollectionBase* pipeline_helper)
+    CollectionPipeline(DatabaseManager* db_mgr, CollectionBase* collection)
         : db_mgr_(db_mgr)
         , tiny_strings_(db_mgr)
-        , pipeline_helper_(pipeline_helper)
+        , collection_(collection)
     {}
 
     /// \class AppFactory
@@ -35,10 +35,10 @@ public:
     public:
         using AppT = CollectionPipeline;
 
-        /// \brief TODO cnyce: get rid of this after refactor if possible
-        void parameterize(CollectionBase* pipeline_helper)
+        /// \brief Forward the collection to the pipeline app.
+        void parameterize(CollectionBase* collection)
         {
-            pipeline_helper_ = pipeline_helper;
+            collection_ = collection;
         }
 
         /// \brief Allocate a new pipeline app.
@@ -46,8 +46,8 @@ public:
         /// \return New \ref CollectionPipeline; ownership follows the app framework contract.
         AppT* createApp(DatabaseManager* db_mgr) override
         {
-            assert(pipeline_helper_ != nullptr);
-            return new AppT(db_mgr, pipeline_helper_);
+            assert(collection_ != nullptr);
+            return new AppT(db_mgr, collection_);
         }
 
         /// \brief Populate \a schema with the same tables as \ref CollectionPipeline::defineSchema.
@@ -56,12 +56,11 @@ public:
         {
             AppT::defineSchema(schema);
             auto& timestamps_tbl = schema.addTable("Timestamps");
-            timestamps_tbl.addColumn("Timestamp", pipeline_helper_->getSqlTimeType());
+            timestamps_tbl.addColumn("Timestamp", collection_->getSqlTimeType());
         }
 
     private:
-        /// \brief TODO cnyce
-        CollectionBase* pipeline_helper_ = nullptr;
+        CollectionBase* collection_ = nullptr;
     };
 
     /// \brief Declare SQLite tables used by Argos collection (globals, clocks, element/collectable trees,
@@ -137,19 +136,19 @@ public:
         pipeline->noMoreBindings();
 
         auto pipeline_head = pipeline->getInPortQueue<collection::Payload>("compressor.input_queue");
-        pipeline_helper_->openStage(pipeline_head);
+        collection_->openStage(pipeline_head);
     }
 
     /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writeMetaOnPostInit.
     void postInit(int, char**) override
     {
-        pipeline_helper_->writeMetaOnPostInit(db_mgr_);
+        collection_->writeMetaOnPostInit(db_mgr_);
     }
 
     /// \brief Run before teardown; invokes \ref CollectionPipelineMeta::onCollectionStopping.
     void preTeardown() override
     {
-        pipeline_helper_->flushStageToPipeline();
+        collection_->flushStageToPipeline();
     }
 
 private:
@@ -195,7 +194,7 @@ private:
 
     DatabaseManager *const db_mgr_;
     simdb::TinyStrings<> tiny_strings_;
-    CollectionBase* pipeline_helper_ = nullptr;
+    CollectionBase* collection_ = nullptr;
 };
 
 } // namespace simdb::collection

@@ -13,7 +13,6 @@
 
 namespace simdb::collection {
 
-/// \class TODO cnyce
 class DataTypeNodeVisitor
 {
 public:
@@ -55,8 +54,6 @@ public:
         (void)name_value_pairs;
     }
 
-    /// \param struct_key Field name for nested structs, or root label for the root struct (see \ref DataTypeInspector).
-    /// \param struct_type_name Demangled C++ type name of the struct.
     virtual void visitStructVariable(
         const std::string& struct_key,
         const std::string& description,
@@ -76,26 +73,6 @@ public:
 class DataTypeInspector
 {
 public:
-    DataTypeInspector() = default;
-
-    explicit DataTypeInspector(DatabaseManager* db_mgr)
-    {
-        bindDatabase(db_mgr);
-    }
-
-    void bindDatabase(DatabaseManager* db_mgr)
-    {
-        if (db_mgr == nullptr || tiny_strings_)
-        {
-            return;
-        }
-        tiny_strings_ = std::make_unique<simdb::TinyStrings<>>(db_mgr);
-        for (const auto& [_, hier] : root_hierarchies_)
-        {
-            injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
-        }
-    }
-
     ~DataTypeInspector()
     {
         if (tiny_strings_)
@@ -122,10 +99,22 @@ public:
         }
 
         std::shared_ptr<DataTypeHierarchy<Type>> hier = createDataTypeHier<value_t>();
-        injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
         root_hierarchies_.emplace(type_name, hier);
 
         return hier;
+    }
+
+    void bindDatabase(DatabaseManager* db_mgr)
+    {
+        if (db_mgr == nullptr || tiny_strings_)
+        {
+            return;
+        }
+        tiny_strings_ = std::make_unique<simdb::TinyStrings<>>(db_mgr);
+        for (const auto& [_, hier] : root_hierarchies_)
+        {
+            injectTinyStringsIntoFields_(hier->getRoot(), tiny_strings_.get());
+        }
     }
 
     void acceptVisitor(DataTypeNodeVisitor* visitor) const
