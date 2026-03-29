@@ -8,6 +8,7 @@
 #include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/apps/argos/DataTypeSerializer.hpp"
 #include "simdb/utils/Tree.hpp"
+#include "simdb/utils/TypeTraits.hpp"
 #include "simdb/Exceptions.hpp"
 
 #include <cstdint>
@@ -135,7 +136,8 @@ public:
         const CollectableT* scalar)
     {
         verifyNoDupPaths_(path);
-        auto dtype_hier = dtype_inspector_.registerType<CollectableT>();
+        using ElemT = type_traits::remove_any_pointer_t<CollectableT>;
+        auto dtype_hier = dtype_inspector_.registerType<ElemT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable = std::make_shared<AutoScalarCollector<CollectableT>>(
@@ -151,7 +153,8 @@ public:
         const std::string& clk_name)
     {
         verifyNoDupPaths_(path);
-        auto dtype_hier = dtype_inspector_.registerType<CollectableT>();
+        using ElemT = type_traits::remove_any_pointer_t<CollectableT>;
+        auto dtype_hier = dtype_inspector_.registerType<ElemT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
         auto collectable =

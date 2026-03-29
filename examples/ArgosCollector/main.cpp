@@ -105,23 +105,63 @@ public:
     void createCollectables(simdb::collection::Collection<uint64_t>& collection)
     {
         ui16_collector_ = collection.collectScalarWithAutoCollection<uint16_t>(
-            "auto.ui16", "root", &ui16_);
+            "ui16",  "root", &ui16_);
 
         ui32_collector_ = collection.collectScalarWithAutoCollection<uint32_t>(
-            "auto.ui32", "root", &ui32_);
+            "ui32",  "root", &ui32_);
 
         dbl_collector_ = collection.collectScalarWithAutoCollection<double>(
-            "auto.dbl",  "root", &dbl_);
+            "dbl",   "root", &dbl_);
 
         str_collector_ = collection.collectScalarWithAutoCollection<std::string>(
-            "auto.str",  "root", &str_);
+            "str",   "root", &str_);
 
         flag_collector_ = collection.collectScalarWithAutoCollection<bool>(
-            "auto.flag", "root", &flag_);
+            "flag",  "root", &flag_);
 
         color_collector_ = collection.collectScalarWithAutoCollection<simdb::Colors>(
-            "auto.color", "root", &color_);
-        /*
+            "color", "root", &color_);
+
+        inst_collector_ = collection.collectScalarWithAutoCollection<std::shared_ptr<Instruction>>(
+            "inst",  "root", &inst_);
+    }
+
+    simdb::collection::AutoScalarCollector<uint16_t>* getUI16Collector() const
+    {
+        return ui16_collector_.get();
+    }
+
+    simdb::collection::AutoScalarCollector<uint32_t>* getUI32Collector() const
+    {
+        return ui32_collector_.get();
+    }
+
+    simdb::collection::AutoScalarCollector<double>* getDblCollector() const
+    {
+        return dbl_collector_.get();
+    }
+
+    simdb::collection::AutoScalarCollector<std::string>* getStrCollector() const
+    {
+        return str_collector_.get();
+    }
+
+    simdb::collection::AutoScalarCollector<bool>* getFlagCollector() const
+    {
+        return flag_collector_.get();
+    }
+
+    simdb::collection::AutoScalarCollector<simdb::Colors>* getColorCollector() const
+    {
+        return color_collector_.get();
+    }
+
+    simdb::collection::AutoScalarCollector<std::shared_ptr<Instruction>>* getInstCollector() const
+    {
+        return inst_collector_.get();
+    }
+
+    /*
     class Packet
     {
     private:
@@ -157,7 +197,6 @@ public:
 
     auto manual_packet_q_collector = collection.collectContainerManually<PacketQueue, false>(
         "manual.packet_q", "root", 8);*/
-    }
 
     void randomize()
     {
@@ -167,6 +206,7 @@ public:
         str_ = simdb::generateRandomString();
         flag_ = simdb::generateRandomBool();
         color_ = simdb::generateRandomColor();
+        inst_ = Instruction::genRandom();
     }
 
 private:
@@ -176,6 +216,7 @@ private:
     std::string str_;
     bool flag_;
     simdb::Colors color_;
+    std::shared_ptr<Instruction> inst_;
 
     std::shared_ptr<simdb::collection::AutoScalarCollector<uint16_t>> ui16_collector_;
     std::shared_ptr<simdb::collection::AutoScalarCollector<uint32_t>> ui32_collector_;
@@ -183,9 +224,10 @@ private:
     std::shared_ptr<simdb::collection::AutoScalarCollector<std::string>> str_collector_;
     std::shared_ptr<simdb::collection::AutoScalarCollector<bool>> flag_collector_;
     std::shared_ptr<simdb::collection::AutoScalarCollector<simdb::Colors>> color_collector_;
+    std::shared_ptr<simdb::collection::AutoScalarCollector<std::shared_ptr<Instruction>>> inst_collector_;
 };
 
-void TestSimpleScalars()
+void TestScalars()
 {
     uint64_t tick = 0;
     simdb::collection::Collection<uint64_t> collection;
@@ -209,13 +251,15 @@ void TestSimpleScalars()
     app_mgrs.openPipelines();
 
     // TODO cnyce
+    [[maybe_unused]] auto ui16_collector  = scalars.getUI16Collector();
+    [[maybe_unused]] auto ui32_collector  = scalars.getUI32Collector();
+    [[maybe_unused]] auto dbl_collector   = scalars.getDblCollector();
+    [[maybe_unused]] auto str_collector   = scalars.getStrCollector();
+    [[maybe_unused]] auto flag_collector  = scalars.getFlagCollector();
+    [[maybe_unused]] auto color_collector = scalars.getColorCollector();
+    [[maybe_unused]] auto inst_collector  = scalars.getInstCollector();
 
     app_mgrs.postSimLoopTeardown();
-}
-
-void TestStructScalars()
-{
-
 }
 
 void TestContainers()
@@ -225,7 +269,6 @@ void TestContainers()
 
 int main()
 {
-    TestSimpleScalars();
-    TestStructScalars();
+    TestScalars();
     TestContainers();
 }
