@@ -16,6 +16,11 @@ namespace simdb::collection {
 
 class DomainCollection;
 
+template <typename T>
+static constexpr bool is_collectable_stl_v =
+    type_traits::is_std_vector_v<T> ||
+    type_traits::is_std_deque_v<T>;
+
 /// Base class for all collectables.
 class CollectableBase
 {
@@ -226,9 +231,39 @@ public:
         appendSize_(buffer, container);
 
         auto it = container.begin();
+        uint16_t bin_idx = 0;
         while (it++ != container.end())
         {
-            // TODO cnyce
+            bool valid = false;
+            if constexpr (is_collectable_stl_v<ContainerT>)
+            {
+                if (*it)
+                {
+                    valid = true;
+                }
+            }
+            else
+            {
+                if (it.isValid())
+                {
+                    valid = true;
+                }
+            }
+
+            if (valid)
+            {
+                if (Sparse)
+                {
+                    buffer << bin_idx;
+                }
+                dtype_hierarchy_->writeBuffer(bytes, *it);
+            }
+            else if (!Sparse)
+            {
+                break;
+            }
+
+            ++bin_idx;
         }
 
         //dtype_hierarchy_->writeBuffer(buf, value);

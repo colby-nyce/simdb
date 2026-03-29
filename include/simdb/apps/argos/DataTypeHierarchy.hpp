@@ -246,6 +246,16 @@ public:
         }
     }
 
+    template <typename T>
+    std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
+    writeBuffer(std::vector<char>& buffer, const T& value) const
+    {
+        if (value)
+        {
+            writeBuffer(buffer, *value);
+        }
+    }
+
 private:
     template <typename T>
     friend std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataTypeHier();
