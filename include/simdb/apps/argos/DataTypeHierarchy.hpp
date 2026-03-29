@@ -131,11 +131,14 @@ namespace detail {
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
+/// Leaf scalars for auto/POD wiring: trivial layout types plus \c std::string (uint32 string id).
+/// Enums are \c NodeKind::Enum, not this trait.
 template <typename T>
 constexpr bool is_pod_leaf_v =
-    std::is_trivial_v<remove_cvref_t<T>> &&
-    std::is_standard_layout_v<remove_cvref_t<T>> &&
-    !std::is_enum_v<remove_cvref_t<T>>;
+    std::is_same_v<remove_cvref_t<T>, std::string> ||
+    (std::is_trivial_v<remove_cvref_t<T>> &&
+     std::is_standard_layout_v<remove_cvref_t<T>> &&
+     !std::is_enum_v<remove_cvref_t<T>>);
 
 template <typename IntT>
 constexpr EnumBackingKind getBackingKind()

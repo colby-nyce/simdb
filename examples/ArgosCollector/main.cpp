@@ -3,147 +3,125 @@
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
-#include "simdb/utils/Tree.hpp"
-
-#include <vector>
 
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
 
+enum InstType
+{
+    NO_OP,
+    MEM,
+    CSR,
+    ILLEGAL,
+    __N
+};
+
 // Template specializations
 namespace simdb::collection {
+
+template <>
+struct EnumDescriptor<InstType>
+{
+    static std::vector<EnumMember> members()
+    {
+        return {{"NO_OP", 0},
+                {"MEM", 1},
+                {"CSR", 2},
+                {"ILLEGAL", 3}};
+    }
+};
 
 template <>
 struct EnumDescriptor<simdb::Colors>
 {
     static std::vector<EnumMember> members()
     {
-        return {{"RED", 1},
+        return {{"WHITE", 0},
+                {"RED", 1},
                 {"GREEN", 2},
                 {"BLUE", 3},
-                {"WHITE", 0},
                 {"TRANSPARENT", -1}};
     }
 };
 
 } // namespace simdb::collection
 
-/// Example simulator that configures all supported types of collections.
-class Sim
+class Instruction
 {
-public:
-    void step()
-    {
-        randomizeDummyPacketCollectables_();
-        auto tick = ++current_tick_;
-
-        // Collect a random uint64_t between ticks 10 and 25
-        if (tick == 1000)
-        {
-            // uint64_collectable_->activate(generateRandomInt<uint64_t>());
-        } else if (tick == 2000)
-        {
-            // uint64_collectable_->deactivate();
-        }
-
-        // Collect a random bool between ticks 1500 and 2500
-        if (tick == 1500)
-        {
-            // bool_collectable_->activate(rand() % 2 == 0);
-        } else if (tick == 2500)
-        {
-            // bool_collectable_->deactivate();
-        }
-
-        // Collect a random enum between ticks 1800 and 2800
-        if (tick == 1800)
-        {
-            // enum_collectable_->activate(generateRandomColor());
-        } else if (tick == 2800)
-        {
-            // enum_collectable_->deactivate();
-        }
-
-        // Collect a random DummyPacket between ticks 2000 and 3000
-        if (tick == 2000)
-        {
-            // dummy_packet_collectable_->activate(generateRandomDummyPacket());
-        } else if (tick == 3000)
-        {
-            // dummy_packet_collectable_->deactivate();
-        }
-
-        // Collect some different values for just one cycle. To do this, we call
-        // the activate() method, passing in "once=true".
-        if (tick >= 5000 && tick % 5 == 0)
-        {
-            // uint64_collectable_->activate(generateRandomInt<uint64_t>(), true);
-            // bool_collectable_->activate(rand() % 2 == 0, true);
-            // enum_collectable_->activate(generateRandomColor(), true);
-            // dummy_packet_collectable_->activate(generateRandomDummyPacket(), true);
-        }
-
-        // dummy_collectable_vec_contig_->activate(&dummy_packet_vec_contig_);
-        // dummy_collectable_vec_sparse_->activate(&dummy_packet_vec_sparse_);
-    }
-
-    uint64_t getCurrentTick() const { return current_tick_; }
-
 private:
-    void randomizeDummyPacketCollectables_()
-    {
-        dummy_packet_vec_contig_.clear();
-        for (int i = 0; i < rand() % 10; ++i)
-        {
-            dummy_packet_vec_contig_.push_back(simdb::generateRandomDummyPacket());
-        }
+    InstType type_ = InstType::NO_OP;
+    uint64_t opcode_ = 0;
+    std::string mnemonic_;
+    uint32_t csr_ = 0;
+    bool last_inst_ = 0;
 
-        dummy_packet_vec_sparse_.clear();
-        dummy_packet_vec_sparse_.resize(32);
-        for (int i = 0; i < rand() % 10; ++i)
-        {
-            if (rand() % 2 == 0)
-            {
-                dummy_packet_vec_sparse_[i] = simdb::generateRandomDummyPacket();
-            }
-        }
+public:
+    InstType getType() const { return type_; }
+    uint64_t getOpcode() const { return opcode_; }
+    const std::string& getMnemonic() const { return mnemonic_; }
+    uint32_t getCsr() const { return csr_; }
+    bool finishesSim() const { return last_inst_; }
+
+    Instruction(InstType type, uint64_t opcode, const std::string& mnemonic, uint32_t csr = 0, bool last_inst = false)
+        : type_(type)
+        , opcode_(opcode)
+        , mnemonic_(mnemonic)
+        , csr_(csr)
+        , last_inst_(last_inst)
+    {}
+
+    static std::shared_ptr<Instruction> genRandom()
+    {
+        auto type = static_cast<InstType>(rand() % InstType::__N);
+        auto opcode = rand();
+
+        static const char* mnemonics[] = {
+            "add", "addi", "li", "b", "jlr"
+        };
+        auto mnemonic = mnemonics[rand() % 5];
+        auto csr = type == InstType::CSR ? rand() % 256 : 0;
+        auto last_inst = rand() % 1000 == 500;
+        return std::make_shared<Instruction>(type, opcode, mnemonic, csr, last_inst);
     }
 
-    uint64_t current_tick_ = 0;
-
-    // std::shared_ptr<simdb::CollectionPoint> uint64_collectable_;
-    // std::shared_ptr<simdb::CollectionPoint> bool_collectable_;
-    // std::shared_ptr<simdb::CollectionPoint> enum_collectable_;
-    // std::shared_ptr<simdb::CollectionPoint> dummy_packet_collectable_;
-
-    simdb::DummyPacketPtrVec dummy_packet_vec_contig_;
-    // std::shared_ptr<simdb::ContigIterableCollectionPoint> dummy_collectable_vec_contig_;
-
-    simdb::DummyPacketPtrVec dummy_packet_vec_sparse_;
-    // std::shared_ptr<simdb::SparseIterableCollectionPoint> dummy_collectable_vec_sparse_;
+    class ArgosCollector : public simdb::collection::ArgosCollectorBase<Instruction>
+    {
+    public:
+        ARGOS_COLLECT(type, &Instruction::getType, "Instruction type");
+        ARGOS_COLLECT(opcode, &Instruction::getOpcode, "Opcode");
+        ARGOS_COLLECT(mnemonic, &Instruction::getMnemonic, "Mnemonic");
+        ARGOS_COLLECT(csr, &Instruction::getCsr, "CSR number");
+    };
 };
 
-int main(int argc, char** argv)
+class Scalars
 {
-    Sim sim;
-    simdb::collection::Collection<uint64_t> collection;
-    collection.timestampWith([&sim]() { return sim.getCurrentTick(); });
-    collection.addCollection("root", 1);
+public:
+    Scalars()
+    {
+        randomize();
+    }
 
-    int intval = 5;
-    auto auto_int_collector = collection.collectScalarWithAutoCollection<int>(
-        "auto.int", "root", &intval);
+    void createCollectables(simdb::collection::Collection<uint64_t>& collection)
+    {
+        ui16_collector_ = collection.collectScalarWithAutoCollection<uint16_t>(
+            "auto.ui16", "root", &ui16_);
 
-    auto manual_int_collector = collection.collectScalarManually<int>(
-        "manual.int", "root");
+        ui32_collector_ = collection.collectScalarWithAutoCollection<uint32_t>(
+            "auto.ui32", "root", &ui32_);
 
-    auto color = simdb::Colors::GREEN;
-    auto auto_enum_collector = collection.collectScalarWithAutoCollection<simdb::Colors>(
-        "auto.color", "root", &color);
+        dbl_collector_ = collection.collectScalarWithAutoCollection<double>(
+            "auto.dbl",  "root", &dbl_);
 
-    auto manual_enum_collector = collection.collectScalarManually<simdb::Colors>(
-        "manual.color", "root");
+        str_collector_ = collection.collectScalarWithAutoCollection<std::string>(
+            "auto.str",  "root", &str_);
 
+        flag_collector_ = collection.collectScalarWithAutoCollection<bool>(
+            "auto.flag", "root", &flag_);
+
+        color_collector_ = collection.collectScalarWithAutoCollection<simdb::Colors>(
+            "auto.color", "root", &color_);
+        /*
     class Packet
     {
     private:
@@ -178,7 +156,44 @@ int main(int argc, char** argv)
         "auto.packet_q", "root", &packet_queue, 8);
 
     auto manual_packet_q_collector = collection.collectContainerManually<PacketQueue, false>(
-        "manual.packet_q", "root", 8);
+        "manual.packet_q", "root", 8);*/
+    }
+
+    void randomize()
+    {
+        ui16_ = simdb::generateRandomInt<uint16_t>();
+        ui32_ = simdb::generateRandomInt<uint32_t>();
+        dbl_ = simdb::generateRandomFloat<double>();
+        str_ = simdb::generateRandomString();
+        flag_ = simdb::generateRandomBool();
+        color_ = simdb::generateRandomColor();
+    }
+
+private:
+    uint16_t ui16_;
+    uint32_t ui32_;
+    double dbl_;
+    std::string str_;
+    bool flag_;
+    simdb::Colors color_;
+
+    std::shared_ptr<simdb::collection::AutoScalarCollector<uint16_t>> ui16_collector_;
+    std::shared_ptr<simdb::collection::AutoScalarCollector<uint32_t>> ui32_collector_;
+    std::shared_ptr<simdb::collection::AutoScalarCollector<double>> dbl_collector_;
+    std::shared_ptr<simdb::collection::AutoScalarCollector<std::string>> str_collector_;
+    std::shared_ptr<simdb::collection::AutoScalarCollector<bool>> flag_collector_;
+    std::shared_ptr<simdb::collection::AutoScalarCollector<simdb::Colors>> color_collector_;
+};
+
+void TestSimpleScalars()
+{
+    uint64_t tick = 0;
+    simdb::collection::Collection<uint64_t> collection;
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    Scalars scalars;
+    scalars.createCollectables(collection);
 
     simdb::AppManagers app_mgrs;
     app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
@@ -189,14 +204,28 @@ int main(int argc, char** argv)
     app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
     app_mgrs.createEnabledApps();
     app_mgrs.createSchemas();
-    app_mgrs.postInit(argc, argv);
+    app_mgrs.postInit(0, nullptr);
     app_mgrs.initializePipelines();
     app_mgrs.openPipelines();
 
     // TODO cnyce
 
     app_mgrs.postSimLoopTeardown();
+}
 
-    REPORT_ERROR;
-    return ERROR_CODE;
+void TestStructScalars()
+{
+
+}
+
+void TestContainers()
+{
+
+}
+
+int main()
+{
+    TestSimpleScalars();
+    TestStructScalars();
+    TestContainers();
 }
