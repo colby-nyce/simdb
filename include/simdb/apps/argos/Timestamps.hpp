@@ -16,8 +16,8 @@ public:
     /// Apply the stored type-specific time value to the INSERT at column 0
     virtual void apply(PreparedINSERT* inserter) const = 0;
 
-    /// Check if the current time is later than ours.
-    virtual bool comesBefore(const TimePointBase* time_point) const = 0;
+    /// Check if the given time point is equal to ours (dynamic cast must succeed)
+    virtual bool equals(const TimePointBase* time_point, bool must_be_equal_or_less = false) const = 0;
 };
 
 /// \class TimePoint
@@ -33,12 +33,25 @@ public:
         inserter->setColumnValue(0, time_);
     }
 
-    /// Check if the current time is later than ours.
-    bool comesBefore(const TimePointBase* time_point) const override final
+    /// Check if the given time point is equal to ours (dynamic cast must succeed)
+    bool equals(const TimePointBase* time_point, bool must_be_equal_or_less = false) const override final
     {
         if (auto typed_time_point = dynamic_cast<const TimePoint<TimeT>*>(time_point))
         {
-            return time_ < typed_time_point->time_;
+            if (time_ == typed_time_point->time_)
+            {
+                return true;
+            }
+            else if (must_be_equal_or_less && time_ < typed_time_point->time_)
+            {
+                return true;
+            }
+            else if (must_be_equal_or_less)
+            {
+                throw DBException("Time comparison failure: ")
+                    << time_ << " <= " << typed_time_point->time_;
+            }
+            return false;
         }
         throw DBException("Dynamic cast failed");
     }

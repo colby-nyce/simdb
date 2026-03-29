@@ -162,61 +162,59 @@ private:
     private:
         pipeline::PipelineAction run_(bool force) override
         {
+            pipeline::PipelineAction action = pipeline::PipelineAction::SLEEP;
             Payload payload;
-            if (input_queue_->try_pop(payload))
+            while (input_queue_->try_pop(payload))
             {
-                // Don't have anything buffered yet? Buffer now.
-                if (!pending_payload_)
-                {
-                    pending_payload_ = std::make_unique<Payload>(std::move(payload));
-
-                    // Flush to the pipeline if forced
-                    if (force)
-                    {
-                        flushToPipeline_();
-                    }
-                    return pipeline::PipelineAction::PROCEED;
-                }
-
                 // Try to buffer the incoming payload (only able to if it's for the same time point)
-                if (pending_payload_->time_point->comesBefore(payload.time_point.get()))
+                if (!payload_queue_.empty() && payload_queue_.back().time_point->equals(payload.time_point.get(), true))
                 {
-                    // We can't buffer it. Flush to the pipeline and then buffer the incoming payload.
-                    flushToPipeline_();
-                    pending_payload_ = std::make_unique<Payload>(std::move(payload));
-                }
-                else
-                {
-                    // We can buffer it.
-                    auto& dst = pending_payload_->bytes;
+                    auto& dst = payload_queue_.back().bytes;
                     const auto& src = payload.bytes;
                     dst.insert(dst.end(), src.begin(), src.end());
                 }
 
-                // Flush to the pipeline if forced
-                if (force)
+                // Otherwise start a new entry in the queue. Flush first since we are
+                // now done with that entry's time point (notice how we pass in 'true'
+                // to the call to equals() above which guarantees time points never
+                // go backwards).
+                else
                 {
-                    flushToPipeline_();
+                    flushToPipeline_(true /*leave newest*/);
+                    payload_queue_.emplace(std::move(payload));
                 }
 
-                return pipeline::PipelineAction::PROCEED;
+                action = pipeline::PipelineAction::PROCEED;
             }
 
-            return pipeline::PipelineAction::SLEEP;
+            if (force)
+            {
+                if (flushToPipeline_(false /*flush everything*/))
+                {
+                    action = pipeline::PipelineAction::PROCEED;
+                }
+            }
+
+            return action;
         }
 
-        void flushToPipeline_()
+        bool flushToPipeline_(bool leave_newest)
         {
-            if (pending_payload_)
+            auto flushed = false;
+            auto target_size = leave_newest ? 1u : 0u;
+            while (payload_queue_.size() > target_size)
             {
-                //output_queue_->emplace(std::move(*pending_payload_));
-                pending_payload_.reset();
+                auto payload = std::move(payload_queue_.front());
+                output_queue_->emplace(std::move(payload));
+                payload_queue_.pop();
+                flushed = true;
             }
+            return flushed;
         }
 
         ConcurrentQueue<Payload>* input_queue_ = nullptr;
         ConcurrentQueue<Payload>* output_queue_ = nullptr;
-        std::unique_ptr<Payload> pending_payload_;
+        std::queue<Payload> payload_queue_;
     };
 
     class Compressor : public pipeline::Stage

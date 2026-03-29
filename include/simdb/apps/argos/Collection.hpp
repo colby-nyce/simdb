@@ -76,7 +76,6 @@ public:
     {
         ensureTimestampReconfigurable_();
         timestamp_ = std::make_shared<Timestamp<TimeT>>(backpointer);
-        // TODO cnyce: create stager here?
     }
 
     /// \brief Use a C-style function pointer to get the current time for every clock domain.
