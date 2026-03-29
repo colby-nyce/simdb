@@ -97,8 +97,8 @@ public:
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
     virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
 
-    /// \brief Collect everything and send it down the pipeline
-    void performCollection()
+    /// \brief Run auto-collection on all collectables configured for it
+    void performAutoCollection()
     {
         for (auto collectable : all_auto_collectables_)
         {

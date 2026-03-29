@@ -18,6 +18,9 @@ public:
 
     /// Check if the given time point is equal to ours (dynamic cast must succeed)
     virtual bool equals(const TimePointBase* time_point, bool must_be_equal_or_less = false) const = 0;
+
+    /// Check if our time is less than the given time point (dynamic cast must succeed)
+    virtual bool lessThan(const TimePointBase* time_point) const = 0;
 };
 
 /// \class TimePoint
@@ -42,7 +45,7 @@ public:
             {
                 return true;
             }
-            else if (must_be_equal_or_less && time_ < typed_time_point->time_)
+            else if (must_be_equal_or_less && lessThan(typed_time_point))
             {
                 return true;
             }
@@ -52,6 +55,16 @@ public:
                     << time_ << " <= " << typed_time_point->time_;
             }
             return false;
+        }
+        throw DBException("Dynamic cast failed");
+    }
+
+    /// Check if our time is less than the given time point (dynamic cast must succeed)
+    bool lessThan(const TimePointBase* time_point) const override final
+    {
+        if (auto typed_time_point = dynamic_cast<const TimePoint<TimeT>*>(time_point))
+        {
+            return time_ < typed_time_point->time_;
         }
         throw DBException("Dynamic cast failed");
     }

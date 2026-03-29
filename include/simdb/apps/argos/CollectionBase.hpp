@@ -16,7 +16,7 @@ public:
     virtual size_t getHeartbeat() const = 0;
     virtual SqlDataType getSqlTimeType() const = 0;
     virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
-    virtual void openStage(ConcurrentQueue<Payload>* pipeline_head) = 0;
+    virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
 };
 
 } // namespace simdb::collection

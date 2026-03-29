@@ -200,12 +200,19 @@ public:
     }
 
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
-    void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head)
+    void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override
     {
         for (auto& [_, collection] : collections_)
         {
             collection->connectToPipeline(pipeline_head);
         }
+    }
+
+    /// \brief Run auto-collection on all collectables configured for it
+    void performAutoCollection(const std::string& clk_name)
+    {
+        auto collection = getCollection_(clk_name, true /*must exist*/);
+        collection->performAutoCollection();
     }
 
 private:
@@ -346,18 +353,6 @@ private:
 
         // Write data types and their hierarchies (structs / nested structs)
         DataTypeSerializer::serialize(&dtype_inspector_, db_mgr);
-    }
-
-    void openStage(ConcurrentQueue<Payload>* pipeline_head) override
-    {
-        // TODO cnyce
-        (void)pipeline_head;
-    }
-
-    /// \brief Collect everything and send it down the pipeline
-    void performCollection()
-    {
-        // TODO cnyce
     }
 
     const size_t heartbeat_;

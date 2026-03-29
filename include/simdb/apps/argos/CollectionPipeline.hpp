@@ -139,7 +139,7 @@ public:
         pipeline->noMoreBindings();
 
         auto pipeline_head = pipeline->getInPortQueue<Payload>("organizer.input_queue");
-        collection_->openStage(pipeline_head);
+        collection_->connectToPipeline(pipeline_head);
     }
 
     /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writeMetaOnPostInit.
@@ -149,10 +149,10 @@ public:
     }
 
 private:
-    class AutoCollectorHandler
+    class ManualCollectorHandler
     {
     public:
-        AutoCollectorHandler(size_t heartbeat, std::vector<char>&& bytes)
+        ManualCollectorHandler(size_t heartbeat, std::vector<char>&& bytes)
             : heartbeat_(heartbeat)
             , bytes_(std::move(bytes))
         {}
@@ -194,37 +194,19 @@ private:
             Payload payload;
             while (input_queue_->try_pop(payload))
             {
+                if (goesToNextTimeStep_(payload.time_point.get()))
+                {
+                    auto earliest_time_point = getEarliestTimePointInQueues_();
+                    mergeAndSendPayloadsAtTimePoint_(earliest_time_point);
+                }
+
                 if (payload.auto_collected)
                 {
-                    const char* raw = payload.bytes.data();
-                    const auto cid = *reinterpret_cast<const uint16_t*>(raw);
-                    auto& handler = auto_collector_handlers_[cid];
-                    if (!handler)
-                    {
-                        handler = std::make_unique<AutoCollectorHandler>(heartbeat_, std::move(payload.bytes));
-                    }
-                    else
-                    {
-                        handler->setBytes(std::move(payload.bytes));
-                    }
+                    auto_payloads_.emplace(std::move(payload));
                 }
-
-                // Try to buffer the incoming payload (only able to if it's for the same time point)
-                if (!payload_queue_.empty() && payload_queue_.back().time_point->equals(payload.time_point.get(), true))
-                {
-                    auto& dst = payload_queue_.back().bytes;
-                    const auto& src = payload.bytes;
-                    dst.insert(dst.end(), src.begin(), src.end());
-                }
-
-                // Otherwise start a new entry in the queue. Flush first since we are
-                // now done with that entry's time point (notice how we pass in 'true'
-                // to the call to equals() above which guarantees time points never
-                // go backwards).
                 else
                 {
-                    flushToPipeline_(true /*leave newest*/);
-                    payload_queue_.emplace(std::move(payload));
+                    manual_payloads_.emplace(std::move(payload));
                 }
 
                 action = pipeline::PipelineAction::PROCEED;
@@ -232,8 +214,9 @@ private:
 
             if (force)
             {
-                if (flushToPipeline_(false /*flush everything*/))
+                while (auto earliest_time_point = getEarliestTimePointInQueues_())
                 {
+                    mergeAndSendPayloadsAtTimePoint_(earliest_time_point);
                     action = pipeline::PipelineAction::PROCEED;
                 }
             }
@@ -241,30 +224,173 @@ private:
             return action;
         }
 
-        bool flushToPipeline_(bool leave_newest)
+        bool goesToNextTimeStep_(const TimePointBase* time_point) const
         {
-            auto flushed = false;
-            auto target_size = leave_newest ? 1u : 0u;
-            while (payload_queue_.size() > target_size)
+            if (auto latest_time_point = getLatestTimePointInQueues_())
             {
-                auto payload = std::move(payload_queue_.front());
-                for (const auto& [_, handler] : auto_collector_handlers_)
-                {
-                    handler->appendToAutoCollection(payload.bytes);
-                }
-
-                output_queue_->emplace(std::move(payload));
-                payload_queue_.pop();
-                flushed = true;
+                return latest_time_point->lessThan(time_point);
             }
-            return flushed;
+            return false;
+        }
+
+        const TimePointBase* getEarliestTimePointInQueues_() const
+        {
+            std::shared_ptr<TimePointBase> time_point;
+
+            auto auto_time_point =
+                auto_payloads_.empty() ?
+                nullptr : auto_payloads_.front().time_point;
+
+            auto manual_time_point =
+                manual_payloads_.empty() ?
+                nullptr : manual_payloads_.front().time_point;
+
+            if (auto_time_point && manual_time_point)
+            {
+                if (manual_time_point->lessThan(auto_time_point.get()))
+                {
+                    time_point = manual_time_point;
+                }
+                else
+                {
+                    time_point = auto_time_point;
+                }
+            }
+            else if (auto_time_point)
+            {
+                time_point = auto_time_point;
+            }
+            else if (manual_time_point)
+            {
+                time_point = manual_time_point;
+            }
+
+            return time_point.get();
+        }
+
+        const TimePointBase* getLatestTimePointInQueues_() const
+        {
+            std::shared_ptr<TimePointBase> time_point;
+
+            auto auto_time_point =
+                auto_payloads_.empty() ?
+                nullptr : auto_payloads_.back().time_point;
+
+            auto manual_time_point =
+                manual_payloads_.empty() ?
+                nullptr : manual_payloads_.back().time_point;
+
+            if (auto_time_point && manual_time_point)
+            {
+                if (manual_time_point->lessThan(auto_time_point.get()))
+                {
+                    time_point = auto_time_point;
+                }
+                else
+                {
+                    time_point = manual_time_point;
+                }
+            }
+            else if (auto_time_point)
+            {
+                time_point = auto_time_point;
+            }
+            else if (manual_time_point)
+            {
+                time_point = manual_time_point;
+            }
+
+            return time_point.get();
+        }
+
+        void mergeAndSendPayloadsAtTimePoint_(const TimePointBase* time_point)
+        {
+            std::queue<Payload> auto_payloads_at_time_point;
+            std::queue<Payload> manual_payloads_at_time_point;
+
+            auto extract_payload_at_time_point = [&](
+                std::queue<Payload>& src,
+                std::queue<Payload>& dst)
+            {
+                if (!src.empty() && src.front().time_point->equals(time_point))
+                {
+                    dst.emplace(std::move(src.front()));
+                    src.pop();
+                    return true;
+                }
+                return false;
+            };
+
+            while (true)
+            {
+                if (!extract_payload_at_time_point(auto_payloads_, auto_payloads_at_time_point) &&
+                    !extract_payload_at_time_point(manual_payloads_, manual_payloads_at_time_point))
+                {
+                    break;
+                }
+            }
+
+            mergeAndSendPayloads_(auto_payloads_at_time_point, manual_payloads_at_time_point);
+        }
+
+        void mergeAndSendPayloads_(
+            std::queue<Payload>& auto_payloads,
+            std::queue<Payload>& manual_payloads)
+        {
+            if (auto_payloads.empty() && manual_payloads.empty())
+            {
+                return;
+            }
+
+            Payload merged;
+            if (!auto_payloads.empty())
+            {
+                merged.time_point = auto_payloads.front().time_point;
+            }
+            else
+            {
+                merged.time_point = manual_payloads.front().time_point;
+            }
+
+            while (!auto_payloads.empty())
+            {
+                assert(merged.time_point->equals(auto_payloads.front().time_point.get()));
+                const auto& src = auto_payloads.front().bytes;
+                auto& dst = merged.bytes;
+                dst.insert(dst.end(), src.begin(), src.end());
+                auto_payloads.pop();
+            }
+
+            while (!manual_payloads.empty())
+            {
+                assert(merged.time_point->equals(manual_payloads.front().time_point.get()));
+                const char* raw = manual_payloads.front().bytes.data();
+                const uint16_t cid = *reinterpret_cast<const uint16_t*>(raw);
+                auto& handler = manual_collector_handlers_[cid];
+                if (!handler)
+                {
+                    handler = std::make_unique<ManualCollectorHandler>(cid, std::move(manual_payloads.front().bytes));
+                }
+                else
+                {
+                    handler->setBytes(std::move(manual_payloads.front().bytes));
+                }
+                manual_payloads.pop();
+            }
+
+            for (auto& [_, handler] : manual_collector_handlers_)
+            {
+                handler->appendToAutoCollection(merged.bytes);
+            }
+            output_queue_->emplace(std::move(merged));
         }
 
         const size_t heartbeat_;
         ConcurrentQueue<Payload>* input_queue_ = nullptr;
         ConcurrentQueue<Payload>* output_queue_ = nullptr;
-        std::queue<Payload> payload_queue_;
-        std::unordered_map<uint16_t, std::unique_ptr<AutoCollectorHandler>> auto_collector_handlers_;
+        std::queue<Payload> auto_payloads_;
+        std::queue<Payload> manual_payloads_;
+        std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>> manual_collector_handlers_;
     };
 
     class Compressor : public pipeline::Stage
