@@ -666,6 +666,163 @@ void TestAutoCollectContainers()
     ValidateCollectionInDatabase(db_mgr, snapshots);
 }
 
+class FullScale
+{
+public:
+    FullScale(uint64_t& tick, size_t capacity = 32)
+        : tick_(tick)
+        , capacity_(capacity)
+    {
+        randomize();
+    }
+
+    void createCollectables(simdb::collection::Collection<uint64_t>& collection)
+    {
+        ipc_collector_ = collection.collectScalarWithAutoCollection<double>(
+            "ipc", "root", &ipc_);
+
+        inst_q_collector_ = collection.collectContainerWithAutoCollection<InstQueue, false>(
+            "inst_q", "root", &inst_queue_, capacity_);
+
+        injected_inst_collector_ = collection.collectScalarManually<Instruction>(
+            "inj_inst", "root");
+
+        injected_insts_collector_ = collection.collectContainerManually<InstQueue, false>(
+            "inj_insts", "root", capacity_);
+    }
+
+    void randomize()
+    {
+        ipc_ = 1.0 * rand() / RAND_MAX;
+        inst_queue_.clear();
+        auto num_insts = rand() % capacity_;
+        while (inst_queue_.size() < num_insts)
+        {
+            inst_queue_.push_back(Instruction::genRandom());
+        }
+    }
+
+    class ByteSkipper : public ValidatorBase
+    {
+    public:
+        explicit ByteSkipper(size_t skip) : skip_(skip) {}
+        size_t requiredBytes() const override final { return skip_; }
+        void validate(simdb::TinyStrings<>*, const char*& bytes) const override { bytes += skip_; }
+    private:
+        const size_t skip_;
+    };
+
+    CollectionSnapshot snapshot()
+    {
+        CollectionSnapshot snapshot{
+            {ipc_collector_->getID(),    std::make_shared<typename Scalars::Validator<double>>(ipc_)},
+            {inst_q_collector_->getID(), std::make_shared<typename Containers::Validator<InstQueue, false>>(inst_queue_, capacity_)}
+        };
+
+        if (last_injected_inst_)
+        {
+            snapshot[injected_inst_collector_->getID()] = std::make_shared<typename Scalars::Validator<Instruction>>(*last_injected_inst_);
+        }
+
+        if (last_injected_insts_)
+        {
+            snapshot[injected_insts_collector_->getID()] = std::make_shared<typename Containers::Validator<InstQueue, false>>(*last_injected_insts_, capacity_);
+        }
+
+        return snapshot;
+    }
+
+    using InstQueue = typename Containers::InstQueue;
+
+    void inject(std::shared_ptr<Instruction> inst)
+    {
+        last_injected_inst_ = inst;
+        injected_inst_collector_->collect(inst);
+    }
+
+    void inject(std::shared_ptr<InstQueue> insts)
+    {
+        last_injected_insts_ = insts;
+        injected_insts_collector_->collect(insts);
+    }
+
+private:
+    uint64_t& tick_;
+    const size_t capacity_;
+
+    std::shared_ptr<Instruction> last_injected_inst_;
+    std::shared_ptr<InstQueue> last_injected_insts_;
+
+    // Auto-collected variables
+    double ipc_ = 0;
+    InstQueue inst_queue_;
+
+    // Collectables (auto)
+    std::shared_ptr<simdb::collection::AutoScalarCollector<double>> ipc_collector_;
+    std::shared_ptr<simdb::collection::AutoContainerCollector<InstQueue, false>> inst_q_collector_;
+
+    // Collectables (manual)
+    std::shared_ptr<simdb::collection::ScalarCollector<Instruction>> injected_inst_collector_;
+    std::shared_ptr<simdb::collection::ContainerCollector<InstQueue, false>> injected_insts_collector_;
+};
+
+void TestFullScale()
+{
+    uint64_t tick = 0;
+    simdb::collection::Collection<uint64_t> collection;
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    FullScale full_scale(tick);
+    full_scale.createCollectables(collection);
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    CollectionSnapshots snapshots;
+    while (tick < RUN_TICKS)
+    {
+        ++tick;
+
+        // Periodically inject instructions
+        if (rand() % 10 == 0)
+        {
+            auto inj_inst = Instruction::genRandom();
+            full_scale.inject(inj_inst);
+
+            if (rand() % 10 == 0)
+            {
+                auto insts = std::make_shared<typename Containers::InstQueue>();
+                size_t num_insts = rand() % 32;
+                num_insts = std::max(num_insts, 1ul);
+                while (insts->size() < num_insts)
+                {
+                    insts->push_back(Instruction::genRandom());
+                }
+                full_scale.inject(insts);
+            }
+        }
+
+        full_scale.randomize();
+        snapshots[tick] = full_scale.snapshot();
+        collection.performAutoCollection("root");
+    }
+
+    app_mgrs.postSimLoopTeardown();
+    auto db_mgr = app_mgr.getDatabaseManager();
+    ValidateCollectionInDatabase(db_mgr, snapshots);
+}
+
 void ValidateCollectionInDatabase(
     simdb::DatabaseManager* db_mgr,
     const CollectionSnapshots& snapshots,
@@ -761,4 +918,5 @@ int main()
 {
     TestAutoCollectScalars();
     TestAutoCollectContainers();
+    TestFullScale();
 }

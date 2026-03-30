@@ -186,7 +186,7 @@ public:
     /// \brief Pointer-version of collect()
     template <typename T = ScalarT>
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
-    collect(const T& value, bool auto_collected)
+    collect(const T& value, bool auto_collected = false)
     {
         if (value)
         {
