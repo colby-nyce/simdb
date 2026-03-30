@@ -222,9 +222,8 @@ public:
 
         appendSize_(buffer, container);
 
-        auto it = container.begin();
         uint16_t bin_idx = 0;
-        while (it++ != container.end())
+        for (auto it = container.begin(), end = container.end(); it != end; ++it)
         {
             bool valid = false;
             if constexpr (is_collectable_stl_v<ContainerT>)

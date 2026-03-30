@@ -558,5 +558,5 @@ void TestAutoCollectContainers()
 int main()
 {
     TestAutoCollectScalars();
-    //TestAutoCollectContainers();
+    TestAutoCollectContainers();
 }
