@@ -211,6 +211,11 @@ public:
         }
     }
 
+    TinyStrings<>* getTinyStrings() const override
+    {
+        return dtype_inspector_.getTinyStrings();
+    }
+
     /// \brief Run auto-collection on all collectables configured for it
     void performAutoCollection(const std::string& clk_name)
     {

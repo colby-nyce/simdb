@@ -3,7 +3,7 @@
 #pragma once
 
 #include "simdb/schema/SchemaDef.hpp"
-#include "simdb/sqlite/PreparedINSERT.hpp"
+#include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/utils/ValidValue.hpp"
 
 namespace simdb::collection {
@@ -21,6 +21,9 @@ public:
 
     /// Check if our time is less than the given time point (dynamic cast must succeed)
     virtual bool lessThan(const TimePointBase* time_point) const = 0;
+
+    /// Create an entry in the Timestamps table and return the rowid
+    virtual int createTimestampInDatabase(DatabaseManager* db_mgr) const = 0;
 };
 
 /// \class TimePoint
@@ -67,6 +70,12 @@ public:
             return time_ < typed_time_point->time_;
         }
         throw DBException("Dynamic cast failed");
+    }
+
+    /// Create an entry in the Timestamps table and return the rowid
+    int createTimestampInDatabase(DatabaseManager* db_mgr) const override final
+    {
+        return db_mgr->INSERT(SQL_TABLE("Timestamps"), SQL_VALUES(time_))->getId();
     }
 
 private:

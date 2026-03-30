@@ -29,8 +29,25 @@ public:
             using dt = simdb::SqlDataType;
             auto& tbl = append_schema.addTable("TinyStringIDs");
             tbl.addColumn("StringValue", dt::string_t);
-            tbl.addColumn("StringID", dt::int32_t);
+            tbl.addColumn("StringID", dt::uint32_t);
             db_mgr->appendSchema(append_schema);
+        }
+        else
+        {
+            auto query = db_mgr->createQuery("TinyStringIDs");
+
+            std::string str;
+            query->select("StringValue", str);
+
+            uint32_t id;
+            query->select("StringID", id);
+
+            auto results = query->getResultSet();
+            while (results.getNextRecord())
+            {
+                assert(map_->find(str) == map_->end());
+                (*map_)[str] = id;
+            }
         }
 
         inserter_ = db_mgr->prepareINSERT(SQL_TABLE("TinyStringIDs"));

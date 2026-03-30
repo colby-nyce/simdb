@@ -18,7 +18,6 @@ class ArgosFieldBase
 public:
     virtual ~ArgosFieldBase() = default;
     virtual std::string getName() const = 0;
-    /// Human-readable description for tooling/DB; empty if none was set.
     virtual std::string getDescription() const { return ""; }
     virtual std::string getTypeName() const = 0;
     virtual bool isEnumField() const = 0;
@@ -31,6 +30,33 @@ public:
     virtual void writeBufferErased(std::vector<char>&, const void*) const = 0;
     virtual const void* getStructPtrErased(const void*) const = 0;
     virtual void setTinyStrings(TinyStrings<>*) {}
+
+    size_t requiredBytes() const
+    {
+        return requiredBytes_(this);
+    }
+
+private:
+    static size_t requiredBytes_(const ArgosFieldBase* field)
+    {
+        if (field->isEnumField())
+        {
+            return enumBackingKindToBytes(field->getEnumBackingKind());
+        }
+        else if (field->isStructField())
+        {
+            size_t struct_bytes = 0;
+            for (const auto member : field->getStructFields())
+            {
+                struct_bytes += requiredBytes_(member);
+            }
+            return struct_bytes;
+        }
+        else
+        {
+            return podKindToBytes(field->getPodTypeKind());
+        }
+    }
 };
 
 template <typename CollectedT>

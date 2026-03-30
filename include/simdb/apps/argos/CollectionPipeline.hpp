@@ -25,7 +25,6 @@ public:
     /// \param handler Non-owning callbacks; must remain valid for the lifetime of this app (typically supplied via \ref AppFactory::parameterize).
     CollectionPipeline(DatabaseManager* db_mgr, CollectionBase* collection)
         : db_mgr_(db_mgr)
-        , tiny_strings_(db_mgr)
         , collection_(collection)
     {}
 
@@ -106,22 +105,20 @@ public:
         collectable_tns_tbl.addColumn("AutoCollected", dt::int32_t);
 
         auto& collection_records_tbl = schema.addTable("CollectionRecords");
-        collection_records_tbl.addColumn("Tick", dt::uint64_t);
-        collection_records_tbl.addColumn("Data", dt::blob_t);
-        collection_records_tbl.addColumn("OldestReferredTick", dt::uint64_t);
-        collection_records_tbl.setColumnDefaultValue("OldestReferredTick", 0);
-        collection_records_tbl.createIndexOn("Tick");
+        collection_records_tbl.addColumn("TimestampID", dt::int32_t);
+        collection_records_tbl.addColumn("Records", dt::blob_t);
+        collection_records_tbl.unsetPrimaryKey();
 
+        // TODO cnyce: write to this table
         auto& queue_max_sizes_tbl = schema.addTable("QueueMaxSizes");
         queue_max_sizes_tbl.addColumn("CollectableTreeNodeID", dt::int32_t);
         queue_max_sizes_tbl.addColumn("MaxSize", dt::int32_t);
     }
 
     /// \brief Return the string intern table used when mapping string values to stable integer IDs for storage.
-    /// \return Pointer to the owned \ref TinyStrings instance (valid for the app lifetime).
-    simdb::TinyStrings<>* getTinyStrings()
+    simdb::TinyStrings<>* getTinyStrings() const
     {
-        return &tiny_strings_;
+        return collection_->getTinyStrings();
     }
 
     /// \brief Create the pipeline to process collected data.
@@ -146,6 +143,15 @@ public:
     void postInit(int, char**) override
     {
         collection_->writeMetaOnPostInit(db_mgr_);
+    }
+
+    /// \brief Perform end-of-simulation tasks
+    void postTeardown() override
+    {
+        if (auto tiny_strings = getTinyStrings())
+        {
+            tiny_strings->serialize();
+        }
     }
 
 private:
@@ -436,11 +442,11 @@ private:
             Payload payload;
             if (input_queue_->try_pop(payload))
             {
-                /*auto inserter = getTableInserter_("Collection")
-                auto inserter = getTableInserter_("TimedstampedData");
-                payload.time_point->apply(inserter);
-                inserter->setColumnValue(1, payload.bytes);
-                inserter->createRecord();*/
+                auto db_mgr = getDatabaseManager_();
+                auto id = payload.time_point->createTimestampInDatabase(db_mgr);
+
+                auto inserter = getTableInserter_("CollectionRecords");
+                inserter->createRecordWithColValues(id, payload.bytes);
                 return pipeline::PipelineAction::PROCEED;
             }
 
@@ -451,7 +457,6 @@ private:
     };
 
     DatabaseManager *const db_mgr_;
-    simdb::TinyStrings<> tiny_strings_;
     CollectionBase* collection_ = nullptr;
 };
 

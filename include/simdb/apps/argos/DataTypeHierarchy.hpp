@@ -55,6 +55,32 @@ enum class PodTypeKind
     str
 };
 
+inline size_t podKindToBytes(PodTypeKind kind)
+{
+    switch (kind)
+    {
+        case PodTypeKind::c:
+        case PodTypeKind::i8:
+        case PodTypeKind::ui8:
+        case PodTypeKind::logical:
+            return sizeof(uint8_t);
+        case PodTypeKind::i16:
+        case PodTypeKind::ui16:
+            return sizeof(uint16_t);
+        case PodTypeKind::i32:
+        case PodTypeKind::ui32:
+        case PodTypeKind::f:
+        case PodTypeKind::str:
+            return sizeof(uint32_t);
+        case PodTypeKind::i64:
+        case PodTypeKind::ui64:
+        case PodTypeKind::d:
+            return sizeof(uint64_t);
+    }
+    throw DBException("Unknown data type");
+    return 0;
+}
+
 struct EnumMember
 {
     std::string name;
@@ -124,6 +150,27 @@ inline const char* enumBackingKindToString(EnumBackingKind kind)
     }
     throw DBException("Unknown enum backing kind");
     return nullptr;
+}
+
+inline size_t enumBackingKindToBytes(EnumBackingKind kind)
+{
+    switch (kind)
+    {
+    case EnumBackingKind::i8:
+    case EnumBackingKind::ui8:
+        return sizeof(int8_t);
+    case EnumBackingKind::i16:
+    case EnumBackingKind::ui16:
+        return sizeof(uint16_t);
+    case EnumBackingKind::i32:
+    case EnumBackingKind::ui32:
+        return sizeof(uint32_t);
+    case EnumBackingKind::i64:
+    case EnumBackingKind::ui64:
+        return sizeof(uint64_t);
+    }
+    throw DBException("Unknown enum backing kind");
+    return 0;
 }
 
 namespace detail {

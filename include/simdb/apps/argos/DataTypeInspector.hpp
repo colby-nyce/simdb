@@ -117,6 +117,11 @@ public:
         }
     }
 
+    TinyStrings<>* getTinyStrings() const
+    {
+        return tiny_strings_.get();
+    }
+
     void acceptVisitor(DataTypeNodeVisitor* visitor) const
     {
         if (!visitor)
@@ -188,6 +193,12 @@ private:
         {
             auto* field = static_cast<ArgosFieldBase*>(node.source_field);
             field->setTinyStrings(tiny_strings);
+        }
+        // Root-level std::string (and any POD-string node without an ArgosField) writes via
+        // node.tiny_strings in createDataTypeHier(); only nested fields get source_field set.
+        if (node.pod_type && *node.pod_type == PodTypeKind::str)
+        {
+            const_cast<DataTypeNode&>(node).tiny_strings = tiny_strings;
         }
         for (const auto& child : node.children)
         {

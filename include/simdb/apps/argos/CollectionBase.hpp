@@ -4,6 +4,7 @@
 
 #include "simdb/schema/SchemaDef.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
+#include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::collection {
 
@@ -17,6 +18,7 @@ public:
     virtual SqlDataType getSqlTimeType() const = 0;
     virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
     virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
+    virtual TinyStrings<>* getTinyStrings() const = 0;
 };
 
 } // namespace simdb::collection
