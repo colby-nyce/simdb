@@ -138,6 +138,10 @@ public:
         {
             throw DBException("Unable to set default value string (data type mismatch)");
         }
+        if (unique_col_)
+        {
+            throw DBException("Cannot set default column value on a unique column");
+        }
 
         setDefaultValueStr_(val);
     }
@@ -149,6 +153,26 @@ public:
     /// strings since the schema creation command is one string,
     /// e.g. "CREATE TABLE ..."
     const std::string& getDefaultValueAsString() const { return default_val_string_; }
+
+    /// Ensure the given column is unique:
+    ///   CREATE TABLE my_table (
+    ///     Id INTEGER PRIMARY KEY,
+    ///     Timestamp INTEGER UNIQUE    <---
+    ///   );
+    void ensureUnique()
+    {
+        if (hasDefaultValue())
+        {
+            throw DBException("Column has default value; cannot make unique");
+        }
+        unique_col_ = true;
+    }
+
+    /// Check if this column should be created with the UNIQUE tag.
+    bool isUnique() const
+    {
+        return unique_col_;
+    }
 
 private:
     /// Default values are stringified. For doubles, we need maximum precision.
@@ -190,6 +214,9 @@ private:
 
     /// Optional default value (stringified)
     std::string default_val_string_;
+
+    /// Should this column be defined as e.g. "Timestamp INTEGER UNIQUE"?
+    bool unique_col_ = false;
 };
 
 /*!
@@ -267,6 +294,23 @@ public:
         }
 
         iter->second->setDefaultValue(default_val);
+        return *this;
+    }
+
+    /// Ensure the given column is unique:
+    ///   CREATE TABLE my_table (
+    ///     Id INTEGER PRIMARY KEY,
+    ///     Timestamp INTEGER UNIQUE    <---
+    ///   );
+    Table& ensureUnique(const std::string& col_name)
+    {
+        auto iter = columns_by_name_.find(col_name);
+        if (iter == columns_by_name_.end())
+        {
+            throw DBException("No column named ") << col_name << " in table " << name_;
+        }
+
+        iter->second->ensureUnique();
         return *this;
     }
 

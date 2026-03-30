@@ -57,6 +57,7 @@ public:
             AppT::defineSchema(schema);
             auto& timestamps_tbl = schema.addTable("Timestamps");
             timestamps_tbl.addColumn("Timestamp", collection_->getSqlTimeType());
+            timestamps_tbl.ensureUnique("Timestamp");
         }
 
     private:

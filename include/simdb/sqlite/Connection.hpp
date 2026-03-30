@@ -234,6 +234,10 @@ private:
             {
                 oss << " DEFAULT " << column->getDefaultValueAsString();
             }
+            if (column->isUnique() && column->getName() != pkey)
+            {
+                oss << " UNIQUE";
+            }
             if (idx != columns.size() - 1)
             {
                 oss << ", ";
