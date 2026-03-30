@@ -17,10 +17,13 @@ class StreamBuffer
 {
 public:
     /// Create with a reference to the final buffer.
-    explicit StreamBuffer(std::vector<char>& out) :
+    StreamBuffer(std::vector<char>& out, bool clear_first = true) :
         out_(out)
     {
-        out_.clear();
+        if (clear_first)
+        {
+            out_.clear();
+        }
     }
 
     void append(const void* data, const size_t num_bytes)

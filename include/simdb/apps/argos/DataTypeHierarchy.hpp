@@ -3,6 +3,7 @@
 #include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/MoveOnlyFunction.hpp"
 #include "simdb/utils/TinyStrings.hpp"
+#include "simdb/utils/StreamBuffer.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -17,7 +18,7 @@
 namespace simdb::collection {
 
 using WriteErased =
-    simdb::utils::MoveOnlyFunction<void(std::vector<char>&, const void*)>;
+    simdb::utils::MoveOnlyFunction<void(StreamBuffer&, const void*)>;
 
 enum class NodeKind
 {
@@ -288,7 +289,7 @@ public:
         return root_;
     }
 
-    void writeBuffer(std::vector<char>& buffer, const RootT& value) const
+    void writeBuffer(StreamBuffer& buffer, const RootT& value) const
     {
         if (root_.write_erased)
         {
@@ -298,7 +299,7 @@ public:
 
     template <typename T>
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
-    writeBuffer(std::vector<char>& buffer, const T& value) const
+    writeBuffer(StreamBuffer& buffer, const T& value) const
     {
         if (value)
         {
@@ -328,11 +329,10 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
         using enum_int_t = std::underlying_type_t<value_t>;
         node.enum_meta->backing_kind = detail::getBackingKind<enum_int_t>();
         node.enum_meta->members = EnumDescriptor<value_t>::members();
-        node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
+        node.write_erased = [](StreamBuffer& buffer, const void* value_void) {
             const auto* value = static_cast<const value_t*>(value_void);
             const auto raw = static_cast<enum_int_t>(*value);
-            const auto* bytes = reinterpret_cast<const char*>(&raw);
-            buffer.insert(buffer.end(), bytes, bytes + sizeof(raw));
+            buffer << raw;
         };
     }
     else if constexpr (detail::has_argos_collector_v<value_t>)
@@ -377,7 +377,7 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                     active_struct_stack.pop_back();
 
                     child->write_erased = [field, nested_writer = std::move(nested_writer)](
-                        std::vector<char>& buffer, const void* parent_void) {
+                        StreamBuffer& buffer, const void* parent_void) {
                         const auto nested_ptr = field->getStructPtrErased(parent_void);
                         if (nested_ptr == nullptr)
                         {
@@ -393,7 +393,7 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                     child->enum_meta->backing_kind = field->getEnumBackingKind();
                     child->enum_meta->members = field->getEnumMembers();
 
-                    child->write_erased = [field](std::vector<char>& buffer, const void* parent_void) {
+                    child->write_erased = [field](StreamBuffer& buffer, const void* parent_void) {
                         field->writeBufferErased(buffer, parent_void);
                     };
                 }
@@ -402,7 +402,7 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                     child->kind = NodeKind::Pod;
                     child->pod_type = std::make_unique<PodTypeKind>(field->getPodTypeKind());
 
-                    child->write_erased = [field](std::vector<char>& buffer, const void* parent_void) {
+                    child->write_erased = [field](StreamBuffer& buffer, const void* parent_void) {
                         field->writeBufferErased(buffer, parent_void);
                     };
                 }
@@ -410,7 +410,7 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
                 parent.children.emplace_back(std::move(child));
             }
 
-            return [&parent](std::vector<char>& buffer, const void* owner_void) {
+            return [&parent](StreamBuffer& buffer, const void* owner_void) {
                 for (const auto& ch : parent.children)
                 {
                     if (ch->write_erased)
@@ -436,34 +436,31 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
         node.pod_type = std::make_unique<PodTypeKind>(detail::getPodTypeKind<value_t>());
         if constexpr (std::is_same_v<value_t, std::string>)
         {
-            node.write_erased = [&node](std::vector<char>& buffer, const void* value_void) {
+            node.write_erased = [&node](StreamBuffer& buffer, const void* value_void) {
                 if (node.tiny_strings == nullptr)
                 {
                     throw DBException("TinyStrings not set before string collection");
                 }
                 const auto* s = static_cast<const value_t*>(value_void);
                 const uint32_t id = node.tiny_strings->getStringID(*s);
-                const auto* bytes = reinterpret_cast<const char*>(&id);
-                buffer.insert(buffer.end(), bytes, bytes + sizeof(id));
+                buffer << id;
             };
         }
         else
         {
             if constexpr (std::is_same_v<value_t, bool>)
             {
-                node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
+                node.write_erased = [](StreamBuffer& buffer, const void* value_void) {
                     const auto* value = static_cast<const value_t*>(value_void);
                     const uint8_t v = (*value) ? 1u : 0u;
-                    const auto* bytes = reinterpret_cast<const char*>(&v);
-                    buffer.insert(buffer.end(), bytes, bytes + sizeof(v));
+                    buffer << v;
                 };
             }
             else
             {
-                node.write_erased = [](std::vector<char>& buffer, const void* value_void) {
-                    const auto* value = static_cast<const value_t*>(value_void);
-                    const auto* bytes = reinterpret_cast<const char*>(value);
-                    buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
+                node.write_erased = [](StreamBuffer& buffer, const void* value_void) {
+                    const auto value = *static_cast<const value_t*>(value_void);
+                    buffer << value;
                 };
             }
         }

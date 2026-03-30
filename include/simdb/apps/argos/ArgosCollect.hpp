@@ -27,7 +27,7 @@ public:
     virtual std::vector<EnumMember> getEnumMembers() const = 0;
     virtual std::string getStructTypeName() const = 0;
     virtual std::vector<const ArgosFieldBase*> getStructFields() const = 0;
-    virtual void writeBufferErased(std::vector<char>&, const void*) const = 0;
+    virtual void writeBufferErased(StreamBuffer&, const void*) const = 0;
     virtual const void* getStructPtrErased(const void*) const = 0;
     virtual void setTinyStrings(TinyStrings<>*) {}
 
@@ -143,7 +143,7 @@ public:
     std::string getStructTypeName() const override { return {}; }
     std::vector<const ArgosFieldBase*> getStructFields() const override { return {}; }
 
-    void writeBufferErased(std::vector<char>& buffer, const void* owner_void) const override
+    void writeBufferErased(StreamBuffer& buffer, const void* owner_void) const override
     {
         const auto* owner = static_cast<const OwnerT*>(owner_void);
         if constexpr (std::is_same_v<value_t, std::string>)
@@ -153,20 +153,17 @@ public:
                 throw DBException("TinyStrings not set before string collection");
             }
             const uint32_t id = tiny_strings_->getStringID(std::invoke(Getter, owner));
-            const auto* bytes = reinterpret_cast<const char*>(&id);
-            buffer.insert(buffer.end(), bytes, bytes + sizeof(id));
+            buffer << id;
         }
         else if constexpr (std::is_same_v<value_t, bool>)
         {
             const uint8_t v = std::invoke(Getter, owner) ? 1u : 0u;
-            const auto* bytes = reinterpret_cast<const char*>(&v);
-            buffer.insert(buffer.end(), bytes, bytes + sizeof(v));
+            buffer << v;
         }
         else
         {
             value_t v = static_cast<value_t>(std::invoke(Getter, owner));
-            const auto* bytes = reinterpret_cast<const char*>(&v);
-            buffer.insert(buffer.end(), bytes, bytes + sizeof(value_t));
+            buffer << v;
         }
     }
 
@@ -210,12 +207,11 @@ public:
     std::string getStructTypeName() const override { return {}; }
     std::vector<const ArgosFieldBase*> getStructFields() const override { return {}; }
 
-    void writeBufferErased(std::vector<char>& buffer, const void* owner_void) const override
+    void writeBufferErased(StreamBuffer& buffer, const void* owner_void) const override
     {
         const auto* owner = static_cast<const OwnerT*>(owner_void);
         const int_t raw = static_cast<int_t>(std::invoke(Getter, owner));
-        const auto* bytes = reinterpret_cast<const char*>(&raw);
-        buffer.insert(buffer.end(), bytes, bytes + sizeof(int_t));
+        buffer << raw;
     }
 
     const void* getStructPtrErased(const void*) const override { return nullptr; }
@@ -267,7 +263,7 @@ public:
         return nested_schema.getFields();
     }
 
-    void writeBufferErased(std::vector<char>&, const void*) const override {}
+    void writeBufferErased(StreamBuffer&, const void*) const override {}
 
     const void* getStructPtrErased(const void* owner_void) const override
     {

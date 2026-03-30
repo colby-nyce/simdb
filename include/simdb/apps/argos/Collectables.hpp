@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "simdb/apps/argos/ArgosRecord.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
 #include "simdb/utils/Demangle.hpp"
@@ -28,7 +27,7 @@ public:
     virtual ~CollectableBase() = default;
 
     /// Get the unique ID for this collection point.
-    uint16_t getID() const { return argos_record_.getID(); }
+    uint16_t getID() const { return cid_; }
 
     /// \brief Connect to the CollectorPipeline's main input queue
     void connectToPipeline(PipelineStagerBase* stager)
@@ -41,12 +40,6 @@ public:
 
     /// Disable collection
     void disable();
-
-    /// Move the ArgosRecord to DONT_READ, but keep auto-collection running
-    void deactivate()
-    {
-        argos_record_.deactivate();
-    }
 
     /// Run auto-collection for this collectable
     virtual void autoCollect()
@@ -66,22 +59,11 @@ protected:
         , heartbeat_(heartbeat)
     {}
 
-    /// Unique ID generator.
-    static uint16_t nextID_()
-    {
-        static uint16_t id = 1;
-        return id++;
-    }
-
     /// Get the heartbeat value for all collection points.
     size_t getHeartbeat_() const
     {
         return heartbeat_;
     }
-
-    /// Raw data held in the SimDB collection "black box". Sent to the database
-    /// for as long as the Status isn't set to DONT_READ.
-    ArgosRecord argos_record_{nextID_()};
 
     /// Stage collected bytes for pipeline processing.
     void stage_(std::vector<char>&& bytes, bool auto_collected)
@@ -90,6 +72,16 @@ protected:
     }
 
 private:
+    /// Unique ID generator.
+    static uint16_t nextID_()
+    {
+        static uint16_t id = 1;
+        return id++;
+    }
+
+    /// Unique collectable ID
+    const uint16_t cid_{nextID_()};
+
     /// Collection object that owns 'this' collectable
     DomainCollection *const collection_;
 
@@ -140,7 +132,7 @@ public:
         std::vector<char> bytes;
         StreamBuffer buffer(bytes);
         buffer << getID();
-        dtype_hierarchy_->writeBuffer(bytes, value);
+        dtype_hierarchy_->writeBuffer(buffer, value);
         stage_(std::move(bytes), auto_collected);
     }
 
@@ -155,7 +147,7 @@ public:
         }
         else
         {
-            deactivate();
+            // TODO cnyce - deactivate
         }
     }
 
@@ -256,7 +248,7 @@ public:
                 {
                     buffer << bin_idx;
                 }
-                dtype_hierarchy_->writeBuffer(bytes, *it);
+                dtype_hierarchy_->writeBuffer(buffer, *it);
             }
             else if (!Sparse)
             {
@@ -266,7 +258,6 @@ public:
             ++bin_idx;
         }
 
-        //dtype_hierarchy_->writeBuffer(buf, value);
         stage_(std::move(bytes), auto_collected);
     }
 
@@ -281,7 +272,7 @@ public:
         }
         else
         {
-            deactivate();
+            // TODO cnyce - deactivate
         }
     }
 
