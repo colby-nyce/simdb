@@ -13,6 +13,57 @@ public:
     virtual ~ValidatorBase() = default;
     virtual size_t requiredBytes() const = 0;
     virtual void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) const = 0;
+
+protected:
+    template <typename EnumT>
+    void validateEnum_(const EnumT expected, const char*& bytes) const
+    {
+        static_assert(std::is_enum_v<EnumT>);
+        using int_type = std::underlying_type_t<EnumT>;
+        const auto ours = static_cast<int_type>(expected);
+        const auto theirs = *reinterpret_cast<const int_type*>(bytes);
+        if (theirs != ours)
+        {
+            throw simdb::DBException("Value mismatch");
+        }
+        bytes += sizeof(int_type);
+    }
+
+    void validateBool_(const bool expected, const char*& bytes) const
+    {
+        const auto ours = static_cast<uint8_t>(expected);
+        const auto theirs = *reinterpret_cast<const uint8_t*>(bytes);
+        if (theirs != ours)
+        {
+            throw simdb::DBException("Value mismatch");
+        }
+        bytes += sizeof(uint8_t);
+    }
+
+    void validateString_(const std::string& expected, const char*& bytes, simdb::TinyStrings<>* tiny_strings) const
+    {
+        using encoding_t = uint32_t;
+        const auto ours = tiny_strings->getStringID(expected);
+        const auto theirs = *reinterpret_cast<const encoding_t*>(bytes);
+        if (theirs != ours)
+        {
+            throw simdb::DBException("Value mismatch");
+        }
+        bytes += sizeof(encoding_t);
+    }
+
+    template <typename SimpleType>
+    void validateSimple_(const SimpleType expected, const char*& bytes) const
+    {
+        static_assert(std::is_trivial_v<SimpleType> && std::is_standard_layout_v<SimpleType>);
+        const auto ours = expected;
+        const auto theirs = *reinterpret_cast<const SimpleType*>(bytes);
+        if (theirs != ours)
+        {
+            throw simdb::DBException("Value mismatch");
+        }
+        bytes += sizeof(SimpleType);
+    }
 };
 
 using CollectionSnapshot =
@@ -29,6 +80,42 @@ void ValidateCollectionInDatabase(
     simdb::DatabaseManager* db_mgr,
     const CollectionSnapshots& snapshots,
     size_t expected_ticks = RUN_TICKS);
+
+template <typename T>
+struct scalar_num_bytes
+{
+    static size_t value()
+    {
+        if constexpr (std::is_enum_v<T>)
+        {
+            using int_type = std::underlying_type_t<T>;
+            return sizeof(int_type);
+        }
+        else if constexpr (std::is_same_v<T, bool>)
+        {
+            return sizeof(uint8_t);
+        }
+        else if constexpr (std::is_same_v<T, std::string>)
+        {
+            return sizeof(uint32_t);
+        }
+        else if constexpr (std::is_trivial_v<T> && std::is_standard_layout_v<T>)
+        {
+            return sizeof(T);
+        }
+        else
+        {
+            using value_type = simdb::type_traits::remove_any_pointer_t<T>;
+            typename value_type::ArgosCollector collector;
+            size_t num_bytes = 0;
+            for (const auto field : collector.getFields())
+            {
+                num_bytes += field->requiredBytes();
+            }
+            return num_bytes;
+        }
+    }
+};
 
 enum InstType
 {
@@ -224,79 +311,26 @@ public:
 
         size_t requiredBytes() const override
         {
-            if constexpr (std::is_enum_v<T>)
-            {
-                using int_type = std::underlying_type_t<T>;
-                return sizeof(int_type);
-            }
-            else if constexpr (std::is_same_v<T, bool>)
-            {
-                return sizeof(uint8_t);
-            }
-            else if constexpr (std::is_same_v<T, std::string>)
-            {
-                return sizeof(uint32_t);
-            }
-            else if constexpr (std::is_trivial_v<T> && std::is_standard_layout_v<T>)
-            {
-                return sizeof(T);
-            }
-            else
-            {
-                using value_type = simdb::type_traits::remove_any_pointer_t<T>;
-                typename value_type::ArgosCollector collector;
-                size_t num_bytes = 0;
-                for (const auto field : collector.getFields())
-                {
-                    num_bytes += field->requiredBytes();
-                }
-                return num_bytes;
-            }
+            return scalar_num_bytes<T>::value();
         }
 
         void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) const override
         {
             if constexpr (std::is_enum_v<T>)
             {
-                using int_type = std::underlying_type_t<T>;
-                const auto mine = static_cast<int_type>(value_);
-                const auto theirs = *reinterpret_cast<const int_type*>(bytes);
-                if (mine != theirs)
-                {
-                    throw simdb::DBException("Value mismatch");
-                }
-                bytes += sizeof(int_type);
+                validateEnum_<T>(value_, bytes);
             }
             else if constexpr (std::is_same_v<T, bool>)
             {
-                const bool& mine = value_;
-                const bool theirs = *reinterpret_cast<const uint8_t*>(bytes);
-                if (mine != theirs)
-                {
-                    throw simdb::DBException("Value mismatch");
-                }
-                bytes += sizeof(uint8_t);
+                validateBool_(value_, bytes);
             }
             else if constexpr (std::is_same_v<T, std::string>)
             {
-                using encoding_t = uint32_t;
-                const auto mine = tiny_strings->getStringID(value_);
-                const auto theirs = *reinterpret_cast<const encoding_t*>(bytes);
-                if (mine != theirs)
-                {
-                    throw simdb::DBException("Value mismatch");
-                }
-                bytes += sizeof(encoding_t);
+                validateString_(value_, bytes, tiny_strings);
             }
             else if constexpr (std::is_trivial_v<T> && std::is_standard_layout_v<T>)
             {
-                const auto& mine = value_;
-                const auto theirs = *reinterpret_cast<const T*>(bytes);
-                if (mine != theirs)
-                {
-                    throw simdb::DBException("Value mismatch");
-                }
-                bytes += sizeof(T);
+                validateSimple_<T>(value_, bytes);
             }
             else
             {
@@ -370,8 +404,8 @@ void TestAutoCollectScalars()
         snapshots[tick] = scalars.snapshot();
         collection.performAutoCollection("root");
     }
-    app_mgrs.postSimLoopTeardown();
 
+    app_mgrs.postSimLoopTeardown();
     auto db_mgr = app_mgr.getDatabaseManager();
     ValidateCollectionInDatabase(db_mgr, snapshots);
 }
@@ -387,9 +421,15 @@ public:
 
     using InstPtr = std::shared_ptr<Instruction>;
     using InstQueue = std::vector<InstPtr>;
-    using BoolQueue = std::vector<bool>;
-    using StringQueue = std::vector<std::string>;
-    using EnumQueue = std::vector<simdb::Colors>;
+
+    using BoolPtr = std::shared_ptr<bool>;
+    using BoolQueue = std::vector<BoolPtr>;
+
+    using StringPtr = std::shared_ptr<std::string>;
+    using StringQueue = std::vector<StringPtr>;
+
+    using ColorPtr = std::shared_ptr<simdb::Colors>;
+    using EnumQueue = std::vector<ColorPtr>;
 
     void createCollectables(simdb::collection::Collection<uint64_t>& collection)
     {
@@ -423,7 +463,7 @@ public:
         auto num_flags = rand() % capacity_ + 1;
         while (flag_queue_.size() < num_flags)
         {
-            flag_queue_.push_back(rand() % 2 == 0);
+            flag_queue_.push_back(std::make_shared<bool>(rand() % 2 == 0));
         }
 
         string_queue_.clear();
@@ -432,21 +472,102 @@ public:
         {
             const auto min_chars = 4;
             const auto max_chars = min_chars;
-            string_queue_.push_back(simdb::generateRandomString(min_chars, max_chars));
+            const auto str = simdb::generateRandomString(min_chars, max_chars);
+            auto strptr = std::make_shared<std::string>(str);
+            string_queue_.push_back(strptr);
         }
 
         enum_queue_.clear();
         auto num_enums = rand() % capacity_ + 1;
         while (enum_queue_.size() < num_enums)
         {
-            enum_queue_.push_back(simdb::generateRandomColor());
+            const auto enumval = simdb::generateRandomColor();
+            auto enumptr = std::make_shared<simdb::Colors>(enumval);
+            enum_queue_.push_back(enumptr);
         }
     }
 
+    template <typename ContainerT, bool Sparse>
+    class Validator : public ValidatorBase
+    {
+    public:
+        Validator(const ContainerT& container, size_t capacity)
+            : container_(container)
+            , capacity_(capacity)
+            , size_(simdb::collection::getNumElements<ContainerT, Sparse>(container))
+        {}
+
+        size_t requiredBytes() const override
+        {
+            using value_type =
+                simdb::type_traits::remove_any_pointer_t<
+                    typename ContainerT::value_type>;
+
+            return scalar_num_bytes<value_type>::value() * capacity_;
+        }
+
+        void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) const override
+        {
+            // uint16_t size always comes first
+            const auto mine = size_;
+            const auto theirs = *reinterpret_cast<const uint16_t*>(bytes);
+            if (mine != theirs)
+            {
+                throw simdb::DBException("Value mismatch");
+            }
+            bytes += sizeof(uint16_t);
+
+            uint16_t count = 0;
+            while (count < size_)
+            {
+                uint16_t bin_idx = count;
+
+                // Only sparse containers explicitly collect the bin idx
+                if constexpr (Sparse)
+                {
+                    bin_idx = *reinterpret_cast<const uint16_t*>(bytes);
+                    bytes += sizeof(uint16_t);
+                }
+
+                validateBin_(container_.at(bin_idx), tiny_strings, bytes);
+                ++count;
+            }
+        }
+
+    private:
+        template <typename ValueType>
+        std::enable_if_t<simdb::type_traits::is_any_pointer_v<ValueType>, void>
+        validateBin_(const ValueType& bin, simdb::TinyStrings<>* tiny_strings, const char*& bytes) const
+        {
+            assert(bin != nullptr);
+            validateBin_(*bin, tiny_strings, bytes);
+        }
+
+        void validateBin_(
+            const simdb::type_traits::remove_any_pointer_t<typename ContainerT::value_type>& bin,
+            simdb::TinyStrings<>* tiny_strings,
+            const char*& bytes) const
+        {
+            //TODO cnyce
+            (void)bin;
+            (void)tiny_strings;
+            (void)bytes;
+        }
+
+        ContainerT container_;
+        const size_t capacity_;
+        const uint16_t size_;
+    };
+
     CollectionSnapshot snapshot() const
     {
-        // TODO cnyce
-        return {};
+        return {
+            {inst_q_collector_->getID(),        std::make_shared<Validator<InstQueue, false>>(inst_queue_, capacity_)},
+            {sparse_inst_q_collector_->getID(), std::make_shared<Validator<InstQueue, true>>(sparse_inst_queue_, capacity_)},
+            {flag_q_collector_->getID(),        std::make_shared<Validator<BoolQueue, false>>(flag_queue_, capacity_)},
+            {string_q_collector_->getID(),      std::make_shared<Validator<StringQueue, false>>(string_queue_, capacity_)},
+            {enum_q_collector_->getID(),        std::make_shared<Validator<EnumQueue, false>>(enum_queue_, capacity_)}
+        };
     }
 
 private:
@@ -496,9 +617,10 @@ void TestAutoCollectContainers()
         snapshots[tick] = containers.snapshot();
         collection.performAutoCollection("root");
     }
-    app_mgrs.postSimLoopTeardown();
 
-    // TODO cnyce
+    app_mgrs.postSimLoopTeardown();
+    auto db_mgr = app_mgr.getDatabaseManager();
+    ValidateCollectionInDatabase(db_mgr, snapshots);
 }
 
 void ValidateCollectionInDatabase(
@@ -591,7 +713,6 @@ void ValidateCollectionInDatabase(
         validate_collection(time_id);
     }
 }
-
 
 int main()
 {
