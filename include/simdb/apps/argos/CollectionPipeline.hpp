@@ -153,6 +153,7 @@ public:
         {
             tiny_strings->serialize();
         }
+        collection_->writeMetaOnPostTeardown(db_mgr_);
     }
 
 private:

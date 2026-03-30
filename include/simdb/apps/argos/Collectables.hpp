@@ -188,14 +188,11 @@ public:
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
     collect(const T& value, bool auto_collected = false)
     {
-        if (value)
+        if (!value)
         {
-            collect(*value, auto_collected);
+            throw DBException("Cannot collect a null container");
         }
-        else
-        {
-            // TODO cnyce - deactivate
-        }
+        collect(*value, auto_collected);
     }
 
 private:
@@ -230,9 +227,17 @@ private:
     const ScalarT *const scalar_;
 };
 
+/// ContainerCollector base class which adds non-template metadata APIs
+class ContainerCollectorBase : public CollectableBase
+{
+public:
+    using CollectableBase::CollectableBase;
+    virtual size_t getMaxContainerSizeCollected() const = 0;
+};
+
 /// Template class for all container types (vector, deque, etc.)
 template <typename ContainerT, bool Sparse>
-class ContainerCollector : public CollectableBase
+class ContainerCollector : public ContainerCollectorBase
 {
 public:
     using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
@@ -241,7 +246,7 @@ public:
                                 size_t heartbeat,
                                 size_t expected_capacity,
                                 std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
-        : CollectableBase(collection, heartbeat)
+        : ContainerCollectorBase(collection, heartbeat)
         , expected_capacity_(expected_capacity)
         , dtype_hierarchy_(std::move(dtype_hierarchy))
     {}
@@ -266,7 +271,10 @@ public:
         std::vector<char> bytes;
         StreamBuffer buffer(bytes);
         buffer << getID();
-        buffer << getNumElements<T, Sparse>(container);
+
+        auto num_elements = getNumElements<T, Sparse>(container);
+        buffer << num_elements;
+        max_size_collected_ = std::max(max_size_collected_, num_elements);
 
         uint16_t bin_idx = 0;
         for (auto it = container.begin(), end = container.end(); it != end; ++it)
@@ -311,14 +319,16 @@ public:
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
     collect(const T& container, bool auto_collected = false)
     {
-        if (container)
+        if (!container)
         {
-            collect(*container, auto_collected);
+            throw DBException("Cannot collect a null container");
         }
-        else
-        {
-            // TODO cnyce - deactivate
-        }
+        collect(*container, auto_collected);
+    }
+
+    size_t getMaxContainerSizeCollected() const override final
+    {
+        return max_size_collected_;
     }
 
 protected:
@@ -326,6 +336,7 @@ protected:
 
 private:
     std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy_;
+    uint16_t max_size_collected_ = 0;
 };
 
 /// \class AutoContainerCollector

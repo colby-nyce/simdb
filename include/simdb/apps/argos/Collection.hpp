@@ -334,18 +334,14 @@ private:
                 clock_db_ids[clk_name] = clk_rec->getId();
             }
 
-            for (const auto& [clk_name, collection_ptr] : collections_)
+            for (const auto& [clk_name, collection] : collections_)
             {
-                if (!collection_ptr)
-                {
-                    continue;
-                }
                 const int clock_id = clock_db_ids.at(clk_name);
-                for (const auto& path : collection_ptr->getCollectablePaths())
+                for (const auto& path : collection->getCollectablePaths())
                 {
                     auto* elem_node = collectables_tree_.tryGet(path, true);
                     const int elem_tree_id = element_db_ids.at(elem_node);
-                    const auto* coll = collection_ptr->getCollectable(path);
+                    const auto* coll = collection->getCollectable(path);
                     (void)db_mgr->INSERT(
                         SQL_TABLE("CollectableTreeNodes"),
                         SQL_VALUES(
@@ -361,6 +357,28 @@ private:
 
         // Write data types and their hierarchies (structs / nested structs)
         DataTypeSerializer::serialize(&dtype_inspector_, db_mgr);
+    }
+
+    /// \brief Called when handling the app's postTeardown()
+    void writeMetaOnPostTeardown(DatabaseManager* db_mgr) override
+    {
+        std::map<uint16_t, uint16_t> container_max_sizes;
+        for (const auto& [clk_name, collection] : collections_)
+        {
+            for (auto collectable : collection->getAllCollectables())
+            {
+                if (auto container_collector = dynamic_cast<const ContainerCollectorBase*>(collectable))
+                {
+                    container_max_sizes[collectable->getID()] = container_collector->getMaxContainerSizeCollected();
+                }
+            }
+        }
+
+        auto inserter = db_mgr->prepareINSERT(SQL_TABLE("QueueMaxSizes"));
+        for (const auto& [cid, sz] : container_max_sizes)
+        {
+            inserter->createRecordWithColValues(cid, sz);
+        }
     }
 
     const size_t heartbeat_;

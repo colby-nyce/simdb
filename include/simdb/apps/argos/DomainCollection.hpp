@@ -51,6 +51,17 @@ public:
         return it->second.get();
     }
 
+    /// \brief Get all collectables
+    std::vector<const CollectableBase*> getAllCollectables() const
+    {
+        std::vector<const CollectableBase*> collectables;
+        for (const auto& [_, collectable] : collectables_by_path_)
+        {
+            collectables.push_back(collectable.get());
+        }
+        return collectables;
+    }
+
     /// \brief Get all collectable paths
     std::vector<std::string> getCollectablePaths() const
     {
