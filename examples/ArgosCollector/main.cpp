@@ -435,7 +435,7 @@ public:
     {
         inst_q_collector_ = collection.collectContainerWithAutoCollection<InstQueue, false>(
             "inst_q", "root", &inst_queue_, capacity_);
-#if 0
+
         sparse_inst_q_collector_ = collection.collectContainerWithAutoCollection<InstQueue, true>(
             "sparse_inst_q", "root", &sparse_inst_queue_, capacity_);
 
@@ -447,7 +447,6 @@ public:
 
         enum_q_collector_ = collection.collectContainerWithAutoCollection<EnumQueue, false>(
             "enum_q", "root", &enum_queue_, capacity_);
-#endif
     }
 
     void randomize()
@@ -606,11 +605,11 @@ public:
     CollectionSnapshot snapshot() const
     {
         return {
-            {inst_q_collector_->getID(),        std::make_shared<Validator<InstQueue, false>>(inst_queue_, capacity_)}
-//            {sparse_inst_q_collector_->getID(), std::make_shared<Validator<InstQueue, true>>(sparse_inst_queue_, capacity_)},
-//            {flag_q_collector_->getID(),        std::make_shared<Validator<BoolQueue, false>>(flag_queue_, capacity_)},
-//            {string_q_collector_->getID(),      std::make_shared<Validator<StringQueue, false>>(string_queue_, capacity_)},
-//            {enum_q_collector_->getID(),        std::make_shared<Validator<EnumQueue, false>>(enum_queue_, capacity_)}
+            {inst_q_collector_->getID(),        std::make_shared<Validator<InstQueue, false>>(inst_queue_, capacity_)},
+            {sparse_inst_q_collector_->getID(), std::make_shared<Validator<InstQueue, true>>(sparse_inst_queue_, capacity_)},
+            {flag_q_collector_->getID(),        std::make_shared<Validator<BoolQueue, false>>(flag_queue_, capacity_)},
+            {string_q_collector_->getID(),      std::make_shared<Validator<StringQueue, false>>(string_queue_, capacity_)},
+            {enum_q_collector_->getID(),        std::make_shared<Validator<EnumQueue, false>>(enum_queue_, capacity_)}
         };
     }
 
