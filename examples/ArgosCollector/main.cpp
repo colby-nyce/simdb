@@ -435,9 +435,19 @@ public:
     {
         inst_q_collector_ = collection.collectContainerWithAutoCollection<InstQueue, false>(
             "inst_q", "root", &inst_queue_, capacity_);
-
+#if 0
         sparse_inst_q_collector_ = collection.collectContainerWithAutoCollection<InstQueue, true>(
             "sparse_inst_q", "root", &sparse_inst_queue_, capacity_);
+
+        flag_q_collector_ = collection.collectContainerWithAutoCollection<BoolQueue, false>(
+            "flag_q", "root", &flag_queue_, capacity_);
+
+        string_q_collector_ = collection.collectContainerWithAutoCollection<StringQueue, false>(
+            "string_q", "root", &string_queue_, capacity_);
+
+        enum_q_collector_ = collection.collectContainerWithAutoCollection<EnumQueue, false>(
+            "enum_q", "root", &enum_queue_, capacity_);
+#endif
     }
 
     void randomize()
@@ -503,7 +513,23 @@ public:
                 simdb::type_traits::remove_any_pointer_t<
                     typename ContainerT::value_type>;
 
-            return scalar_num_bytes<value_type>::value() * capacity_;
+            // Start with the number of bytes for one element
+            size_t num_bytes = scalar_num_bytes<value_type>::value();
+
+            // Multiply by the number of elements we have to write
+            num_bytes *= size_;
+
+            // Contig and sparse both write the uint16_t queue num elements
+            num_bytes += sizeof(uint16_t);
+
+            // Only sparse containers write the uint16_t bin index
+            // prior to every element's raw bytes
+            if constexpr (Sparse)
+            {
+                num_bytes += sizeof(uint16_t) * size_;
+            }
+
+            return num_bytes;
         }
 
         void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) const override
@@ -535,6 +561,8 @@ public:
         }
 
     private:
+        using value_type = simdb::type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
+
         template <typename ValueType>
         std::enable_if_t<simdb::type_traits::is_any_pointer_v<ValueType>, void>
         validateBin_(const ValueType& bin, simdb::TinyStrings<>* tiny_strings, const char*& bytes) const
@@ -544,14 +572,30 @@ public:
         }
 
         void validateBin_(
-            const simdb::type_traits::remove_any_pointer_t<typename ContainerT::value_type>& bin,
+            const value_type& bin,
             simdb::TinyStrings<>* tiny_strings,
             const char*& bytes) const
         {
-            //TODO cnyce
-            (void)bin;
-            (void)tiny_strings;
-            (void)bytes;
+            if constexpr (std::is_enum_v<value_type>)
+            {
+                validateEnum_<value_type>(bin, bytes);
+            }
+            else if constexpr (std::is_same_v<value_type, bool>)
+            {
+                validateBool_(bin, bytes);
+            }
+            else if constexpr (std::is_same_v<value_type, std::string>)
+            {
+                validateString_(bin, bytes, tiny_strings);
+            }
+            else if constexpr (std::is_trivial_v<value_type> && std::is_standard_layout_v<value_type>)
+            {
+                validateSimple_<value_type>(bin, bytes);
+            }
+            else
+            {
+                bin.compare(bytes, tiny_strings);
+            }
         }
 
         ContainerT container_;
@@ -562,11 +606,11 @@ public:
     CollectionSnapshot snapshot() const
     {
         return {
-            {inst_q_collector_->getID(),        std::make_shared<Validator<InstQueue, false>>(inst_queue_, capacity_)},
-            {sparse_inst_q_collector_->getID(), std::make_shared<Validator<InstQueue, true>>(sparse_inst_queue_, capacity_)},
-            {flag_q_collector_->getID(),        std::make_shared<Validator<BoolQueue, false>>(flag_queue_, capacity_)},
-            {string_q_collector_->getID(),      std::make_shared<Validator<StringQueue, false>>(string_queue_, capacity_)},
-            {enum_q_collector_->getID(),        std::make_shared<Validator<EnumQueue, false>>(enum_queue_, capacity_)}
+            {inst_q_collector_->getID(),        std::make_shared<Validator<InstQueue, false>>(inst_queue_, capacity_)}
+//            {sparse_inst_q_collector_->getID(), std::make_shared<Validator<InstQueue, true>>(sparse_inst_queue_, capacity_)},
+//            {flag_q_collector_->getID(),        std::make_shared<Validator<BoolQueue, false>>(flag_queue_, capacity_)},
+//            {string_q_collector_->getID(),      std::make_shared<Validator<StringQueue, false>>(string_queue_, capacity_)},
+//            {enum_q_collector_->getID(),        std::make_shared<Validator<EnumQueue, false>>(enum_queue_, capacity_)}
         };
     }
 
