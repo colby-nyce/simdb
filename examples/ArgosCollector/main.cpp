@@ -7,6 +7,29 @@
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
 
+class ValidatorBase
+{
+public:
+    virtual ~ValidatorBase() = default;
+    virtual size_t requiredBytes() const = 0;
+    virtual void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) const = 0;
+};
+
+using CollectionSnapshot =
+    std::map<uint16_t,  // CID
+        std::shared_ptr<ValidatorBase>>;
+
+using CollectionSnapshots =
+    std::map<uint64_t, // Tick
+       CollectionSnapshot>;
+
+constexpr size_t RUN_TICKS = 1000;
+
+void ValidateCollectionInDatabase(
+    simdb::DatabaseManager* db_mgr,
+    const CollectionSnapshots& snapshots,
+    size_t expected_ticks = RUN_TICKS);
+
 enum InstType
 {
     NO_OP,
@@ -56,7 +79,7 @@ private:
     bool last_inst_ = 0;
 
     template <typename T>
-    void compareAndAdvance_(const char*& theirs, const T& mine, simdb::TinyStrings<>* tiny_strings)
+    void compareAndAdvance_(const char*& theirs, const T& mine, simdb::TinyStrings<>* tiny_strings) const
     {
         if constexpr (std::is_enum_v<T>)
         {
@@ -140,7 +163,7 @@ public:
         ARGOS_COLLECT(last, &Instruction::finishesSim, "Last instruction");
     };
 
-    void compare(const char*& bytes, simdb::TinyStrings<>* tiny_strings)
+    void compare(const char*& bytes, simdb::TinyStrings<>* tiny_strings) const
     {
         compareAndAdvance_(bytes, type_, tiny_strings);
         compareAndAdvance_(bytes, opcode_, tiny_strings);
@@ -193,14 +216,6 @@ public:
         inst_ = Instruction::genRandom();
     }
 
-    class ValidatorBase
-    {
-    public:
-        virtual ~ValidatorBase() = default;
-        virtual size_t requiredBytes() const = 0;
-        virtual void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) = 0;
-    };
-
     template <typename T>
     class Validator : public ValidatorBase
     {
@@ -239,7 +254,7 @@ public:
             }
         }
 
-        void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) override
+        void validate(simdb::TinyStrings<>* tiny_strings, const char*& bytes) const override
         {
             if constexpr (std::is_enum_v<T>)
             {
@@ -293,7 +308,7 @@ public:
         T value_;
     };
 
-    std::map<uint16_t, std::shared_ptr<ValidatorBase>> snapshot() const
+    CollectionSnapshot snapshot() const
     {
         return {
             {ui16_collector_->getID(),  std::make_shared<Validator<uint16_t>>(ui16_)},
@@ -347,96 +362,18 @@ void TestAutoCollectScalars()
     app_mgrs.initializePipelines();
     app_mgrs.openPipelines();
 
-    std::map<uint64_t,       // Tick
-        std::map<uint16_t,   // CID
-            std::shared_ptr<Scalars::ValidatorBase>>> state_validators;
-
-    while (tick < 1000)
+    CollectionSnapshots snapshots;
+    while (tick < RUN_TICKS)
     {
         ++tick;
         scalars.randomize();
-        state_validators[tick] = scalars.snapshot();
+        snapshots[tick] = scalars.snapshot();
         collection.performAutoCollection("root");
     }
     app_mgrs.postSimLoopTeardown();
 
     auto db_mgr = app_mgr.getDatabaseManager();
-
-    simdb::TinyStrings<> tiny_strings(db_mgr);
-
-    auto time_query = db_mgr->createQuery("Timestamps");
-    EXPECT_EQUAL(time_query->count(), 1000);
-
-    int time_id;
-    time_query->select("Id", time_id);
-
-    uint64_t expected_tick = 1;
-    uint64_t actual_tick;
-    time_query->select("Timestamp", actual_tick);
-
-    auto get_cid = [](const char*& begin, const char* end) -> uint16_t
-    {
-        if (begin + sizeof(uint16_t) >= end)
-        {
-            throw simdb::DBException("Could not extract collectable ID");
-        }
-        const auto cid = *reinterpret_cast<const uint16_t*>(begin);
-        begin += sizeof(uint16_t);
-        return cid;
-    };
-
-    auto get_validator = [&](uint64_t tick, uint16_t cid)
-    {
-        auto& tick_validators = state_validators[tick];
-        auto& validator = tick_validators[cid];
-        if (!validator)
-        {
-            throw simdb::DBException("Could not get validator");
-        }
-        return validator.get();
-    };
-
-    auto validate_collection = [&](int timestamp_id)
-    {
-        EXPECT_EQUAL(expected_tick++, actual_tick);
-
-        auto query = db_mgr->createQuery("CollectionRecords");
-        query->addConstraintForInt("TimestampID", simdb::Constraints::EQUAL, timestamp_id);
-
-        std::vector<char> bytes;
-        query->select("Records", bytes);
-
-        auto results = query->getResultSet();
-        EXPECT_TRUE(results.getNextRecord());
-        EXPECT_FALSE(results.getNextRecord());
-
-        if (bytes.empty())
-        {
-            throw simdb::DBException("Could not find CollectionRecords row");
-        }
-
-        std::vector<char> uncompressed;
-        simdb::decompressData(bytes, uncompressed);
-
-        const char* front = uncompressed.data();
-        const char* end = front + uncompressed.size();
-        while (front != end)
-        {
-            auto cid = get_cid(front, end);
-            auto validator = get_validator(actual_tick, cid);
-            if (front + validator->requiredBytes() > end)
-            {
-                throw simdb::DBException("Reached end of byte buffer early");
-            }
-            validator->validate(&tiny_strings, front);
-        }
-    };
-
-    auto time_results = time_query->getResultSet();
-    while (time_results.getNextRecord())
-    {
-        validate_collection(time_id);
-    }
+    ValidateCollectionInDatabase(db_mgr, snapshots);
 }
 
 class Containers
@@ -506,6 +443,12 @@ public:
         }
     }
 
+    CollectionSnapshot snapshot() const
+    {
+        // TODO cnyce
+        return {};
+    }
+
 private:
     const size_t capacity_;
 
@@ -545,15 +488,110 @@ void TestAutoCollectContainers()
     app_mgrs.initializePipelines();
     app_mgrs.openPipelines();
 
-    while (tick < 1000)
+    CollectionSnapshots snapshots;
+    while (tick < RUN_TICKS)
     {
         ++tick;
         containers.randomize();
+        snapshots[tick] = containers.snapshot();
         collection.performAutoCollection("root");
     }
-
     app_mgrs.postSimLoopTeardown();
+
+    // TODO cnyce
 }
+
+void ValidateCollectionInDatabase(
+    simdb::DatabaseManager* db_mgr,
+    const CollectionSnapshots& snapshots,
+    size_t expected_ticks)
+{
+    simdb::TinyStrings<> tiny_strings(db_mgr);
+
+    auto time_query = db_mgr->createQuery("Timestamps");
+    EXPECT_EQUAL(time_query->count(), expected_ticks);
+
+    int time_id;
+    time_query->select("Id", time_id);
+
+    uint64_t expected_tick = 1;
+    uint64_t actual_tick;
+    time_query->select("Timestamp", actual_tick);
+
+    auto get_cid = [](const char*& begin, const char* end) -> uint16_t
+    {
+        if (begin + sizeof(uint16_t) >= end)
+        {
+            throw simdb::DBException("Could not extract collectable ID");
+        }
+        const auto cid = *reinterpret_cast<const uint16_t*>(begin);
+        begin += sizeof(uint16_t);
+        return cid;
+    };
+
+    auto get_validator = [&](uint64_t tick, uint16_t cid)
+    {
+        auto it1 = snapshots.find(tick);
+        if (it1 == snapshots.end())
+        {
+            throw simdb::DBException("Tick not found in snapshot");
+        }
+        auto it2 = it1->second.find(cid);
+        if (it2 == it1->second.end())
+        {
+            throw simdb::DBException("Collectable ID not found in snapshot at tick ") << tick;
+        }
+        const auto& validator = it2->second;
+        if (!validator)
+        {
+            throw simdb::DBException("Found null validator");
+        }
+        return validator.get();
+    };
+
+    auto validate_collection = [&](int timestamp_id)
+    {
+        EXPECT_EQUAL(expected_tick++, actual_tick);
+
+        auto query = db_mgr->createQuery("CollectionRecords");
+        query->addConstraintForInt("TimestampID", simdb::Constraints::EQUAL, timestamp_id);
+
+        std::vector<char> bytes;
+        query->select("Records", bytes);
+
+        auto results = query->getResultSet();
+        EXPECT_TRUE(results.getNextRecord());
+        EXPECT_FALSE(results.getNextRecord());
+
+        if (bytes.empty())
+        {
+            throw simdb::DBException("Could not find CollectionRecords row");
+        }
+
+        std::vector<char> uncompressed;
+        simdb::decompressData(bytes, uncompressed);
+
+        const char* front = uncompressed.data();
+        const char* end = front + uncompressed.size();
+        while (front != end)
+        {
+            auto cid = get_cid(front, end);
+            auto validator = get_validator(actual_tick, cid);
+            if (front + validator->requiredBytes() > end)
+            {
+                throw simdb::DBException("Reached end of byte buffer early");
+            }
+            validator->validate(&tiny_strings, front);
+        }
+    };
+
+    auto time_results = time_query->getResultSet();
+    while (time_results.getNextRecord())
+    {
+        validate_collection(time_id);
+    }
+}
+
 
 int main()
 {
