@@ -1196,7 +1196,7 @@ void ValidateCollectionInDatabase(
 int main()
 {
     TestManualCollectorHandler();
-    //TestAutoCollectScalars();
+    TestAutoCollectScalars();
     //TestAutoCollectContainers();
     //TestFullScale();
 }

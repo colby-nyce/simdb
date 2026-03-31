@@ -156,7 +156,7 @@ public:
         auto& collection = collections_[clk_name];
         if (!collection)
         {
-            collection = std::make_unique<TimeDomainCollection<TimeT>>(timestamp_);
+            collection = std::make_unique<TimeDomainCollection<TimeT>>(timestamp_, this);
             clk_periods_[clk_name] = clk_period;
         }
     }

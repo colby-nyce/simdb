@@ -16,6 +16,10 @@ namespace simdb::collection {
 class DomainCollection
 {
 public:
+    explicit DomainCollection(CollectionBase* collection_if)
+        : collection_if_(collection_if)
+    {}
+
     virtual ~DomainCollection() = default;
 
     /// \brief Let the \ref Collection object give us our collectables.
@@ -74,20 +78,15 @@ public:
         return paths;
     }
 
-    /// \brief Enable collection for the given collectable
-    void enableCollection(CollectableBase* collectable)
+    /// \brief Enable / disable collection for the given collectable
+    void enableCollection(CollectableBase* collectable, bool enable)
     {
-        collectable->enabled_ = true;
-        auto time_point = getCurrentTime();
-        collection_if_->collectableEnabledAt(time_point, collectable->getID(), true);
-    }
-
-    /// \brief Disable collection for the given collectable
-    void disableCollection(CollectableBase* collectable)
-    {
-        collectable->enabled_ = false;
-        auto time_point = getCurrentTime();
-        collection_if_->collectableEnabledAt(time_point, collectable->getID(), false);
+        collectable->enabled_ = enable;
+        if (!collectable->isAutoCollected())
+        {
+            auto time_point = getCurrentTime();
+            collection_if_->collectableEnabledAt(time_point, collectable->getID(), enable);
+        }
     }
 
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
@@ -128,8 +127,9 @@ private:
 template <typename TimeT> class TimeDomainCollection : public DomainCollection
 {
 public:
-    explicit TimeDomainCollection(std::shared_ptr<Timestamp<TimeT>> timestamp) :
-        timestamp_(std::move(timestamp))
+    TimeDomainCollection(std::shared_ptr<Timestamp<TimeT>> timestamp, CollectionBase* collection_if)
+        : DomainCollection(collection_if)
+        , timestamp_(std::move(timestamp))
     {}
 
     void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override final
@@ -153,12 +153,12 @@ private:
 
 inline void CollectableBase::enable()
 {
-    collection_->enableCollection(this);
+    collection_->enableCollection(this, true);
 }
 
 inline void CollectableBase::disable()
 {
-    collection_->disableCollection(this);
+    collection_->enableCollection(this, false);
 }
 
 } // namespace simdb::collection

@@ -100,6 +100,9 @@ public:
         throw DBException("This collectable does not support auto-collection");
     }
 
+    /// Check if we are auto-collected
+    virtual bool isAutoCollected() const { return false; }
+
     /// Demangled element type for scalars, or element demangle + \c _contig_capacityN / \c _sparse_capacityN for queues.
     virtual std::string collectableTypeNameForDb() const = 0;
 
@@ -231,6 +234,8 @@ public:
     {
         this->collect(*scalar_, true /*auto collected*/);
     }
+
+    virtual bool isAutoCollected() const { return true; }
 
     int32_t collectableAutoCollectedForDb() const override { return 1; }
 
@@ -380,6 +385,8 @@ public:
     {
         this->collect(*container_, true /*auto collected*/);
     }
+
+    virtual bool isAutoCollected() const { return true; }
 
     int32_t collectableAutoCollectedForDb() const override { return 1; }
 
