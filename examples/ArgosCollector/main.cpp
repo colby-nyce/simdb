@@ -1197,6 +1197,6 @@ int main()
 {
     TestManualCollectorHandler();
     TestAutoCollectScalars();
-    //TestAutoCollectContainers();
+    TestAutoCollectContainers();
     //TestFullScale();
 }
