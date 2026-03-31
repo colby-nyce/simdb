@@ -89,6 +89,46 @@ void TestManualCollectorHandler()
 
     // Time 15: collect 9 (changed) -> emit 9
     step(15, 9, 9);
+
+    // Enable/disable behavior:
+    // Start with a fresh handler so prior cadence does not interfere.
+    ManualCollectorHandler handler2(3, makeBytes(5));
+    out.clear();
+
+    auto step2 = [&](std::optional<uint8_t> new_value,
+                     std::optional<uint8_t> expected_emit,
+                     bool enabled)
+    {
+        out.clear();
+        handler2.collectableEnabledAt(nullptr, enabled);
+        if (new_value)
+        {
+            handler2.setBytes(makeBytes(*new_value));
+        }
+        handler2.appendToAutoCollection(nullptr, out);
+
+        if (expected_emit)
+        {
+            EXPECT_EQUAL(out.size(), size_t{1});
+            EXPECT_EQUAL(static_cast<uint8_t>(out[0]), *expected_emit);
+        }
+        else
+        {
+            EXPECT_EQUAL(out.size(), size_t{0});
+        }
+    };
+
+    // Initially enabled: first value should emit.
+    step2(5, 5, true);
+
+    // Disable: changing the value should not emit.
+    step2(7, std::nullopt, false);
+
+    // Still disabled: no emit even without change.
+    step2(std::nullopt, std::nullopt, false);
+
+    // Re-enable: changed value should emit immediately again.
+    step2(9, 9, true);
 }
 
 class ValidatorBase

@@ -14,6 +14,7 @@ public:
         : heartbeat_(heartbeat)
         , bytes_last_seen_(std::move(bytes))
         , has_value_(!bytes_last_seen_.empty())
+        , enabled_(true)
     {}
 
     // Update the last-seen manual payload for this collectable.
@@ -28,7 +29,7 @@ public:
     // this logic; cadence is tracked purely by a counter.
     void appendToAutoCollection(const TimePointBase*, std::vector<char>& auto_collected)
     {
-        if (!has_value_)
+        if (!has_value_ || !enabled_)
         {
             return;
         }
@@ -67,11 +68,24 @@ public:
         }
     }
 
-    // Pass 1: enable/disable semantics are not wired into the handler yet.
-    // This overload matches the Collection::collectableEnabledAt() caller.
-    void collectableEnabledAt(std::shared_ptr<TimePointBase>, bool)
+    // Enable/disable notifications from the collection. The TimePointBase is
+    // not used in the current implementation; we only care about the logical
+    // enabled state for deciding when to emit.
+    void collectableEnabledAt(std::shared_ptr<TimePointBase>, bool enabled)
     {
-        // no-op for now
+        if (enabled_ == enabled)
+        {
+            return;
+        }
+
+        enabled_ = enabled;
+
+        // When re-enabling, restart the heartbeat window so we don't
+        // immediately emit purely due to accumulated ticks while disabled.
+        if (enabled_)
+        {
+            ticks_since_emit_ = 0;
+        }
     }
 
 private:
@@ -80,6 +94,9 @@ private:
     // Last value seen via setBytes()
     std::vector<char> bytes_last_seen_;
     bool has_value_ = false;
+
+    // Logical enabled/disabled state for this handler.
+    bool enabled_ = false;
 
     // Last value we actually emitted into the stream
     std::vector<char> bytes_last_emitted_;
