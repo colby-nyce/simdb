@@ -1096,13 +1096,17 @@ void ValidateCollectionInDatabase(
     simdb::TinyStrings<> tiny_strings(db_mgr);
 
     auto time_query = db_mgr->createQuery("Timestamps");
-    auto expected_ticks = snapshots.size();
-    EXPECT_EQUAL(time_query->count(), expected_ticks);
+    EXPECT_EQUAL(time_query->count(), snapshots.size());
 
     int time_id;
     time_query->select("Id", time_id);
 
-    uint64_t expected_tick = 1;
+    std::queue<uint64_t> expected_ticks;
+    for (const auto& [tick, _] : snapshots)
+    {
+        expected_ticks.push(tick);
+    }
+
     uint64_t actual_tick;
     time_query->select("Timestamp", actual_tick);
 
@@ -1139,7 +1143,9 @@ void ValidateCollectionInDatabase(
 
     auto validate_collection = [&](int timestamp_id)
     {
-        EXPECT_EQUAL(expected_tick++, actual_tick);
+        EXPECT_FALSE(expected_ticks.empty());
+        EXPECT_EQUAL(expected_ticks.front(), actual_tick);
+        expected_ticks.pop();
 
         std::set<uint16_t> to_validate;
         auto it = snapshots.find(actual_tick);
@@ -1199,4 +1205,7 @@ int main()
     TestAutoCollectScalars();
     TestAutoCollectContainers();
     //TestFullScale();
+
+    REPORT_ERROR;
+    return ERROR_CODE;
 }
