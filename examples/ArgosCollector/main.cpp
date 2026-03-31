@@ -492,6 +492,26 @@ public:
             "enum_q", "root", &enum_queue_, capacity_);
     }
 
+    void disableCollection()
+    {
+        inst_q_collector_->disable();
+        sparse_inst_q_collector_->disable();
+        flag_q_collector_->disable();
+        string_q_collector_->disable();
+        enum_q_collector_->disable();
+        auto_enabled_ = false;
+    }
+
+    void enableCollection()
+    {
+        inst_q_collector_->enable();
+        sparse_inst_q_collector_->enable();
+        flag_q_collector_->enable();
+        string_q_collector_->enable();
+        enum_q_collector_->enable();
+        auto_enabled_ = true;
+    }
+
     void randomize()
     {
         inst_queue_.clear();
@@ -647,6 +667,11 @@ public:
 
     CollectionSnapshot snapshot() const
     {
+        if (!auto_enabled_)
+        {
+            return {};
+        }
+
         return {
             {inst_q_collector_->getID(),        std::make_shared<Validator<InstQueue, false>>(inst_queue_, capacity_)},
             {sparse_inst_q_collector_->getID(), std::make_shared<Validator<InstQueue, true>>(sparse_inst_queue_, capacity_)},
@@ -670,6 +695,7 @@ private:
     std::shared_ptr<simdb::collection::AutoContainerCollector<BoolQueue, false>> flag_q_collector_;
     std::shared_ptr<simdb::collection::AutoContainerCollector<StringQueue, false>> string_q_collector_;
     std::shared_ptr<simdb::collection::AutoContainerCollector<EnumQueue, false>> enum_q_collector_;
+    bool auto_enabled_ = true;
 };
 
 void TestAutoCollectContainers()
@@ -700,8 +726,22 @@ void TestAutoCollectContainers()
     {
         ++tick;
         containers.randomize();
-        snapshots[tick] = containers.snapshot();
+        auto snapshot = containers.snapshot();
+        if (!snapshot.empty())
+        {
+            snapshots[tick] = snapshot;
+        }
         collection.performAutoCollection("root");
+
+        // Disable auto collection from tick [200-250)
+        if (tick == 200)
+        {
+            containers.disableCollection();
+        }
+        else if (tick == 250)
+        {
+            containers.enableCollection();
+        }
     }
 
     app_mgrs.postSimLoopTeardown();
@@ -734,6 +774,20 @@ public:
             "inj_insts", "root", capacity_);
     }
 
+    void disableAutoCollection()
+    {
+        ipc_collector_->disable();
+        inst_q_collector_->disable();
+        auto_enabled_ = false;
+    }
+
+    void enableAutoCollection()
+    {
+        ipc_collector_->enable();
+        inst_q_collector_->enable();
+        auto_enabled_ = true;
+    }
+
     void randomize()
     {
         ipc_ = 1.0 * rand() / RAND_MAX;
@@ -747,10 +801,15 @@ public:
 
     CollectionSnapshot snapshot()
     {
-        CollectionSnapshot snapshot{
-            {ipc_collector_->getID(),    std::make_shared<typename Scalars::Validator<double>>(ipc_)},
-            {inst_q_collector_->getID(), std::make_shared<typename Containers::Validator<InstQueue, false>>(inst_queue_, capacity_)}
-        };
+        CollectionSnapshot snapshot;
+
+        if (auto_enabled_)
+        {
+            snapshot.insert({
+                {ipc_collector_->getID(),    std::make_shared<typename Scalars::Validator<double>>(ipc_)},
+                {inst_q_collector_->getID(), std::make_shared<typename Containers::Validator<InstQueue, false>>(inst_queue_, capacity_)}
+            });
+        }
 
         if (last_injected_inst_ && inj_inst_snapshot_counter_++ % heartbeat_ == 0)
         {
@@ -798,6 +857,8 @@ private:
     // Collectables (auto)
     std::shared_ptr<simdb::collection::AutoScalarCollector<double>> ipc_collector_;
     std::shared_ptr<simdb::collection::AutoContainerCollector<InstQueue, false>> inst_q_collector_;
+
+    bool auto_enabled_ = true;
 
     // Collectables (manual)
     std::shared_ptr<simdb::collection::ScalarCollector<Instruction>> injected_inst_collector_;
@@ -852,8 +913,22 @@ void TestFullScale()
         }
 
         full_scale.randomize();
-        snapshots[tick] = full_scale.snapshot();
+        auto snapshot = full_scale.snapshot();
+        if (!snapshot.empty())
+        {
+            snapshots[tick] = snapshot;
+        }
         collection.performAutoCollection("root");
+
+        // Disable auto collection from tick [200-250)
+        if (tick == 200)
+        {
+            full_scale.disableAutoCollection();
+        }
+        else if (tick == 250)
+        {
+            full_scale.enableAutoCollection();
+        }
     }
 
     app_mgrs.postSimLoopTeardown();
