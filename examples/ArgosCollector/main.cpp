@@ -343,6 +343,11 @@ public:
 
     CollectionSnapshot snapshot() const
     {
+        if (!auto_enabled_)
+        {
+            return {};
+        }
+
         return {
             {ui16_collector_->getID(),  std::make_shared<Validator<uint16_t>>(ui16_)},
             {ui32_collector_->getID(),  std::make_shared<Validator<uint32_t>>(ui32_)},
@@ -354,6 +359,30 @@ public:
         };
     }
 
+    void disableCollection()
+    {
+        auto_enabled_ = false;
+        ui16_collector_->disable();
+        ui32_collector_->disable();
+        dbl_collector_->disable();
+        str_collector_->disable();
+        flag_collector_->disable();
+        color_collector_->disable();
+        inst_collector_->disable();
+    }
+
+    void enableCollection()
+    {
+        auto_enabled_ = true;
+        ui16_collector_->enable();
+        ui32_collector_->enable();
+        dbl_collector_->enable();
+        str_collector_->enable();
+        flag_collector_->enable();
+        color_collector_->enable();
+        inst_collector_->enable();
+    }
+
 private:
     uint16_t ui16_;
     uint32_t ui32_;
@@ -362,6 +391,7 @@ private:
     bool flag_;
     simdb::Colors color_;
     std::shared_ptr<Instruction> inst_;
+    bool auto_enabled_ = true;
 
     std::shared_ptr<simdb::collection::AutoScalarCollector<uint16_t>> ui16_collector_;
     std::shared_ptr<simdb::collection::AutoScalarCollector<uint32_t>> ui32_collector_;
@@ -400,8 +430,22 @@ void TestAutoCollectScalars()
     {
         ++tick;
         scalars.randomize();
-        snapshots[tick] = scalars.snapshot();
+        auto snapshot = scalars.snapshot();
+        if (!snapshot.empty())
+        {
+            snapshots[tick] = snapshot;
+        }
         collection.performAutoCollection("root");
+
+        // Disable collection from tick [200-250)
+        if (tick == 200)
+        {
+            scalars.disableCollection();
+        }
+        else if (tick == 250)
+        {
+            scalars.enableCollection();
+        }
     }
 
     app_mgrs.postSimLoopTeardown();

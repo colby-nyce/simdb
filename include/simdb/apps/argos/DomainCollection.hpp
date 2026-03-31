@@ -76,32 +76,12 @@ public:
     /// \brief Enable collection for the given collectable
     void enableCollection(CollectableBase* collectable)
     {
-        if (isAutoCollectable_(collectable))
-        {
-            auto it = std::find(enabled_auto_collectables_.begin(),
-                                enabled_auto_collectables_.end(),
-                                collectable);
-            if (it == enabled_auto_collectables_.end())
-            {
-                enabled_auto_collectables_.push_back(collectable);
-            }
-        }
         collectable->enabled_ = true;
     }
 
     /// \brief Disable collection for the given collectable
     void disableCollection(CollectableBase* collectable)
     {
-        if (isAutoCollectable_(collectable))
-        {
-            auto it = std::find(enabled_auto_collectables_.begin(),
-                                enabled_auto_collectables_.end(),
-                                collectable);
-            if (it != enabled_auto_collectables_.end())
-            {
-                enabled_auto_collectables_.erase(it);
-            }
-        }
         collectable->enabled_ = false;
     }
 
@@ -113,7 +93,10 @@ public:
     {
         for (auto collectable : all_auto_collectables_)
         {
-            collectable->autoCollect();
+            if (collectable->enabled())
+            {
+                collectable->autoCollect();
+            }
         }
     }
 
@@ -126,14 +109,8 @@ protected:
     }
 
 private:
-    bool isAutoCollectable_(CollectableBase* collectable) const
-    {
-        return all_auto_collectables_.count(collectable) > 0;
-    }
-
     std::vector<std::shared_ptr<CollectableBase>> all_collectables_;
     std::unordered_set<CollectableBase*> all_auto_collectables_;
-    std::vector<CollectableBase*> enabled_auto_collectables_;
     std::map<std::string, std::shared_ptr<CollectableBase>> collectables_by_path_;
 };
 

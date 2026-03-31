@@ -88,6 +88,12 @@ public:
     /// Disable collection
     void disable();
 
+    /// Check enabled
+    bool enabled() const
+    {
+        return enabled_;
+    }
+
     /// Run auto-collection for this collectable
     virtual void autoCollect()
     {
