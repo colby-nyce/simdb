@@ -95,6 +95,44 @@ public:
         timestamp_ = std::make_shared<Timestamp<TimeT>>(std::move(fn));
     }
 
+    /// \brief Return the collection heartbeat
+    size_t getHeartbeat() const override
+    {
+        return heartbeat_;
+    }
+
+    /// \brief Called when the app is created
+    SqlDataType getSqlTimeType() const override
+    {
+        if constexpr (std::is_same_v<TimeT, uint64_t>)
+        {
+            return SqlDataType::uint64_t;
+        }
+        else if constexpr (std::is_same_v<TimeT, int64_t>)
+        {
+            return SqlDataType::int64_t;
+        }
+        else if constexpr (std::is_same_v<TimeT, uint32_t>)
+        {
+            return SqlDataType::uint32_t;
+        }
+        else if constexpr (std::is_same_v<TimeT, int32_t>)
+        {
+            return SqlDataType::int32_t;
+        }
+        else if constexpr (std::is_floating_point_v<TimeT>)
+        {
+            return SqlDataType::double_t;
+        }
+        else
+        {
+            static_assert(std::is_integral_v<TimeT>);
+            static_assert(std::is_unsigned_v<TimeT>);
+            static_assert(sizeof(TimeT) <= sizeof(int32_t));
+            return SqlDataType::int32_t;
+        }
+    }
+
     /// \brief Add a collection for one clock domain
     /// \param clk_name Clock name
     /// \param clk_period Clock period
@@ -259,44 +297,6 @@ private:
         }
 
         return it->second.get();
-    }
-
-    /// \brief Return the collection heartbeat
-    size_t getHeartbeat() const override
-    {
-        return heartbeat_;
-    }
-
-    /// \brief Called when the app is created
-    SqlDataType getSqlTimeType() const override
-    {
-        if constexpr (std::is_same_v<TimeT, uint64_t>)
-        {
-            return SqlDataType::uint64_t;
-        }
-        else if constexpr (std::is_same_v<TimeT, int64_t>)
-        {
-            return SqlDataType::int64_t;
-        }
-        else if constexpr (std::is_same_v<TimeT, uint32_t>)
-        {
-            return SqlDataType::uint32_t;
-        }
-        else if constexpr (std::is_same_v<TimeT, int32_t>)
-        {
-            return SqlDataType::int32_t;
-        }
-        else if constexpr (std::is_floating_point_v<TimeT>)
-        {
-            return SqlDataType::double_t;
-        }
-        else
-        {
-            static_assert(std::is_integral_v<TimeT>);
-            static_assert(std::is_unsigned_v<TimeT>);
-            static_assert(sizeof(TimeT) <= sizeof(int32_t));
-            return SqlDataType::int32_t;
-        }
     }
 
     /// \brief Called when handling the app's postInit()

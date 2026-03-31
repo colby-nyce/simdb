@@ -110,7 +110,6 @@ public:
         collection_records_tbl.addColumn("Records", dt::blob_t);
         collection_records_tbl.unsetPrimaryKey();
 
-        // TODO cnyce: write to this table
         auto& queue_max_sizes_tbl = schema.addTable("QueueMaxSizes");
         queue_max_sizes_tbl.addColumn("CollectableTreeNodeID", dt::int32_t);
         queue_max_sizes_tbl.addColumn("MaxSize", dt::int32_t);

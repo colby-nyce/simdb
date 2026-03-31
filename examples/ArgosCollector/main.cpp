@@ -78,8 +78,7 @@ constexpr size_t RUN_TICKS = 1000;
 
 void ValidateCollectionInDatabase(
     simdb::DatabaseManager* db_mgr,
-    const CollectionSnapshots& snapshots,
-    size_t expected_ticks = RUN_TICKS);
+    const CollectionSnapshots& snapshots);
 
 template <typename T>
 struct scalar_num_bytes
@@ -669,8 +668,8 @@ void TestAutoCollectContainers()
 class FullScale
 {
 public:
-    FullScale(uint64_t& tick, size_t capacity = 32)
-        : tick_(tick)
+    FullScale(size_t heartbeat, size_t capacity = 32)
+        : heartbeat_(heartbeat)
         , capacity_(capacity)
     {
         randomize();
@@ -702,16 +701,6 @@ public:
         }
     }
 
-    class ByteSkipper : public ValidatorBase
-    {
-    public:
-        explicit ByteSkipper(size_t skip) : skip_(skip) {}
-        size_t requiredBytes() const override final { return skip_; }
-        void validate(simdb::TinyStrings<>*, const char*& bytes) const override { bytes += skip_; }
-    private:
-        const size_t skip_;
-    };
-
     CollectionSnapshot snapshot()
     {
         CollectionSnapshot snapshot{
@@ -719,16 +708,17 @@ public:
             {inst_q_collector_->getID(), std::make_shared<typename Containers::Validator<InstQueue, false>>(inst_queue_, capacity_)}
         };
 
-        if (last_injected_inst_)
+        if (last_injected_inst_ && inj_inst_snapshot_counter_++ % heartbeat_ == 0)
         {
             snapshot[injected_inst_collector_->getID()] = std::make_shared<typename Scalars::Validator<Instruction>>(*last_injected_inst_);
+            inj_inst_snapshot_counter_ = 0;
         }
 
-        if (last_injected_insts_)
+        if (last_injected_insts_ && inj_insts_snapshot_counter_++ % heartbeat_ == 0)
         {
             snapshot[injected_insts_collector_->getID()] = std::make_shared<typename Containers::Validator<InstQueue, false>>(*last_injected_insts_, capacity_);
+            inj_insts_snapshot_counter_ = 0;
         }
-
         return snapshot;
     }
 
@@ -738,17 +728,21 @@ public:
     {
         last_injected_inst_ = inst;
         injected_inst_collector_->collect(inst);
+        inj_inst_snapshot_counter_ = 0;
     }
 
     void inject(std::shared_ptr<InstQueue> insts)
     {
         last_injected_insts_ = insts;
         injected_insts_collector_->collect(insts);
+        inj_insts_snapshot_counter_ = 0;
     }
 
 private:
-    uint64_t& tick_;
+    const size_t heartbeat_;
     const size_t capacity_;
+    size_t inj_inst_snapshot_counter_ = 0;
+    size_t inj_insts_snapshot_counter_ = 0;
 
     std::shared_ptr<Instruction> last_injected_inst_;
     std::shared_ptr<InstQueue> last_injected_insts_;
@@ -773,7 +767,7 @@ void TestFullScale()
     collection.timestampWith(&tick);
     collection.addCollection("root", 1);
 
-    FullScale full_scale(tick);
+    FullScale full_scale(collection.getHeartbeat());
     full_scale.createCollectables(collection);
 
     simdb::AppManagers app_mgrs;
@@ -825,12 +819,12 @@ void TestFullScale()
 
 void ValidateCollectionInDatabase(
     simdb::DatabaseManager* db_mgr,
-    const CollectionSnapshots& snapshots,
-    size_t expected_ticks)
+    const CollectionSnapshots& snapshots)
 {
     simdb::TinyStrings<> tiny_strings(db_mgr);
 
     auto time_query = db_mgr->createQuery("Timestamps");
+    auto expected_ticks = snapshots.size();
     EXPECT_EQUAL(time_query->count(), expected_ticks);
 
     int time_id;
@@ -875,6 +869,16 @@ void ValidateCollectionInDatabase(
     {
         EXPECT_EQUAL(expected_tick++, actual_tick);
 
+        std::set<uint16_t> to_validate;
+        auto it = snapshots.find(actual_tick);
+        if (it != snapshots.end())
+        {
+            for (const auto& [cid, _] : it->second)
+            {
+                to_validate.insert(cid);
+            }
+        }
+
         auto query = db_mgr->createQuery("CollectionRecords");
         query->addConstraintForInt("TimestampID", simdb::Constraints::EQUAL, timestamp_id);
 
@@ -904,7 +908,10 @@ void ValidateCollectionInDatabase(
                 throw simdb::DBException("Reached end of byte buffer early");
             }
             validator->validate(&tiny_strings, front);
+            to_validate.erase(cid);
         }
+
+        EXPECT_TRUE(to_validate.empty());
     };
 
     auto time_results = time_query->getResultSet();
