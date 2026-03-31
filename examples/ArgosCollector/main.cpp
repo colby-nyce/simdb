@@ -788,6 +788,20 @@ public:
         auto_enabled_ = true;
     }
 
+    void disableManualCollection()
+    {
+        injected_inst_collector_->disable();
+        injected_insts_collector_->disable();
+        manual_enabled_ = false;
+    }
+
+    void enableManualCollection()
+    {
+        injected_inst_collector_->enable();
+        injected_insts_collector_->enable();
+        manual_enabled_ = true;
+    }
+
     void randomize()
     {
         ipc_ = 1.0 * rand() / RAND_MAX;
@@ -811,13 +825,17 @@ public:
             });
         }
 
-        if (last_injected_inst_ && inj_inst_snapshot_counter_++ % heartbeat_ == 0)
+        if (manual_enabled_ &&
+            last_injected_inst_ &&
+            inj_inst_snapshot_counter_++ % heartbeat_ == 0)
         {
             snapshot[injected_inst_collector_->getID()] = std::make_shared<typename Scalars::Validator<Instruction>>(*last_injected_inst_);
             inj_inst_snapshot_counter_ = 0;
         }
 
-        if (last_injected_insts_ && inj_insts_snapshot_counter_++ % heartbeat_ == 0)
+        if (manual_enabled_ &&
+            last_injected_insts_ &&
+            inj_insts_snapshot_counter_++ % heartbeat_ == 0)
         {
             snapshot[injected_insts_collector_->getID()] = std::make_shared<typename Containers::Validator<InstQueue, false>>(*last_injected_insts_, capacity_);
             inj_insts_snapshot_counter_ = 0;
@@ -859,6 +877,7 @@ private:
     std::shared_ptr<simdb::collection::AutoContainerCollector<InstQueue, false>> inst_q_collector_;
 
     bool auto_enabled_ = true;
+    bool manual_enabled_ = true;
 
     // Collectables (manual)
     std::shared_ptr<simdb::collection::ScalarCollector<Instruction>> injected_inst_collector_;
@@ -928,6 +947,16 @@ void TestFullScale()
         else if (tick == 250)
         {
             full_scale.enableAutoCollection();
+        }
+
+        // Disable manual collection from tick [600-650)
+        if (tick == 600)
+        {
+            full_scale.disableManualCollection();
+        }
+        else if (tick == 650)
+        {
+            full_scale.enableManualCollection();
         }
     }
 

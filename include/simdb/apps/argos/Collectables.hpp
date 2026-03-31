@@ -182,6 +182,11 @@ public:
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
     collect(const T& value, bool auto_collected = false)
     {
+        if (!enabled())
+        {
+            enable();
+        }
+
         std::vector<char> bytes;
         StreamBuffer buffer(bytes);
         buffer << getID();
@@ -274,6 +279,11 @@ public:
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
     collect(const T& container, bool auto_collected = false)
     {
+        if (!enabled())
+        {
+            enable();
+        }
+
         std::vector<char> bytes;
         StreamBuffer buffer(bytes);
         buffer << getID();

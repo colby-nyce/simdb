@@ -6,6 +6,7 @@
 #include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/apps/argos/CollectionBase.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
+#include "simdb/apps/argos/ManualCollectorHandler.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 #include "simdb/utils/Compress.hpp"
 
@@ -126,7 +127,7 @@ public:
     {
         auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
-        pipeline->addStage<Organizer>("organizer", collection_->getHeartbeat());
+        auto organizer = pipeline->addStage<Organizer>("organizer", collection_->getHeartbeat());
         pipeline->addStage<Compressor>("compressor");
         pipeline->addStage<Writer>("writer");
         pipeline->noMoreStages();
@@ -137,6 +138,7 @@ public:
 
         auto pipeline_head = pipeline->getInPortQueue<Payload>("organizer.input_queue");
         collection_->connectToPipeline(pipeline_head);
+        collection_->setManualCollectorHandlers(organizer->getManualCollectorHandlers());
     }
 
     /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writeMetaOnPostInit.
@@ -156,34 +158,6 @@ public:
     }
 
 private:
-    class ManualCollectorHandler
-    {
-    public:
-        ManualCollectorHandler(size_t heartbeat, std::vector<char>&& bytes)
-            : heartbeat_(heartbeat)
-            , bytes_(std::move(bytes))
-        {}
-
-        void setBytes(std::vector<char>&& bytes)
-        {
-            bytes_ = std::move(bytes);
-            counter_ = 0;
-        }
-
-        void appendToAutoCollection(std::vector<char>& auto_collected)
-        {
-            if (counter_++ % heartbeat_ == 0)
-            {
-                auto_collected.insert(auto_collected.end(), bytes_.begin(), bytes_.end());
-            }
-        }
-
-    private:
-        const size_t heartbeat_;
-        size_t counter_ = 0;
-        std::vector<char> bytes_;
-    };
-
     class Organizer : public pipeline::Stage
     {
     public:
@@ -192,6 +166,11 @@ private:
         {
             addInPort_<Payload>("input_queue", input_queue_);
             addOutPort_<Payload>("output_queue", output_queue_);
+        }
+
+        std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>>* getManualCollectorHandlers()
+        {
+            return &manual_collector_handlers_;
         }
 
     private:
@@ -337,10 +316,11 @@ private:
                 }
             }
 
-            mergeAndSendPayloads_(auto_payloads_at_time_point, manual_payloads_at_time_point);
+            mergeAndSendPayloads_(time_point, auto_payloads_at_time_point, manual_payloads_at_time_point);
         }
 
         void mergeAndSendPayloads_(
+            const TimePointBase* time_point,
             std::queue<Payload>& auto_payloads,
             std::queue<Payload>& manual_payloads)
         {
@@ -387,7 +367,7 @@ private:
 
             for (auto& [_, handler] : manual_collector_handlers_)
             {
-                handler->appendToAutoCollection(merged.bytes);
+                handler->appendToAutoCollection(time_point, merged.bytes);
             }
             output_queue_->emplace(std::move(merged));
         }

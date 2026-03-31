@@ -6,6 +6,7 @@
 
 #include "simdb/apps/argos/Timestamps.hpp"
 #include "simdb/apps/argos/Collectables.hpp"
+#include "simdb/apps/argos/CollectionBase.hpp"
 
 namespace simdb::collection {
 
@@ -77,12 +78,16 @@ public:
     void enableCollection(CollectableBase* collectable)
     {
         collectable->enabled_ = true;
+        auto time_point = getCurrentTime();
+        collection_if_->collectableEnabledAt(time_point, collectable->getID(), true);
     }
 
     /// \brief Disable collection for the given collectable
     void disableCollection(CollectableBase* collectable)
     {
         collectable->enabled_ = false;
+        auto time_point = getCurrentTime();
+        collection_if_->collectableEnabledAt(time_point, collectable->getID(), false);
     }
 
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
@@ -100,6 +105,9 @@ public:
         }
     }
 
+    /// \brief Let subclasses provide timestamps
+    virtual std::shared_ptr<TimePointBase> getCurrentTime() const { return nullptr; }
+
 protected:
     DomainCollection() = default;
 
@@ -112,6 +120,7 @@ private:
     std::vector<std::shared_ptr<CollectableBase>> all_collectables_;
     std::unordered_set<CollectableBase*> all_auto_collectables_;
     std::map<std::string, std::shared_ptr<CollectableBase>> collectables_by_path_;
+    CollectionBase* collection_if_ = nullptr;
 };
 
 /// \class TimeDomainCollection
@@ -130,6 +139,11 @@ public:
         {
             collectable->connectToPipeline(stager_.get());
         }
+    }
+
+    std::shared_ptr<TimePointBase> getCurrentTime() const override final
+    {
+        return timestamp_->snapshot();
     }
 
 private:

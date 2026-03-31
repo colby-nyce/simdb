@@ -7,6 +7,7 @@
 #include "simdb/apps/argos/CollectionPipeline.hpp"
 #include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/apps/argos/DataTypeSerializer.hpp"
+#include "simdb/apps/argos/ManualCollectorHandler.hpp"
 #include "simdb/utils/Tree.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 #include "simdb/Exceptions.hpp"
@@ -249,9 +250,27 @@ public:
         }
     }
 
+    /// \brief Gain access to the ManualCollectorHandler's so we can tell them
+    /// to start/stop "refreshing" previously collected data
+    void setManualCollectorHandlers(
+        std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>>* handlers) override
+    {
+        manual_collector_handlers_ = handlers;
+    }
+
+    /// \brief Get the TinyStrings object used to map strings to ints in the DB
     TinyStrings<>* getTinyStrings() const override
     {
         return dtype_inspector_.getTinyStrings();
+    }
+
+    /// \brief Notify us when a collectable is enabled/disabled
+    void collectableEnabledAt(std::shared_ptr<TimePointBase> time_point, uint16_t cid, bool enabled) override
+    {
+        assert(manual_collector_handlers_ != nullptr);
+        auto& handler = manual_collector_handlers_->at(cid);
+        assert(handler != nullptr);
+        handler->collectableEnabledAt(time_point, enabled);
     }
 
     /// \brief Run auto-collection on all collectables configured for it
@@ -390,6 +409,7 @@ private:
     simdb::Tree collectables_tree_;
     std::shared_ptr<Timestamp<TimeT>> timestamp_;
     std::unique_ptr<PipelineStager<TimeT>> stager_;
+    std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>>* manual_collector_handlers_ = nullptr;
 };
 
 } // namespace simdb::collection
