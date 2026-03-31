@@ -356,7 +356,11 @@ private:
                 auto& handler = manual_collector_handlers_[cid];
                 if (!handler)
                 {
-                    handler = std::make_unique<ManualCollectorHandler>(cid, std::move(manual_payloads.front().bytes));
+                    // Use the global collection heartbeat for manual
+                    // handlers so their refresh cadence matches the
+                    // expectations in tests like TestFullScale.
+                    handler = std::make_unique<ManualCollectorHandler>(
+                        heartbeat_, std::move(manual_payloads.front().bytes));
                 }
                 else
                 {
