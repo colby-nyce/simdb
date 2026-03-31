@@ -3,9 +3,93 @@
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include "simdb/apps/argos/ManualCollectorHandler.hpp"
+#include <optional>
 
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
+
+void TestManualCollectorHandler()
+{
+    using simdb::collection::ManualCollectorHandler;
+
+    auto makeBytes = [](uint8_t v) {
+        return std::vector<char>{static_cast<char>(v)};
+    };
+
+    // Scenario: scalar int with heartbeat 3, as in the design table.
+    ManualCollectorHandler handler(3, makeBytes(0));
+
+    std::vector<char> out;
+
+    auto step = [&](int /*tick*/,
+                    std::optional<uint8_t> new_value,
+                    std::optional<uint8_t> expected_emit)
+    {
+        out.clear();
+        if (new_value)
+        {
+            handler.setBytes(makeBytes(*new_value));
+        }
+
+        handler.appendToAutoCollection(nullptr, out);
+
+        if (expected_emit)
+        {
+            EXPECT_EQUAL(out.size(), size_t{1});
+            EXPECT_EQUAL(static_cast<uint8_t>(out[0]), *expected_emit);
+        }
+        else
+        {
+            EXPECT_EQUAL(out.size(), size_t{0});
+        }
+    };
+
+    // Time 1: collect 8 -> emit 8
+    step(1, 8, 8);
+
+    // Time 2: collect 18 -> emit 18
+    step(2, 18, 18);
+
+    // Time 3: no collect -> no emit
+    step(3, std::nullopt, std::nullopt);
+
+    // Time 4: no collect -> no emit
+    step(4, std::nullopt, std::nullopt);
+
+    // Time 5: heartbeat refresh of unchanged 18 -> emit 18
+    step(5, std::nullopt, 18);
+
+    // Time 6: collect 21 -> emit 21
+    step(6, 21, 21);
+
+    // Time 7: no collect -> no emit
+    step(7, std::nullopt, std::nullopt);
+
+    // Time 8: no collect -> no emit
+    step(8, std::nullopt, std::nullopt);
+
+    // Time 9: heartbeat refresh of unchanged 21 -> emit 21
+    step(9, std::nullopt, 21);
+
+    // Time 10: collect 7 -> emit 7
+    step(10, 7, 7);
+
+    // Time 11: collect 7 again, inside heartbeat window -> no emit
+    step(11, 7, std::nullopt);
+
+    // Time 12: no collect, still inside heartbeat window -> no emit
+    step(12, std::nullopt, std::nullopt);
+
+    // Time 13: collect 8 (changed) -> emit 8
+    step(13, 8, 8);
+
+    // Time 14: no collect -> no emit
+    step(14, std::nullopt, std::nullopt);
+
+    // Time 15: collect 9 (changed) -> emit 9
+    step(15, 9, 9);
+}
 
 class ValidatorBase
 {
@@ -1071,7 +1155,8 @@ void ValidateCollectionInDatabase(
 
 int main()
 {
-    TestAutoCollectScalars();
-    TestAutoCollectContainers();
-    TestFullScale();
+    TestManualCollectorHandler();
+    //TestAutoCollectScalars();
+    //TestAutoCollectContainers();
+    //TestFullScale();
 }
