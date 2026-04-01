@@ -122,9 +122,9 @@ protected:
     }
 
     /// Stage collected bytes for pipeline processing.
-    void stage_(std::vector<char>&& bytes, bool auto_collected)
+    void stage_(CollectedData&& data)
     {
-        stager_->stage(std::move(bytes), auto_collected);
+        stager_->stage(std::move(data));
     }
 
 private:
@@ -183,30 +183,28 @@ public:
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename T = ScalarT>
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
-    collect(const T& value, bool auto_collected = false)
+    collect(const T& value)
     {
         if (!enabled())
         {
             enable();
         }
 
-        std::vector<char> bytes;
-        StreamBuffer buffer(bytes);
-        buffer << getID();
-        dtype_hierarchy_->writeBuffer(buffer, value);
-        stage_(std::move(bytes), auto_collected);
+        CollectedData collected(getID());
+        dtype_hierarchy_->writeBuffer(collected.getBuffer(), value);
+        stage_(std::move(collected));
     }
 
     /// \brief Pointer-version of collect()
     template <typename T = ScalarT>
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
-    collect(const T& value, bool auto_collected = false)
+    collect(const T& value)
     {
         if (!value)
         {
             throw DBException("Cannot collect a null container");
         }
-        collect(*value, auto_collected);
+        collect(*value);
     }
 
 private:
@@ -232,7 +230,7 @@ public:
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
-        this->collect(*scalar_, true /*auto collected*/);
+        this->collect(*scalar_);
     }
 
     virtual bool isAutoCollected() const { return true; }
@@ -282,16 +280,15 @@ public:
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename T = ContainerT>
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
-    collect(const T& container, bool auto_collected = false)
+    collect(const T& container)
     {
         if (!enabled())
         {
             enable();
         }
 
-        std::vector<char> bytes;
-        StreamBuffer buffer(bytes);
-        buffer << getID();
+        CollectedData collected(getID());
+        auto& buffer = collected.getBuffer();
 
         auto num_elements = getNumElements<T, Sparse>(container);
         buffer << num_elements;
@@ -332,19 +329,19 @@ public:
             ++bin_idx;
         }
 
-        stage_(std::move(bytes), auto_collected);
+        stage_(std::move(collected));
     }
 
     /// \brief Pointer-version of collect()
     template <typename T = ContainerT>
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
-    collect(const T& container, bool auto_collected = false)
+    collect(const T& container)
     {
         if (!container)
         {
             throw DBException("Cannot collect a null container");
         }
-        collect(*container, auto_collected);
+        collect(*container);
     }
 
     size_t getMaxContainerSizeCollected() const override final
@@ -383,7 +380,7 @@ public:
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
-        this->collect(*container_, true /*auto collected*/);
+        this->collect(*container_);
     }
 
     virtual bool isAutoCollected() const { return true; }

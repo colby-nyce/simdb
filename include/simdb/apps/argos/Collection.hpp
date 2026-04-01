@@ -7,7 +7,6 @@
 #include "simdb/apps/argos/CollectionPipeline.hpp"
 #include "simdb/apps/argos/DataTypeInspector.hpp"
 #include "simdb/apps/argos/DataTypeSerializer.hpp"
-#include "simdb/apps/argos/ManualCollectorHandler.hpp"
 #include "simdb/utils/Tree.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 #include "simdb/Exceptions.hpp"
@@ -250,42 +249,31 @@ public:
         }
     }
 
-    /// \brief Gain access to the ManualCollectorHandler's so we can tell them
-    /// to start/stop "refreshing" previously collected data
-    void setManualCollectorHandlers(
-        std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>>* handlers) override
-    {
-        manual_collector_handlers_ = handlers;
-    }
-
     /// \brief Get the TinyStrings object used to map strings to ints in the DB
     TinyStrings<>* getTinyStrings() const override
     {
         return dtype_inspector_.getTinyStrings();
     }
 
-    /// \brief Notify us when a collectable is enabled/disabled
-    void collectableEnabledAt(std::shared_ptr<TimePointBase> time_point, uint16_t cid, bool enabled) override
-    {
-        assert(manual_collector_handlers_ != nullptr);
-        auto it = manual_collector_handlers_->find(cid);
-        if (it == manual_collector_handlers_->end())
-        {
-            // No manual handler has ever been created for this collectable.
-            // This can happen if the collectable has never produced a manual
-            // payload yet (e.g., disabled before first injection). In that
-            // case there is nothing for us to notify.
-            return;
-        }
-
-        it->second->collectableEnabledAt(time_point, enabled);
-    }
-
     /// \brief Run auto-collection on all collectables configured for it
-    void performAutoCollection(const std::string& clk_name)
+    void performAutoCollection(const std::string& clk_name, bool send_to_pipeline = true)
     {
         auto collection = getCollection_(clk_name, true /*must exist*/);
         collection->performAutoCollection();
+        if (send_to_pipeline)
+        {
+            collection->sendCollectedDataToPipeline();
+        }
+    }
+
+    /// \brief Calls to performAutoCollection(), just like all explicit
+    /// calls to the collect() methods, only collect the data bytes and
+    /// organize them by their timestamps. You must call this method
+    /// to push the data down the pipeline.
+    void sendCollectedDataToPipeline(const std::string& clk_name)
+    {
+        auto collection = getCollection_(clk_name, true /*must exist*/);
+        collection->sendCollectedDataToPipeline();
     }
 
 private:
@@ -417,7 +405,6 @@ private:
     simdb::Tree collectables_tree_;
     std::shared_ptr<Timestamp<TimeT>> timestamp_;
     std::unique_ptr<PipelineStager<TimeT>> stager_;
-    std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>>* manual_collector_handlers_ = nullptr;
 };
 
 } // namespace simdb::collection

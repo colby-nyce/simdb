@@ -84,13 +84,20 @@ public:
         collectable->enabled_ = enable;
         if (!collectable->isAutoCollected())
         {
-            auto time_point = getCurrentTime();
-            collection_if_->collectableEnabledAt(time_point, collectable->getID(), enable);
+            // TODO cnyce: needs to be forwarded to the 1st stage of the pipeline
+            // --- looks like connectToPipeline should not take the raw
+            //     input queue but a base class of some kind that the
+            //     1st stage implements
+            //       -- careful when doing multi-threaded mode
+            //       -- very nice to have: 1st stage can be main thread or its own thread
         }
     }
 
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
-    virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
+    virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head)
+    {
+        pipeline_head_ = pipeline_head;
+    }
 
     /// \brief Run auto-collection on all collectables configured for it
     void performAutoCollection()
@@ -102,6 +109,15 @@ public:
                 collectable->autoCollect();
             }
         }
+    }
+
+    /// \brief Calls to performAutoCollection(), just like all explicit
+    /// calls to the collect() methods, only collect the data bytes and
+    /// organize them by their timestamps. You must call this method
+    /// to push the data down the pipeline.
+    void sendCollectedDataToPipeline()
+    {
+        // TODO cnyce
     }
 
     /// \brief Let subclasses provide timestamps
@@ -120,6 +136,7 @@ private:
     std::unordered_set<CollectableBase*> all_auto_collectables_;
     std::map<std::string, std::shared_ptr<CollectableBase>> collectables_by_path_;
     CollectionBase* collection_if_ = nullptr;
+    ConcurrentQueue<Payload>* pipeline_head_ = nullptr;
 };
 
 /// \class TimeDomainCollection
@@ -139,6 +156,7 @@ public:
         {
             collectable->connectToPipeline(stager_.get());
         }
+        DomainCollection::connectToPipeline(pipeline_head);
     }
 
     std::shared_ptr<TimePointBase> getCurrentTime() const override final

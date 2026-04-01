@@ -6,7 +6,6 @@
 #include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/apps/argos/CollectionBase.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
-#include "simdb/apps/argos/ManualCollectorHandler.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 #include "simdb/utils/Compress.hpp"
 
@@ -127,7 +126,7 @@ public:
     {
         auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
-        auto organizer = pipeline->addStage<Organizer>("organizer", collection_->getHeartbeat());
+        pipeline->addStage<Organizer>("organizer", collection_->getHeartbeat());
         pipeline->addStage<Compressor>("compressor");
         pipeline->addStage<Writer>("writer");
         pipeline->noMoreStages();
@@ -138,7 +137,6 @@ public:
 
         auto pipeline_head = pipeline->getInPortQueue<Payload>("organizer.input_queue");
         collection_->connectToPipeline(pipeline_head);
-        collection_->setManualCollectorHandlers(organizer->getManualCollectorHandlers());
     }
 
     /// \brief Run after initialization; invokes \ref CollectionPipelineMeta::writeMetaOnPostInit.
@@ -168,11 +166,6 @@ private:
             addOutPort_<Payload>("output_queue", output_queue_);
         }
 
-        std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>>* getManualCollectorHandlers()
-        {
-            return &manual_collector_handlers_;
-        }
-
     private:
         pipeline::PipelineAction run_(bool force) override
         {
@@ -186,14 +179,14 @@ private:
                     mergeAndSendPayloadsAtTimePoint_(earliest_time_point);
                 }
 
-                if (payload.auto_collected)
-                {
-                    auto_payloads_.emplace(std::move(payload));
-                }
-                else
-                {
-                    manual_payloads_.emplace(std::move(payload));
-                }
+                //if (payload.auto_collected)
+                //{
+                //    auto_payloads_.emplace(std::move(payload));
+                //}
+                //else
+                //{
+                //    manual_payloads_.emplace(std::move(payload));
+                //}
 
                 action = pipeline::PipelineAction::PROCEED;
             }
@@ -320,7 +313,7 @@ private:
         }
 
         void mergeAndSendPayloads_(
-            const TimePointBase* time_point,
+            const TimePointBase*,
             std::queue<Payload>& auto_payloads,
             std::queue<Payload>& manual_payloads)
         {
@@ -353,26 +346,10 @@ private:
                 assert(merged.time_point->equals(manual_payloads.front().time_point.get()));
                 const char* raw = manual_payloads.front().bytes.data();
                 const uint16_t cid = *reinterpret_cast<const uint16_t*>(raw);
-                auto& handler = manual_collector_handlers_[cid];
-                if (!handler)
-                {
-                    // Use the global collection heartbeat for manual
-                    // handlers so their refresh cadence matches the
-                    // expectations in tests like TestFullScale.
-                    handler = std::make_unique<ManualCollectorHandler>(
-                        heartbeat_, std::move(manual_payloads.front().bytes));
-                }
-                else
-                {
-                    handler->setBytes(std::move(manual_payloads.front().bytes));
-                }
+                (void)cid;
                 manual_payloads.pop();
             }
 
-            for (auto& [_, handler] : manual_collector_handlers_)
-            {
-                handler->appendToAutoCollection(time_point, merged.bytes);
-            }
             output_queue_->emplace(std::move(merged));
         }
 
@@ -381,7 +358,6 @@ private:
         ConcurrentQueue<Payload>* output_queue_ = nullptr;
         std::queue<Payload> auto_payloads_;
         std::queue<Payload> manual_payloads_;
-        std::unordered_map<uint16_t, std::unique_ptr<ManualCollectorHandler>> manual_collector_handlers_;
     };
 
     class Compressor : public pipeline::Stage
