@@ -268,9 +268,17 @@ public:
     void collectableEnabledAt(std::shared_ptr<TimePointBase> time_point, uint16_t cid, bool enabled) override
     {
         assert(manual_collector_handlers_ != nullptr);
-        auto& handler = manual_collector_handlers_->at(cid);
-        assert(handler != nullptr);
-        handler->collectableEnabledAt(time_point, enabled);
+        auto it = manual_collector_handlers_->find(cid);
+        if (it == manual_collector_handlers_->end())
+        {
+            // No manual handler has ever been created for this collectable.
+            // This can happen if the collectable has never produced a manual
+            // payload yet (e.g., disabled before first injection). In that
+            // case there is nothing for us to notify.
+            return;
+        }
+
+        it->second->collectableEnabledAt(time_point, enabled);
     }
 
     /// \brief Run auto-collection on all collectables configured for it
