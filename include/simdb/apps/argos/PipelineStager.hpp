@@ -44,7 +44,11 @@ public:
         {
             last_stage_time_ = current_time;
         }
-        else if (!last_stage_time_->equals(current_time.get()) && !last_stage_time_->lessThan(current_time.get()))
+        else if (!current_time->lessThan(last_stage_time_.get()))
+        {
+            last_stage_time_ = current_time;
+        }
+        else
         {
             throw DBException("Time must be monotonically increasing");
         }
@@ -99,6 +103,8 @@ private:
             last_sent_bytes_[cid] = data->getData();
         }
 
+        std::unordered_set<uint16_t> cids_requiring_dump;
+        std::unordered_set<uint16_t> cids_requiring_decrement;
         for (auto cid : missing_cids)
         {
             auto it = countdowns_to_refresh_.find(cid);
@@ -107,21 +113,44 @@ private:
                 continue;
             }
 
-            if (--it->second == 0)
+            // TODO cnyce: if NOTHING gets sent down the pipeline, this
+            // decrement still has a lingering effect!!!
+            if (it->second == 1)
             {
-                // The CollectedData object will immediately add the uint16_t cid
-                // to the underlying buffer. Our last_sent_bytes_ also has the
-                // cid at the head of the bytes. That's why we are using the
-                // StreamBuffer::append() api below with a uint16_t offset.
-                auto injected_data = std::make_unique<CollectedData>(cid);
-                const auto& last_sent_bytes = last_sent_bytes_.at(cid);
-                const auto src = last_sent_bytes.data() + sizeof(uint16_t);
-                const auto src_bytes = last_sent_bytes.size() - sizeof(uint16_t);
-                auto& buffer = injected_data->getBuffer();
-                buffer.append(src, src_bytes);
-                to_send.second.emplace_back(std::move(injected_data));
-                it->second = heartbeat_;
+                cids_requiring_dump.insert(cid);
             }
+            else
+            {
+                cids_requiring_decrement.insert(cid);
+            }
+        }
+
+        for (auto cid : cids_requiring_decrement)
+        {
+            auto& count = countdowns_to_refresh_.at(cid);
+            assert(count > 0);
+            --count;
+        }
+
+        if (to_send.second.empty() && cids_requiring_dump.empty())
+        {
+            return;
+        }
+
+        for (auto cid : cids_requiring_dump)
+        {
+            // The CollectedData object will immediately add the uint16_t cid
+            // to the underlying buffer. Our last_sent_bytes_ also has the
+            // cid at the head of the bytes. That's why we are using the
+            // StreamBuffer::append() api below with a uint16_t offset.
+            auto injected_data = std::make_unique<CollectedData>(cid);
+            const auto& last_sent_bytes = last_sent_bytes_.at(cid);
+            const auto src = last_sent_bytes.data() + sizeof(uint16_t);
+            const auto src_bytes = last_sent_bytes.size() - sizeof(uint16_t);
+            auto& buffer = injected_data->getBuffer();
+            buffer.append(src, src_bytes);
+            to_send.second.emplace_back(std::move(injected_data));
+            countdowns_to_refresh_[cid] = heartbeat_;
         }
 
         if (!to_send.second.empty())

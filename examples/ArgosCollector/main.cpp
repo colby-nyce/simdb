@@ -299,6 +299,9 @@ void SmokeTest()
     auto inst_collector_2 = collection.collectScalarManually<Instruction>(
         "inst2", "root");
 
+    auto inst_collector_3 = collection.collectScalarManually<Instruction>(
+        "inst3", "root");
+
     simdb::AppManagers app_mgrs;
     app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
 
@@ -337,12 +340,15 @@ void SmokeTest()
     tick = 5;
     inst_collector_1->collect(F);
 
-    // Collect both insts at tick 6
+    // Collect both insts at tick 6 (notice we call collect()
+    // in "reverse" order as we usually do when both are collected;
+    // we do this to ensure that collection is not paying attention
+    // to what is collected in what order)
     tick = 6;
     auto G = Instruction::genRandom();
     auto H = Instruction::genRandom();
-    inst_collector_1->collect(G);
     inst_collector_2->collect(H);
+    inst_collector_1->collect(G);
 
     // Collect the same value for inst1 at tick7, and collect
     // a different value for inst2
@@ -358,10 +364,21 @@ void SmokeTest()
         inst_collector_1->collect(G);
     }
 
-    // Write one last different value for the 1st inst
-    // (the tick is 13)
+    // Write a different value for the 1st inst at tick 13
     auto J = Instruction::genRandom();
     inst_collector_1->collect(J);
+
+    // Negative test: verify we cannot go back in time
+    auto restore_tick = tick;
+    tick = 3;
+    EXPECT_THROW(inst_collector_1->collect(Instruction::genRandom()));
+    tick = restore_tick;
+
+    // Ensure there are no problems collecting something for
+    // the first time once things are already running
+    tick = 14;
+    auto K = Instruction::genRandom();
+    inst_collector_3->collect(K);
 
     // TODO cnyce: sendCollectedDataToPipeline() needs to get called
     // automatically from preTeardown()
@@ -382,7 +399,8 @@ void SmokeTest()
         {10, {I}},          //                I
         {11, {}},           //
         {12, {G}},          //                G
-        {13, {J,I}}         //   J            I
+        {13, {J,I}},        //   J            I
+        {14, {K}}           //   K
     };
 
     std::map<const Instruction*, uint16_t> collectable_ids_for_insts = {
@@ -395,7 +413,8 @@ void SmokeTest()
         {G.get(), inst_collector_1->getID()},
         {H.get(), inst_collector_2->getID()},
         {I.get(), inst_collector_2->getID()},
-        {J.get(), inst_collector_1->getID()}
+        {J.get(), inst_collector_1->getID()},
+        {K.get(), inst_collector_3->getID()}
     };
 
     auto db_mgr = app_mgr.getDatabaseManager();
