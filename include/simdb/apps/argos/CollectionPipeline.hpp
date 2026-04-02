@@ -143,6 +143,13 @@ public:
         collection_->writeMetaOnPostInit(db_mgr_);
     }
 
+    /// \brief Perform any last minute flushes to the pipeline before threads are shutdown
+    /// and the pipeline is flushed.
+    void preTeardown() override
+    {
+        collection_->sendCollectedDataToPipeline();
+    }
+
     /// \brief Perform end-of-simulation tasks
     void postTeardown() override
     {

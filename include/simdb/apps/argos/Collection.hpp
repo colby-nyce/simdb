@@ -374,6 +374,16 @@ private:
         DataTypeSerializer::serialize(&dtype_inspector_, db_mgr);
     }
 
+    /// \brief Tell the PipelineStager to flush all pending collected
+    /// data to the pipeline on preTeardown()
+    void sendCollectedDataToPipeline() override
+    {
+        for (const auto& [clk_name, collection] : collections_)
+        {
+            collection->sendCollectedDataToPipeline();
+        }
+    }
+
     /// \brief Called when handling the app's postTeardown()
     void writeMetaOnPostTeardown(DatabaseManager* db_mgr) override
     {
