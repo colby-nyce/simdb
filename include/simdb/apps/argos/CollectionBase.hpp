@@ -17,7 +17,7 @@ public:
     virtual size_t getHeartbeat() const = 0;
     virtual SqlDataType getSqlTimeType() const = 0;
     virtual void writeMetaOnPostInit(DatabaseManager* db_mgr) = 0;
-    virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) = 0;
+    virtual void connectToPipeline(ConcurrentQueue<QueueCollectionData>* pipeline_head) = 0;
     virtual TinyStrings<>* getTinyStrings() const = 0;
     virtual void writeMetaOnPostTeardown(DatabaseManager* db_mgr) = 0;
 };

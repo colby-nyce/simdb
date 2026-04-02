@@ -9,70 +9,118 @@
 
 namespace simdb::collection {
 
-// TODO cnyce: does this need a redesign?
-struct Payload
-{
-    std::shared_ptr<TimePointBase> time_point;
-    std::vector<char> bytes;
-};
+using CollectionDataAtTimePoint = std::vector<std::unique_ptr<CollectedData>>;
+using CollectionTime = std::shared_ptr<TimePointBase>;
+using QueueCollectionData = std::pair<CollectionTime, CollectionDataAtTimePoint>;
 
 class PipelineStagerBase
 {
 public:
     virtual ~PipelineStagerBase() = default;
     virtual void stage(CollectedData&& data) = 0;
+    virtual void sendCollectedDataToPipeline() = 0;
 };
 
 template <typename TimeT>
 class PipelineStager final : public PipelineStagerBase
 {
 public:
-    PipelineStager(Timestamp<TimeT>* timestamp,
-                   ConcurrentQueue<Payload>* pipeline_head)
-        : timestamp_(timestamp)
+    PipelineStager(size_t heartbeat,
+                   Timestamp<TimeT>* timestamp,
+                   ConcurrentQueue<QueueCollectionData>* pipeline_head)
+        : heartbeat_(heartbeat)
+        , timestamp_(timestamp)
         , pipeline_head_(pipeline_head)
     {}
 
     void stage(CollectedData&& data) override
     {
-        assert(data.getCID() != 0);
+        auto cid = data.getCID();
+        assert(cid != 0);
+        all_known_cids_.insert(cid);
 
         auto current_time = timestamp_->snapshot();
-        if (waiting_queue_.empty())
+        if (!last_stage_time_)
+        {
+            last_stage_time_ = current_time;
+        }
+        else if (!last_stage_time_->equals(current_time.get()) && !last_stage_time_->lessThan(current_time.get()))
+        {
+            throw DBException("Time must be monotonically increasing");
+        }
+
+        if (!waiting_queue_.empty() && waiting_queue_.back().first->equals(current_time.get(), true))
+        {
+            CollectionDataAtTimePoint& collection = waiting_queue_.back().second;
+            collection.emplace_back(std::make_unique<CollectedData>(std::move(data)));
+        }
+        else
         {
             QueueCollectionData entry;
             entry.first = current_time;
             entry.second.emplace_back(std::make_unique<CollectedData>(std::move(data)));
             waiting_queue_.emplace(std::move(entry));
-            return;
         }
+    }
 
-        if (waiting_queue_.front().first->equals(current_time.get(), true))
+    void sendCollectedDataToPipeline() override
+    {
+        while (!waiting_queue_.empty())
         {
-            //append existing
-            //CollectionDataAtTimePoint& collection = waiting_queue_.front().second;
-            //collection.emplace_back(std::make_unique<CollectedData>(std::move(data)));
+            sendToPipeline_(waiting_queue_.front());
+            waiting_queue_.pop();
         }
-        else
-        {
-            //new one
-            //CollectionDataAtTimePoint collection({std::make_unique<CollectedData>(std::move(data))});
-            //QueueCollectionData entry = std::make_pair(current_time, std::move(collection));
-            //waiting_queue_.emplace(std::move(entry));
-        }
-
-        //Payload payload{timestamp_->snapshot(), std::move(bytes), auto_collected, false};
-        //pipeline_head_->emplace(std::move(payload));
     }
 
 private:
-    Timestamp<TimeT> *const timestamp_;
-    ConcurrentQueue<Payload> *const pipeline_head_;
+    void sendToPipeline_(QueueCollectionData& collection_at_time)
+    {
+        auto missing_cids = all_known_cids_;
+        for (auto& data : collection_at_time.second)
+        {
+            auto cid = data->getCID();
+            missing_cids.erase(cid);
+            countdowns_to_refresh_[cid] = heartbeat_;
+            last_sent_bytes_[cid] = data->getData();
+        }
 
-    using CollectionDataAtTimePoint = std::vector<std::unique_ptr<CollectedData>>;
-    using CollectionTime = std::shared_ptr<TimePointBase>;
-    using QueueCollectionData = std::pair<CollectionTime, CollectionDataAtTimePoint>;
+        for (auto cid : missing_cids)
+        {
+            auto it = countdowns_to_refresh_.find(cid);
+            if (it == countdowns_to_refresh_.end())
+            {
+                continue;
+            }
+
+            if (--it->second == 0)
+            {
+                // The CollectedData object will immediately add the uint16_t cid
+                // to the underlying buffer. Our last_sent_bytes_ also has the
+                // cid at the head of the bytes. That's why we are using the
+                // StreamBuffer::append() api below with a uint16_t offset.
+                auto injected_data = std::make_unique<CollectedData>(cid);
+                const auto& last_sent_bytes = last_sent_bytes_.at(cid);
+                const auto src = last_sent_bytes.data() + sizeof(uint16_t);
+                const auto src_bytes = last_sent_bytes.size() - sizeof(uint16_t);
+                auto& buffer = injected_data->getBuffer();
+                buffer.append(src, src_bytes);
+                collection_at_time.second.emplace_back(std::move(injected_data));
+                it->second = heartbeat_;
+            }
+        }
+
+        pipeline_head_->emplace(std::move(collection_at_time));
+    }
+
+    const size_t heartbeat_;
+    Timestamp<TimeT> *const timestamp_;
+    ConcurrentQueue<QueueCollectionData> *const pipeline_head_;
     std::queue<QueueCollectionData> waiting_queue_;
+    CollectionTime last_stage_time_;
+    CollectionTime last_sent_time_;
+    std::set<uint16_t> all_known_cids_;
+    std::unordered_map<uint16_t, size_t> countdowns_to_refresh_;
+    std::unordered_map<uint16_t, std::vector<char>> last_sent_bytes_;
 };
 
 } // namespace simdb::collection

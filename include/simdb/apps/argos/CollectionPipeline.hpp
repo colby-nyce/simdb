@@ -126,16 +126,14 @@ public:
     {
         auto pipeline = pipeline_mgr->createPipeline(NAME, this);
 
-        pipeline->addStage<Organizer>("organizer", collection_->getHeartbeat());
         pipeline->addStage<Compressor>("compressor");
         pipeline->addStage<Writer>("writer");
         pipeline->noMoreStages();
 
-        pipeline->bind("organizer.output_queue", "compressor.input_queue");
         pipeline->bind("compressor.output_queue", "writer.input_queue");
         pipeline->noMoreBindings();
 
-        auto pipeline_head = pipeline->getInPortQueue<Payload>("organizer.input_queue");
+        auto pipeline_head = pipeline->getInPortQueue<QueueCollectionData>("compressor.input_queue");
         collection_->connectToPipeline(pipeline_head);
     }
 
@@ -156,228 +154,33 @@ public:
     }
 
 private:
-    class Organizer : public pipeline::Stage
-    {
-    public:
-        Organizer(size_t heartbeat)
-            : heartbeat_(heartbeat)
-        {
-            addInPort_<Payload>("input_queue", input_queue_);
-            addOutPort_<Payload>("output_queue", output_queue_);
-        }
-
-    private:
-        pipeline::PipelineAction run_(bool force) override
-        {
-            pipeline::PipelineAction action = pipeline::PipelineAction::SLEEP;
-            Payload payload;
-            while (input_queue_->try_pop(payload))
-            {
-                if (goesToNextTimeStep_(payload.time_point.get()))
-                {
-                    auto earliest_time_point = getEarliestTimePointInQueues_();
-                    mergeAndSendPayloadsAtTimePoint_(earliest_time_point);
-                }
-
-                //if (payload.auto_collected)
-                //{
-                //    auto_payloads_.emplace(std::move(payload));
-                //}
-                //else
-                //{
-                //    manual_payloads_.emplace(std::move(payload));
-                //}
-
-                action = pipeline::PipelineAction::PROCEED;
-            }
-
-            if (force)
-            {
-                while (auto earliest_time_point = getEarliestTimePointInQueues_())
-                {
-                    mergeAndSendPayloadsAtTimePoint_(earliest_time_point);
-                    action = pipeline::PipelineAction::PROCEED;
-                }
-            }
-
-            return action;
-        }
-
-        bool goesToNextTimeStep_(const TimePointBase* time_point) const
-        {
-            if (auto latest_time_point = getLatestTimePointInQueues_())
-            {
-                return latest_time_point->lessThan(time_point);
-            }
-            return false;
-        }
-
-        const TimePointBase* getEarliestTimePointInQueues_() const
-        {
-            std::shared_ptr<TimePointBase> time_point;
-
-            auto auto_time_point =
-                auto_payloads_.empty() ?
-                nullptr : auto_payloads_.front().time_point;
-
-            auto manual_time_point =
-                manual_payloads_.empty() ?
-                nullptr : manual_payloads_.front().time_point;
-
-            if (auto_time_point && manual_time_point)
-            {
-                if (manual_time_point->lessThan(auto_time_point.get()))
-                {
-                    time_point = manual_time_point;
-                }
-                else
-                {
-                    time_point = auto_time_point;
-                }
-            }
-            else if (auto_time_point)
-            {
-                time_point = auto_time_point;
-            }
-            else if (manual_time_point)
-            {
-                time_point = manual_time_point;
-            }
-
-            return time_point.get();
-        }
-
-        const TimePointBase* getLatestTimePointInQueues_() const
-        {
-            std::shared_ptr<TimePointBase> time_point;
-
-            auto auto_time_point =
-                auto_payloads_.empty() ?
-                nullptr : auto_payloads_.back().time_point;
-
-            auto manual_time_point =
-                manual_payloads_.empty() ?
-                nullptr : manual_payloads_.back().time_point;
-
-            if (auto_time_point && manual_time_point)
-            {
-                if (manual_time_point->lessThan(auto_time_point.get()))
-                {
-                    time_point = auto_time_point;
-                }
-                else
-                {
-                    time_point = manual_time_point;
-                }
-            }
-            else if (auto_time_point)
-            {
-                time_point = auto_time_point;
-            }
-            else if (manual_time_point)
-            {
-                time_point = manual_time_point;
-            }
-
-            return time_point.get();
-        }
-
-        void mergeAndSendPayloadsAtTimePoint_(const TimePointBase* time_point)
-        {
-            std::queue<Payload> auto_payloads_at_time_point;
-            std::queue<Payload> manual_payloads_at_time_point;
-
-            auto extract_payload_at_time_point = [&](
-                std::queue<Payload>& src,
-                std::queue<Payload>& dst)
-            {
-                if (!src.empty() && src.front().time_point->equals(time_point))
-                {
-                    dst.emplace(std::move(src.front()));
-                    src.pop();
-                    return true;
-                }
-                return false;
-            };
-
-            while (true)
-            {
-                if (!extract_payload_at_time_point(auto_payloads_, auto_payloads_at_time_point) &&
-                    !extract_payload_at_time_point(manual_payloads_, manual_payloads_at_time_point))
-                {
-                    break;
-                }
-            }
-
-            mergeAndSendPayloads_(time_point, auto_payloads_at_time_point, manual_payloads_at_time_point);
-        }
-
-        void mergeAndSendPayloads_(
-            const TimePointBase*,
-            std::queue<Payload>& auto_payloads,
-            std::queue<Payload>& manual_payloads)
-        {
-            if (auto_payloads.empty() && manual_payloads.empty())
-            {
-                return;
-            }
-
-            Payload merged;
-            if (!auto_payloads.empty())
-            {
-                merged.time_point = auto_payloads.front().time_point;
-            }
-            else
-            {
-                merged.time_point = manual_payloads.front().time_point;
-            }
-
-            while (!auto_payloads.empty())
-            {
-                assert(merged.time_point->equals(auto_payloads.front().time_point.get()));
-                const auto& src = auto_payloads.front().bytes;
-                auto& dst = merged.bytes;
-                dst.insert(dst.end(), src.begin(), src.end());
-                auto_payloads.pop();
-            }
-
-            while (!manual_payloads.empty())
-            {
-                assert(merged.time_point->equals(manual_payloads.front().time_point.get()));
-                const char* raw = manual_payloads.front().bytes.data();
-                const uint16_t cid = *reinterpret_cast<const uint16_t*>(raw);
-                (void)cid;
-                manual_payloads.pop();
-            }
-
-            output_queue_->emplace(std::move(merged));
-        }
-
-        const size_t heartbeat_;
-        ConcurrentQueue<Payload>* input_queue_ = nullptr;
-        ConcurrentQueue<Payload>* output_queue_ = nullptr;
-        std::queue<Payload> auto_payloads_;
-        std::queue<Payload> manual_payloads_;
-    };
+    using CompressedQueueCollectionData = std::pair<CollectionTime, std::vector<char>>;
 
     class Compressor : public pipeline::Stage
     {
     public:
         Compressor()
         {
-            addInPort_<Payload>("input_queue", input_queue_);
-            addOutPort_<Payload>("output_queue", output_queue_);
+            addInPort_<QueueCollectionData>("input_queue", input_queue_);
+            addOutPort_<CompressedQueueCollectionData>("output_queue", output_queue_);
         }
 
     private:
         pipeline::PipelineAction run_(bool) override
         {
-            Payload payload;
-            if (input_queue_->try_pop(payload))
+            QueueCollectionData collection_at_time;
+            if (input_queue_->try_pop(collection_at_time))
             {
-                Payload compressed;
-                compressed.time_point = payload.time_point;
-                compressData(payload.bytes, compressed.bytes);
+                std::vector<char> uncompressed;
+                for (const auto& src : collection_at_time.second)
+                {
+                    const auto& src_data = src->getData();
+                    uncompressed.insert(uncompressed.end(), src_data.begin(), src_data.end());
+                }
+
+                CompressedQueueCollectionData compressed;
+                compressData(uncompressed, compressed.second);
+                compressed.first = collection_at_time.first;
                 output_queue_->emplace(std::move(compressed));
                 return pipeline::PipelineAction::PROCEED;
             }
@@ -385,8 +188,8 @@ private:
             return pipeline::PipelineAction::SLEEP;
         }
 
-        ConcurrentQueue<Payload>* input_queue_ = nullptr;
-        ConcurrentQueue<Payload>* output_queue_ = nullptr;
+        ConcurrentQueue<QueueCollectionData>* input_queue_ = nullptr;
+        ConcurrentQueue<CompressedQueueCollectionData>* output_queue_ = nullptr;
     };
 
     class Writer : public pipeline::DatabaseStage<CollectionPipeline>
@@ -394,27 +197,27 @@ private:
     public:
         Writer()
         {
-            addInPort_<Payload>("input_queue", input_queue_);
+            addInPort_<CompressedQueueCollectionData>("input_queue", input_queue_);
         }
 
     private:
         pipeline::PipelineAction run_(bool) override
         {
-            Payload payload;
-            if (input_queue_->try_pop(payload))
+            CompressedQueueCollectionData collection_at_time;
+            if (input_queue_->try_pop(collection_at_time))
             {
                 auto db_mgr = getDatabaseManager_();
-                auto id = payload.time_point->createTimestampInDatabase(db_mgr);
+                auto id = collection_at_time.first->createTimestampInDatabase(db_mgr);
 
                 auto inserter = getTableInserter_("CollectionRecords");
-                inserter->createRecordWithColValues(id, payload.bytes);
+                inserter->createRecordWithColValues(id, collection_at_time.second);
                 return pipeline::PipelineAction::PROCEED;
             }
 
             return pipeline::PipelineAction::SLEEP;
         }
 
-        ConcurrentQueue<Payload>* input_queue_ = nullptr;
+        ConcurrentQueue<CompressedQueueCollectionData>* input_queue_ = nullptr;
     };
 
     DatabaseManager *const db_mgr_;

@@ -141,6 +141,25 @@ public:
         return unserialized_map_.size();
     }
 
+    /// Get a string for a given ID. Not intended to be
+    /// called in performance critical code.
+    std::string getString(const uint32_t string_id, bool must_exist = true) const
+    {
+        for (const auto& [s,id] : *map_)
+        {
+            if (id == string_id)
+            {
+                return s;
+            }
+        }
+
+        if (must_exist)
+        {
+            throw simdb::DBException("String ID not in TinyStrings: ") << string_id;
+        }
+        return "";
+    }
+
 private:
     uint32_t getStringID_(const std::string& s)
     {

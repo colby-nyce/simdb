@@ -94,7 +94,7 @@ public:
     }
 
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
-    virtual void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head)
+    virtual void connectToPipeline(ConcurrentQueue<QueueCollectionData>* pipeline_head)
     {
         pipeline_head_ = pipeline_head;
     }
@@ -115,10 +115,7 @@ public:
     /// calls to the collect() methods, only collect the data bytes and
     /// organize them by their timestamps. You must call this method
     /// to push the data down the pipeline.
-    void sendCollectedDataToPipeline()
-    {
-        // TODO cnyce
-    }
+    virtual void sendCollectedDataToPipeline() = 0;
 
     /// \brief Let subclasses provide timestamps
     virtual std::shared_ptr<TimePointBase> getCurrentTime() const { return nullptr; }
@@ -136,7 +133,7 @@ private:
     std::unordered_set<CollectableBase*> all_auto_collectables_;
     std::map<std::string, std::shared_ptr<CollectableBase>> collectables_by_path_;
     CollectionBase* collection_if_ = nullptr;
-    ConcurrentQueue<Payload>* pipeline_head_ = nullptr;
+    ConcurrentQueue<QueueCollectionData>* pipeline_head_ = nullptr;
 };
 
 /// \class TimeDomainCollection
@@ -146,17 +143,23 @@ template <typename TimeT> class TimeDomainCollection : public DomainCollection
 public:
     TimeDomainCollection(std::shared_ptr<Timestamp<TimeT>> timestamp, CollectionBase* collection_if)
         : DomainCollection(collection_if)
+        , heartbeat_(collection_if->getHeartbeat())
         , timestamp_(std::move(timestamp))
     {}
 
-    void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override final
+    void connectToPipeline(ConcurrentQueue<QueueCollectionData>* pipeline_head) override final
     {
-        stager_ = std::make_unique<PipelineStager<TimeT>>(timestamp_.get(), pipeline_head);
+        stager_ = std::make_unique<PipelineStager<TimeT>>(heartbeat_, timestamp_.get(), pipeline_head);
         for (auto& collectable : getCollectables_())
         {
             collectable->connectToPipeline(stager_.get());
         }
         DomainCollection::connectToPipeline(pipeline_head);
+    }
+
+    void sendCollectedDataToPipeline() override final
+    {
+        stager_->sendCollectedDataToPipeline();
     }
 
     std::shared_ptr<TimePointBase> getCurrentTime() const override final
@@ -165,6 +168,7 @@ public:
     }
 
 private:
+    const size_t heartbeat_;
     std::shared_ptr<Timestamp<TimeT>> timestamp_;
     std::unique_ptr<PipelineStager<TimeT>> stager_;
 };

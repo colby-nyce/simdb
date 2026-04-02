@@ -240,6 +240,30 @@ public:
         return std::make_shared<Instruction>(type, opcode, mnemonic, csr, last_inst);
     }
 
+    static size_t getFixedNumBytes()
+    {
+        size_t bytes = 0;
+
+        //InstType type_ = InstType::NO_OP;
+        bytes += sizeof(std::underlying_type_t<InstType>);
+
+        //uint64_t opcode_ = 0;
+        bytes += sizeof(uint64_t);
+
+        //std::string mnemonic_;
+        //  --> strings as uint32_t in the DB (TinyStrings)
+        bytes += sizeof(uint32_t);
+
+        //uint32_t csr_ = 0;
+        bytes += sizeof(uint32_t);
+
+        //bool last_inst_ = 0;
+        //  --> bools as uint8_t in the DB
+        bytes += sizeof(uint8_t);
+
+        return bytes;
+    }
+
     class ArgosCollector : public simdb::collection::ArgosCollectorBase<Instruction>
     {
     public:
@@ -259,6 +283,186 @@ public:
         compareAndAdvance_(bytes, last_inst_, tiny_strings);
     }
 };
+
+void SmokeTest()
+{
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    auto inst_collector_1 = collection.collectScalarManually<Instruction>(
+        "inst1", "root");
+
+    auto inst_collector_2 = collection.collectScalarManually<Instruction>(
+        "inst2", "root");
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    // Collect both insts at tick 1
+    tick = 1;
+    auto A = Instruction::genRandom();
+    auto B = Instruction::genRandom();
+    inst_collector_1->collect(A);
+    inst_collector_2->collect(B);
+
+    // Only collect inst1 at ticks 2-5
+    auto C = Instruction::genRandom();
+    auto D = Instruction::genRandom();
+    auto E = Instruction::genRandom();
+    auto F = Instruction::genRandom();
+
+    tick = 2;
+    inst_collector_1->collect(C);
+
+    tick = 3;
+    inst_collector_1->collect(D);
+
+    tick = 4;
+    inst_collector_1->collect(E);
+
+    tick = 5;
+    inst_collector_1->collect(F);
+
+    // Collect both insts at tick 6
+    tick = 6;
+    auto G = Instruction::genRandom();
+    auto H = Instruction::genRandom();
+    inst_collector_1->collect(G);
+    inst_collector_2->collect(H);
+
+    // Collect the same value for inst1 at tick7, and collect
+    // a different value for inst2
+    tick = 7;
+    auto I = Instruction::genRandom();
+    inst_collector_1->collect(G);
+    inst_collector_2->collect(I);
+
+    // Only collect inst1 at ticks 8-12, but use the same
+    // collected Instruction every time
+    while (tick++ <= 12)
+    {
+        inst_collector_1->collect(G);
+    }
+
+    // TODO cnyce: sendCollectedDataToPipeline() needs to get called
+    // automatically from preTeardown()
+    collection.sendCollectedDataToPipeline("root");
+    app_mgrs.postSimLoopTeardown();
+
+    std::map<uint64_t, std::vector<std::shared_ptr<Instruction>>> expected_db_insts = {
+        {1,  {A,B}},
+        {2,  {C}},
+        {3,  {D}},
+        {4,  {E,B}},
+        {5,  {F}},
+        {6,  {G,H}},
+        {7,  {I}},
+        {8,  {}},
+        {9,  {G}},
+        {10, {I}},
+        {11, {}},
+        {12, {G}}
+    };
+
+    std::map<const Instruction*, uint16_t> collectable_ids_for_insts = {
+        {A.get(), inst_collector_1->getID()},
+        {B.get(), inst_collector_2->getID()},
+        {C.get(), inst_collector_1->getID()},
+        {D.get(), inst_collector_1->getID()},
+        {E.get(), inst_collector_1->getID()},
+        {F.get(), inst_collector_1->getID()},
+        {G.get(), inst_collector_1->getID()},
+        {H.get(), inst_collector_2->getID()},
+        {I.get(), inst_collector_2->getID()}
+    };
+
+    auto db_mgr = app_mgr.getDatabaseManager();
+    simdb::TinyStrings<> tiny_strings(db_mgr);
+
+    auto validate_collection_at_time = [&](int timestamp_id, uint64_t tick)
+    {
+        auto query = db_mgr->createQuery("CollectionRecords");
+        query->addConstraintForInt("TimestampID", simdb::Constraints::EQUAL, timestamp_id);
+
+        const auto& expected_insts = expected_db_insts.at(tick);
+        if (expected_insts.empty())
+        {
+            EXPECT_EQUAL(query->count(), 0);
+            return;
+        }
+        EXPECT_EQUAL(query->count(), 1);
+
+        std::vector<char> compressed_collection_blob;
+        query->select("Records", compressed_collection_blob);
+
+        auto results = query->getResultSet();
+        EXPECT_TRUE(results.getNextRecord());
+
+        // Validate the number of bytes
+        std::vector<char> collection_blob;
+        simdb::decompressData(compressed_collection_blob, collection_blob);
+        auto num_bytes = Instruction::getFixedNumBytes() + sizeof(uint16_t);
+        auto expected_bytes = num_bytes * expected_insts.size();
+        auto actual_bytes = collection_blob.size();
+        EXPECT_EQUAL(expected_bytes, actual_bytes);
+
+        // Validate the collected Instruction bytes
+        std::map<uint16_t, std::shared_ptr<Instruction>> expected_cid_insts;
+        for (auto expected_inst : expected_insts)
+        {
+            uint16_t cid = collectable_ids_for_insts.at(expected_inst.get());
+            expected_cid_insts[cid] = expected_inst;
+        }
+
+        const char* ptr = collection_blob.data();
+        auto end = ptr + collection_blob.size();
+        while (ptr != end)
+        {
+            // First read off the uint16_t cid
+            uint16_t cid = *reinterpret_cast<const uint16_t*>(ptr);
+            ptr += sizeof(uint16_t);
+
+            // Get a ref to the expected inst
+            const auto& expected_inst = expected_cid_insts.at(cid);
+
+            // Create a vector of bytes which holds the Instruction bytes
+            expected_inst->compare(ptr, &tiny_strings);
+        }
+    };
+
+    auto query = db_mgr->createQuery("Timestamps");
+
+    int timestamp_id;
+    query->select("Id", timestamp_id);
+
+    uint64_t timestamp_tick;
+    query->select("Timestamp", timestamp_tick);
+
+    // Note tick-1 below is due to the final tick++
+    EXPECT_EQUAL(query->count(), tick-1);
+
+    auto timestamp_results = query->getResultSet();
+    while (timestamp_results.getNextRecord())
+    {
+        validate_collection_at_time(timestamp_id, timestamp_tick);
+    }
+
+    // TODO cnyce: incorporate enable/disable (especially auto collected, but
+    // see now it manifests in manually collected too)
+}
 
 class Scalars
 {
@@ -1078,6 +1282,7 @@ void ValidateCollectionInDatabase(
 
 int main()
 {
+    SmokeTest();
     //TestAutoCollectScalars();
     //TestAutoCollectContainers();
     //TestFullScale();

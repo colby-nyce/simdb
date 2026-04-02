@@ -241,7 +241,7 @@ public:
     }
 
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
-    void connectToPipeline(ConcurrentQueue<Payload>* pipeline_head) override
+    void connectToPipeline(ConcurrentQueue<QueueCollectionData>* pipeline_head) override
     {
         for (auto& [_, collection] : collections_)
         {
@@ -256,7 +256,7 @@ public:
     }
 
     /// \brief Run auto-collection on all collectables configured for it
-    void performAutoCollection(const std::string& clk_name, bool send_to_pipeline = true)
+    void performAutoCollection(const std::string& clk_name, bool send_to_pipeline = false)
     {
         auto collection = getCollection_(clk_name, true /*must exist*/);
         collection->performAutoCollection();

@@ -65,6 +65,23 @@ inline StreamBuffer& operator<<(StreamBuffer& buf, const bool val)
     return buf;
 }
 
+template <typename T, typename Alloc>
+inline StreamBuffer& operator<<(StreamBuffer& buf, const std::vector<T, Alloc>& val)
+{
+    if constexpr (std::is_trivial_v<T> && std::is_standard_layout_v<T>)
+    {
+        buf.append(val.data(), val.size() * sizeof(T));
+    }
+    else
+    {
+        for (const auto& v : val)
+        {
+            buf << v;
+        }
+    }
+    return buf;
+}
+
 template <typename T>
 constexpr bool is_stream_array_value_type_v =
     (std::is_scalar_v<T> && std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T> && !std::is_enum_v<T> &&

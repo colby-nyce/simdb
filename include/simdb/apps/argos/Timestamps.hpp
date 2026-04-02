@@ -48,11 +48,7 @@ public:
             {
                 return true;
             }
-            else if (must_be_equal_or_less && lessThan(typed_time_point))
-            {
-                return true;
-            }
-            else if (must_be_equal_or_less)
+            else if (must_be_equal_or_less && !lessThan(typed_time_point))
             {
                 throw DBException("Time comparison failure: ")
                     << time_ << " <= " << typed_time_point->time_;
