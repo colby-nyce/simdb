@@ -352,10 +352,12 @@ void SmokeTest()
 
     // Only collect inst1 at ticks 8-12, but use the same
     // collected Instruction every time
-    while (tick++ <= 12)
+    for (tick = 8; tick <= 12; ++tick)
     {
         inst_collector_1->collect(G);
     }
+    // Note tick-1 below is due to the final ++tick
+    auto expected_timestamped_collections = tick - 1;
 
     // TODO cnyce: sendCollectedDataToPipeline() needs to get called
     // automatically from preTeardown()
@@ -451,8 +453,7 @@ void SmokeTest()
     uint64_t timestamp_tick;
     query->select("Timestamp", timestamp_tick);
 
-    // Note tick-1 below is due to the final tick++
-    EXPECT_EQUAL(query->count(), tick-1);
+    EXPECT_EQUAL(query->count(), expected_timestamped_collections);
 
     auto timestamp_results = query->getResultSet();
     while (timestamp_results.getNextRecord())
