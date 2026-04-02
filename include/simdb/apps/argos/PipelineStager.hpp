@@ -79,6 +79,23 @@ public:
 private:
     void sendToPipeline_(QueueCollectionData& collection_at_time)
     {
+        std::map<uint16_t, std::unique_ptr<CollectedData>> collected_data_by_cid;
+        for (auto rit = collection_at_time.second.rbegin(); rit != collection_at_time.second.rend(); ++rit)
+        {
+            auto cid = (*rit)->getCID();
+            auto& collected_data = collected_data_by_cid[cid];
+            if (!collected_data)
+            {
+                collected_data = std::move(*rit);
+            }
+        }
+
+        collection_at_time.second.clear();
+        for (auto& [cid, collected_data] : collected_data_by_cid)
+        {
+            collection_at_time.second.emplace_back(std::move(collected_data));
+        }
+
         QueueCollectionData to_send;
         to_send.first = collection_at_time.first;
         for (auto& data : collection_at_time.second)

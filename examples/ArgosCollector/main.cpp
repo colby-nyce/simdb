@@ -344,7 +344,17 @@ void SmokeTest()
     // in "reverse" order as we usually do when both are collected;
     // we do this to ensure that collection is not paying attention
     // to what is collected in what order)
+    //
+    // We also need to be resilient to multiple collect() calls
+    // for the same collectable at the same time point. The DB
+    // should only take the last of these values. To test this,
+    // we will first inject throwaway instructions before collecting
+    // the "real" instructions we wish to test.
     tick = 6;
+    inst_collector_1->collect(Instruction::genRandom());
+    inst_collector_1->collect(Instruction::genRandom());
+    inst_collector_2->collect(Instruction::genRandom());
+
     auto G = Instruction::genRandom();
     auto H = Instruction::genRandom();
     inst_collector_2->collect(H);
