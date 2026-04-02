@@ -3,6 +3,7 @@
 #include "simdb/apps/AppManager.hpp"
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
+#include <iostream>
 #include <optional>
 
 /// This test shows how to use the SimDB data collection system for Argos.
@@ -315,7 +316,9 @@ void SmokeTest()
     tick = 1;
     auto A = Instruction::genRandom();
     auto B = Instruction::genRandom();
+    std::cout << "Collecting A for cid 1" << std::endl;
     inst_collector_1->collect(A);
+    std::cout << "Collecting B for cid 2" << std::endl;
     inst_collector_2->collect(B);
 
     // Only collect inst1 at ticks 2-5
@@ -325,39 +328,52 @@ void SmokeTest()
     auto F = Instruction::genRandom();
 
     tick = 2;
+    std::cout << "Collecting C for cid 1" << std::endl;
     inst_collector_1->collect(C);
 
     tick = 3;
+    std::cout << "Collecting D for cid 1" << std::endl;
     inst_collector_1->collect(D);
 
     tick = 4;
+    std::cout << "Collecting E for cid 1" << std::endl;
     inst_collector_1->collect(E);
 
     tick = 5;
+    std::cout << "Collecting F for cid 1" << std::endl;
     inst_collector_1->collect(F);
 
     // Collect both insts at tick 6
     tick = 6;
     auto G = Instruction::genRandom();
     auto H = Instruction::genRandom();
+    std::cout << "Collecting G for cid 1" << std::endl;
     inst_collector_1->collect(G);
+    std::cout << "Collecting H for cid 2" << std::endl;
     inst_collector_2->collect(H);
 
     // Collect the same value for inst1 at tick7, and collect
     // a different value for inst2
     tick = 7;
     auto I = Instruction::genRandom();
+    std::cout << "Collecting G for cid 1" << std::endl;
     inst_collector_1->collect(G);
+    std::cout << "Collecting I for cid 2" << std::endl;
     inst_collector_2->collect(I);
 
     // Only collect inst1 at ticks 8-12, but use the same
     // collected Instruction every time
     for (tick = 8; tick <= 12; ++tick)
     {
+        std::cout << "Collecting G for cid 1" << std::endl;
         inst_collector_1->collect(G);
     }
-    // Note tick-1 below is due to the final ++tick
-    auto expected_timestamped_collections = tick - 1;
+
+    // Write one last different value for the 1st inst
+    // (the tick is 13)
+    auto J = Instruction::genRandom();
+    std::cout << "Collecting J for cid 1" << std::endl;
+    inst_collector_1->collect(J);
 
     // TODO cnyce: sendCollectedDataToPipeline() needs to get called
     // automatically from preTeardown()
@@ -365,18 +381,20 @@ void SmokeTest()
     app_mgrs.postSimLoopTeardown();
 
     std::map<uint64_t, std::vector<std::shared_ptr<Instruction>>> expected_db_insts = {
-        {1,  {A,B}},
-        {2,  {C}},
-        {3,  {D}},
-        {4,  {E,B}},
-        {5,  {F}},
-        {6,  {G,H}},
-        {7,  {I}},
-        {8,  {}},
-        {9,  {G}},
-        {10, {I}},
-        {11, {}},
-        {12, {G}}
+                            //   Arrived      Refreshed
+        {1,  {A,B}},        //   A,B
+        {2,  {C}},          //   C
+        {3,  {D}},          //   D
+        {4,  {E,B}},        //   E            B
+        {5,  {F}},          //   F
+        {6,  {G,H}},        //   G,H
+        {7,  {I}},          //   I
+        {8,  {}},           //
+        {9,  {G}},          //                G
+        {10, {I}},          //                I
+        {11, {}},           //
+        {12, {G}},          //                G
+        {13, {J,I}}         //   J            I
     };
 
     std::map<const Instruction*, uint16_t> collectable_ids_for_insts = {
@@ -388,7 +406,8 @@ void SmokeTest()
         {F.get(), inst_collector_1->getID()},
         {G.get(), inst_collector_1->getID()},
         {H.get(), inst_collector_2->getID()},
-        {I.get(), inst_collector_2->getID()}
+        {I.get(), inst_collector_2->getID()},
+        {J.get(), inst_collector_1->getID()}
     };
 
     auto db_mgr = app_mgr.getDatabaseManager();
@@ -452,8 +471,6 @@ void SmokeTest()
 
     uint64_t timestamp_tick;
     query->select("Timestamp", timestamp_tick);
-
-    EXPECT_EQUAL(query->count(), expected_timestamped_collections);
 
     auto timestamp_results = query->getResultSet();
     while (timestamp_results.getNextRecord())

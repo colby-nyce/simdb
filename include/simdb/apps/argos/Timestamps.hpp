@@ -24,6 +24,8 @@ public:
 
     /// Create an entry in the Timestamps table and return the rowid
     virtual int createTimestampInDatabase(DatabaseManager* db_mgr) const = 0;
+
+    virtual std::string getTimeAsString() const = 0;
 };
 
 /// \class TimePoint
@@ -72,6 +74,11 @@ public:
     int createTimestampInDatabase(DatabaseManager* db_mgr) const override final
     {
         return db_mgr->INSERT(SQL_TABLE("Timestamps"), SQL_VALUES(time_))->getId();
+    }
+
+    std::string getTimeAsString() const override final
+    {
+        return std::to_string(time_);
     }
 
 private:
