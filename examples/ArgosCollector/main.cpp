@@ -316,9 +316,7 @@ void SmokeTest()
     tick = 1;
     auto A = Instruction::genRandom();
     auto B = Instruction::genRandom();
-    std::cout << "Collecting A for cid 1" << std::endl;
     inst_collector_1->collect(A);
-    std::cout << "Collecting B for cid 2" << std::endl;
     inst_collector_2->collect(B);
 
     // Only collect inst1 at ticks 2-5
@@ -328,51 +326,41 @@ void SmokeTest()
     auto F = Instruction::genRandom();
 
     tick = 2;
-    std::cout << "Collecting C for cid 1" << std::endl;
     inst_collector_1->collect(C);
 
     tick = 3;
-    std::cout << "Collecting D for cid 1" << std::endl;
     inst_collector_1->collect(D);
 
     tick = 4;
-    std::cout << "Collecting E for cid 1" << std::endl;
     inst_collector_1->collect(E);
 
     tick = 5;
-    std::cout << "Collecting F for cid 1" << std::endl;
     inst_collector_1->collect(F);
 
     // Collect both insts at tick 6
     tick = 6;
     auto G = Instruction::genRandom();
     auto H = Instruction::genRandom();
-    std::cout << "Collecting G for cid 1" << std::endl;
     inst_collector_1->collect(G);
-    std::cout << "Collecting H for cid 2" << std::endl;
     inst_collector_2->collect(H);
 
     // Collect the same value for inst1 at tick7, and collect
     // a different value for inst2
     tick = 7;
     auto I = Instruction::genRandom();
-    std::cout << "Collecting G for cid 1" << std::endl;
     inst_collector_1->collect(G);
-    std::cout << "Collecting I for cid 2" << std::endl;
     inst_collector_2->collect(I);
 
     // Only collect inst1 at ticks 8-12, but use the same
     // collected Instruction every time
     for (tick = 8; tick <= 12; ++tick)
     {
-        std::cout << "Collecting G for cid 1" << std::endl;
         inst_collector_1->collect(G);
     }
 
     // Write one last different value for the 1st inst
     // (the tick is 13)
     auto J = Instruction::genRandom();
-    std::cout << "Collecting J for cid 1" << std::endl;
     inst_collector_1->collect(J);
 
     // TODO cnyce: sendCollectedDataToPipeline() needs to get called

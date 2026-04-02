@@ -39,8 +39,6 @@ public:
         assert(cid != 0);
         all_known_cids_.insert(cid);
 
-        std::cout << "Stager received data from cid " << cid << " at time " << timestamp_->snapshot()->getTimeAsString() << std::endl;
-
         auto current_time = timestamp_->snapshot();
         if (!last_stage_time_)
         {
@@ -53,20 +51,16 @@ public:
 
         if (!waiting_queue_.empty() && waiting_queue_.back().first->equals(current_time.get(), true))
         {
-            std::cout << "...at the same time step as the back of our queue; appending" << std::endl;
             CollectionDataAtTimePoint& collection = waiting_queue_.back().second;
             collection.emplace_back(std::make_unique<CollectedData>(std::move(data)));
         }
         else
         {
-            std::cout << "...at a new time step; creating new entry" << std::endl;
             QueueCollectionData entry;
             entry.first = current_time;
             entry.second.emplace_back(std::make_unique<CollectedData>(std::move(data)));
             waiting_queue_.emplace(std::move(entry));
         }
-
-        std::cout << std::endl;
     }
 
     void sendCollectedDataToPipeline() override
@@ -81,47 +75,30 @@ public:
 private:
     void sendToPipeline_(QueueCollectionData& collection_at_time)
     {
-        std::cout << "\n**********\nSending collection at time " << collection_at_time.first->getTimeAsString() << std::endl;
-
         QueueCollectionData to_send;
         to_send.first = collection_at_time.first;
         for (auto& data : collection_at_time.second)
         {
             auto cid = data->getCID();
-            std::cout << "...looking at the last sent bytes for cid " << cid << std::endl;
             if (auto it = last_sent_bytes_.find(cid); it != last_sent_bytes_.end())
             {
                 if (it->second == data->getData())
                 {
-                    std::cout << "......data is the same as before; skipping" << std::endl;
                     continue;
                 }
-                else
-                {
-                    std::cout << "......data is different than before; processing" << std::endl;
-                }
-            }
-            else
-            {
-                std::cout << "......never sent this one; processing" << std::endl;
             }
             to_send.second.emplace_back(std::move(data));
         }
-        std::cout << std::endl;
 
         auto missing_cids = all_known_cids_;
-        std::cout << "We are going to send the following cids (just refreshed counter): ";
         for (auto& data : to_send.second)
         {
             auto cid = data->getCID();
             missing_cids.erase(cid);
             countdowns_to_refresh_[cid] = heartbeat_;
             last_sent_bytes_[cid] = data->getData();
-            std::cout << cid << (&data != &to_send.second.back() ? ", " : "");
         }
-        std::cout << std::endl;
 
-        std::vector<uint16_t> injected_cids;
         for (auto cid : missing_cids)
         {
             auto it = countdowns_to_refresh_.find(cid);
@@ -144,19 +121,7 @@ private:
                 buffer.append(src, src_bytes);
                 to_send.second.emplace_back(std::move(injected_data));
                 it->second = heartbeat_;
-
-                injected_cids.push_back(cid);
             }
-        }
-
-        if (!injected_cids.empty())
-        {
-            std::cout << "The heartbeat counter ran out for the following cids (dumped): ";
-            for (size_t i = 0; i < injected_cids.size() - 1; ++i)
-            {
-                std::cout << injected_cids[i] << ", ";
-            }
-            std::cout << injected_cids.back() << std::endl;
         }
 
         if (!to_send.second.empty())
