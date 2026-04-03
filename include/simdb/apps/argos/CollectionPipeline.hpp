@@ -103,11 +103,12 @@ public:
         collectable_tns_tbl.addColumn("ElementTreeNodeID", dt::int32_t);
         collectable_tns_tbl.addColumn("ClockID", dt::int32_t);
         collectable_tns_tbl.addColumn("TypeName", dt::string_t);
-        collectable_tns_tbl.addColumn("AutoCollected", dt::int32_t);
 
         auto& collection_records_tbl = schema.addTable("CollectionRecords");
         collection_records_tbl.addColumn("TimestampID", dt::int32_t);
-        collection_records_tbl.addColumn("Records", dt::blob_t);
+        collection_records_tbl.addColumn("Records", dt::blob_t);      // compressed
+        collection_records_tbl.addColumn("EnabledCIDs", dt::blob_t);  // uncompressed
+        collection_records_tbl.addColumn("DisabledCIDs", dt::blob_t); // uncompressed
         collection_records_tbl.unsetPrimaryKey();
 
         auto& queue_max_sizes_tbl = schema.addTable("QueueMaxSizes");
@@ -161,7 +162,12 @@ public:
     }
 
 private:
-    using CompressedQueueCollectionData = std::pair<CollectionTime, std::vector<char>>;
+    struct CompressedQueueCollectionData
+    {
+        CollectionTime time_point;
+        std::vector<char> compressed_collection_data;
+        EnabledChangedAtTimePoint enabled_changes;
+    };
 
     class Compressor : public pipeline::Stage
     {
@@ -179,15 +185,16 @@ private:
             if (input_queue_->try_pop(collection_at_time))
             {
                 std::vector<char> uncompressed;
-                for (const auto& src : collection_at_time.second)
+                for (const auto& src : collection_at_time.collection_data)
                 {
                     const auto& src_data = src->getData();
                     uncompressed.insert(uncompressed.end(), src_data.begin(), src_data.end());
                 }
 
                 CompressedQueueCollectionData compressed;
-                compressData(uncompressed, compressed.second);
-                compressed.first = collection_at_time.first;
+                compressData(uncompressed, compressed.compressed_collection_data);
+                compressed.time_point = collection_at_time.time_point;
+                compressed.enabled_changes = std::move(collection_at_time.enabled_changes);
                 output_queue_->emplace(std::move(compressed));
                 return pipeline::PipelineAction::PROCEED;
             }
@@ -214,10 +221,28 @@ private:
             if (input_queue_->try_pop(collection_at_time))
             {
                 auto db_mgr = getDatabaseManager_();
-                auto id = collection_at_time.first->createTimestampInDatabase(db_mgr);
+                auto id = collection_at_time.time_point->createTimestampInDatabase(db_mgr);
 
                 auto inserter = getTableInserter_("CollectionRecords");
-                inserter->createRecordWithColValues(id, collection_at_time.second);
+                const auto& bytes = collection_at_time.compressed_collection_data;
+
+                std::vector<uint16_t> enabled_cids_at_time;
+                std::vector<uint16_t> disabled_cids_at_time;
+                for (const auto& [cid, en] : collection_at_time.enabled_changes)
+                {
+                    if (en)
+                    {
+                        enabled_cids_at_time.push_back(cid);
+                    }
+                    else
+                    {
+                        disabled_cids_at_time.push_back(cid);
+                    }
+                }
+
+                inserter->createRecordWithColValues(
+                    id, bytes, enabled_cids_at_time, disabled_cids_at_time);
+
                 return pipeline::PipelineAction::PROCEED;
             }
 

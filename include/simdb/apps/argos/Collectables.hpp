@@ -83,10 +83,18 @@ public:
     }
 
     /// Enable collection
-    void enable();
+    void enable()
+    {
+        enabled_ = true;
+        stager_->onEnabledChanged(getID(), enabled_);
+    }
 
     /// Disable collection
-    void disable();
+    void disable()
+    {
+        enabled_ = false;
+        stager_->onEnabledChanged(getID(), enabled_);
+    }
 
     /// Check enabled
     bool enabled() const
@@ -100,14 +108,8 @@ public:
         throw DBException("This collectable does not support auto-collection");
     }
 
-    /// Check if we are auto-collected
-    virtual bool isAutoCollected() const { return false; }
-
     /// Demangled element type for scalars, or element demangle + \c _contig_capacityN / \c _sparse_capacityN for queues.
     virtual std::string collectableTypeNameForDb() const = 0;
-
-    /// \c 1 if this collectable was registered for auto-collection, else \c 0 (matches \c CollectableTreeNodes.AutoCollected).
-    virtual int32_t collectableAutoCollectedForDb() const = 0;
 
 protected:
     CollectableBase(DomainCollection* collection, size_t heartbeat)
@@ -178,21 +180,17 @@ public:
         return simdb::demangle_type<ValueType>();
     }
 
-    int32_t collectableAutoCollectedForDb() const override { return 0; }
-
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename T = ScalarT>
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
     collect(const T& value)
     {
-        if (!enabled())
+        if (enabled())
         {
-            enable();
+            CollectedData collected(getID());
+            dtype_hierarchy_->writeBuffer(collected.getBuffer(), value);
+            stage_(std::move(collected));
         }
-
-        CollectedData collected(getID());
-        dtype_hierarchy_->writeBuffer(collected.getBuffer(), value);
-        stage_(std::move(collected));
     }
 
     /// \brief Pointer-version of collect()
@@ -200,11 +198,14 @@ public:
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
     collect(const T& value)
     {
-        if (!value)
+        if (value)
         {
-            throw DBException("Cannot collect a null container");
+            collect(*value);
         }
-        collect(*value);
+        else
+        {
+            disable();
+        }
     }
 
 private:
@@ -230,12 +231,9 @@ public:
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
+        assert(this->enabled());
         this->collect(*scalar_);
     }
-
-    virtual bool isAutoCollected() const { return true; }
-
-    int32_t collectableAutoCollectedForDb() const override { return 1; }
 
 private:
     const ScalarT *const scalar_;
@@ -275,8 +273,6 @@ public:
         return base + "_contig_capacity" + std::to_string(expected_capacity_);
     }
 
-    int32_t collectableAutoCollectedForDb() const override { return 0; }
-
     /// \brief On-demand collection, also called by auto-collecting subclass
     template <typename T = ContainerT>
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
@@ -284,7 +280,7 @@ public:
     {
         if (!enabled())
         {
-            enable();
+            return;
         }
 
         CollectedData collected(getID());
@@ -337,11 +333,14 @@ public:
     std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
     collect(const T& container)
     {
-        if (!container)
+        if (container)
         {
-            throw DBException("Cannot collect a null container");
+            collect(*container);
         }
-        collect(*container);
+        else
+        {
+            disable();
+        }
     }
 
     size_t getMaxContainerSizeCollected() const override final
@@ -380,12 +379,9 @@ public:
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
+        assert(this->enabled());
         this->collect(*container_);
     }
-
-    virtual bool isAutoCollected() const { return true; }
-
-    int32_t collectableAutoCollectedForDb() const override { return 1; }
 
 private:
     const ContainerT *const container_;

@@ -78,21 +78,6 @@ public:
         return paths;
     }
 
-    /// \brief Enable / disable collection for the given collectable
-    void enableCollection(CollectableBase* collectable, bool enable)
-    {
-        collectable->enabled_ = enable;
-        if (!collectable->isAutoCollected())
-        {
-            // TODO cnyce: needs to be forwarded to the 1st stage of the pipeline
-            // --- looks like connectToPipeline should not take the raw
-            //     input queue but a base class of some kind that the
-            //     1st stage implements
-            //       -- careful when doing multi-threaded mode
-            //       -- very nice to have: 1st stage can be main thread or its own thread
-        }
-    }
-
     /// \brief Connect the collectables to the CollectorPipeline's main input queue
     virtual void connectToPipeline(ConcurrentQueue<QueueCollectionData>* pipeline_head)
     {
@@ -172,15 +157,5 @@ private:
     std::shared_ptr<Timestamp<TimeT>> timestamp_;
     std::unique_ptr<PipelineStager<TimeT>> stager_;
 };
-
-inline void CollectableBase::enable()
-{
-    collection_->enableCollection(this, true);
-}
-
-inline void CollectableBase::disable()
-{
-    collection_->enableCollection(this, false);
-}
 
 } // namespace simdb::collection

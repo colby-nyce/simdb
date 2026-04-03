@@ -4,6 +4,18 @@
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#ifdef RAPIDJSON_INSTALLED
+#include <rapidjson/filewritestream.h>
+#include <rapidjson/prettywriter.h>
+#endif
+
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
 
@@ -163,7 +175,99 @@ public:
     }
 };
 
-void SmokeTest()
+// Final validation struction
+using ExpectedInsts =
+    std::map<uint64_t,          // Tick
+             std::map<uint16_t, // CID
+                      std::shared_ptr<Instruction>>>;
+
+namespace {
+
+const char* instTypeToString(InstType t)
+{
+    switch (t)
+    {
+    case InstType::NO_OP:
+        return "NO_OP";
+    case InstType::MEM:
+        return "MEM";
+    case InstType::CSR:
+        return "CSR";
+    case InstType::ILLEGAL:
+        return "ILLEGAL";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+} // namespace
+
+void RunFrontEndValidation(const ExpectedInsts& expected_insts, simdb::DatabaseManager* db_mgr)
+{
+#ifdef RAPIDJSON_INSTALLED
+    FILE* fp = std::fopen("/tmp/expected_insts.json", "w");
+    if (!fp)
+    {
+        std::perror("RunFrontEndValidation: fopen /tmp/expected_insts.json");
+        EXPECT_TRUE(false);
+        return;
+    }
+
+    char write_buffer[65536];
+    rapidjson::FileWriteStream os(fp, write_buffer, sizeof(write_buffer));
+    rapidjson::PrettyWriter<rapidjson::FileWriteStream> writer(os);
+
+    writer.StartObject();
+    for (const auto& tick_entry : expected_insts)
+    {
+        writer.Key(std::to_string(tick_entry.first).c_str());
+        writer.StartObject();
+        for (const auto& cid_entry : tick_entry.second)
+        {
+            writer.Key(std::to_string(cid_entry.first).c_str());
+            const auto& inst = cid_entry.second;
+            if (!inst)
+            {
+                writer.Null();
+            }
+            else
+            {
+                writer.StartObject();
+                writer.Key("type");
+                writer.String(instTypeToString(inst->getType()));
+                writer.Key("opcode");
+                writer.Uint64(inst->getOpcode());
+                writer.Key("mnemonic");
+                writer.String(inst->getMnemonic().c_str());
+                writer.Key("csr");
+                writer.Uint(inst->getCsr());
+                writer.Key("last");
+                writer.Bool(inst->finishesSim());
+                writer.EndObject();
+            }
+        }
+        writer.EndObject();
+    }
+    writer.EndObject();
+    std::fclose(fp);
+
+    const auto db_path = db_mgr->getDatabaseFilePath();
+    std::ostringstream cmd;
+    cmd << "python3 ./validate.py --db-file " << std::quoted(db_path)
+        << " --expected-json " << std::quoted("/tmp/expected_insts.json");
+    const auto rc = std::system(cmd.str().c_str());
+    EXPECT_EQUAL(rc, 0);
+#else
+    (void)expected_insts;
+    (void)db_mgr;
+    std::cerr
+        << "ArgosCollector: RapidJSON was not available at build time; "
+           "skipping RunFrontEndValidation JSON dump (install rapidjson / "
+           "rapidjson-devel and reconfigure CMake)\n";
+#endif
+}
+
+void RunSmokeTest()
 {
     uint64_t tick = 0;
     size_t heartbeat = 3;
@@ -268,9 +372,6 @@ void SmokeTest()
     auto K = Instruction::genRandom();
     inst_collector_3->collect(K);
 
-    // TODO cnyce: sendCollectedDataToPipeline() needs to get called
-    // automatically from preTeardown()
-    collection.sendCollectedDataToPipeline("root");
     app_mgrs.postSimLoopTeardown();
 
     std::map<uint64_t, std::vector<std::shared_ptr<Instruction>>> expected_db_insts = {
@@ -374,9 +475,92 @@ void SmokeTest()
     }
 }
 
+void TestEnabledLogic()
+{
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    auto inst_collector = collection.collectScalarManually<Instruction>(
+        "inst", "root");
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    // Keep track of all expected Instructions and their ticks
+    ExpectedInsts expected_insts;
+
+    // Collect data from ticks 1-5 while collectable is enabled
+    std::shared_ptr<Instruction> I;
+    for (tick = 1; tick <= 5; ++tick)
+    {
+        I = Instruction::genRandom();
+        inst_collector->collect(I);
+        expected_insts[tick] = {{inst_collector->getID(), I}};
+    }
+
+    // Disable and collect a few times (no-op)
+    tick = 6;
+    inst_collector->disable();
+    expected_insts[tick] = {};
+
+    tick = 7;
+    inst_collector->collect(Instruction::genRandom());
+    expected_insts[tick] = {};
+
+    tick = 8;
+    inst_collector->collect(Instruction::genRandom());
+    expected_insts[tick] = {};
+
+    // Re-enable at tick 9, but do not collect anything.
+    // We expect Argos to show the carry-over value from
+    // tick 5 (last time it was enabled).
+    tick = 9;
+    inst_collector->enable();
+    expected_insts[tick] = expected_insts.at(5);
+
+    // Collect ticks 10 and 11
+    for (tick = 10; tick <= 11; ++tick)
+    {
+        I = Instruction::genRandom();
+        inst_collector->collect(I);
+        expected_insts[tick] = {{inst_collector->getID(), I}};
+    }
+
+    //   Tick       Enabled    Expect
+    //   ---------  ---------  ---------
+    //   1          y          A
+    //   2          y          B
+    //   3          y          C
+    //   4          y          D
+    //   5          y          E
+    //   6          n          -
+    //   7          n          -
+    //   8          n          -
+    //   9          y          E
+    //   10         y          F
+    //   11         y          G
+
+    app_mgrs.postSimLoopTeardown();
+    RunFrontEndValidation(expected_insts, app_mgr.getDatabaseManager());
+}
+
 int main()
 {
-    SmokeTest();
+    RunSmokeTest();
+    TestEnabledLogic();
 
     // TODO cnyce: Bash all kinds of scalars, and sparse/contig containers.
     //             Easiest to do this with the rapidjson dump (don't spend
