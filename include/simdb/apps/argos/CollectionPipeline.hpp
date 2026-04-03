@@ -103,6 +103,7 @@ public:
         collectable_tns_tbl.addColumn("ElementTreeNodeID", dt::int32_t);
         collectable_tns_tbl.addColumn("ClockID", dt::int32_t);
         collectable_tns_tbl.addColumn("TypeName", dt::string_t);
+        collectable_tns_tbl.addColumn("SerializationCID", dt::uint32_t);
 
         auto& collection_records_tbl = schema.addTable("CollectionRecords");
         collection_records_tbl.addColumn("TimestampID", dt::int32_t);

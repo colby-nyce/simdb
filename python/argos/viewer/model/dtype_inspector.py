@@ -44,19 +44,18 @@ class DataTypeInspector:
             self.enum_members = {}  # type: Dict[str, int]
 
         def __repr__(self):
-            # type: () -> str
             return (
                 f"DataTypeNode(id={self.node_id!r}, kind={self.kind!r}, "
                 f"name={self.name!r}, type_name={self.type_name!r}, n_children={len(self.children)})"
             )
 
     def __init__(self, db_file):
-        # type: (str) -> None
         self._conn = sqlite3.connect(db_file)
-        self._schemas = {}  # type: Dict[int, str]
-        self._nodes_by_id = {}  # type: Dict[int, DataTypeInspector.DataTypeNode]
-        self._top_by_schema = {}  # type: Dict[int, List[DataTypeInspector.DataTypeNode]]
-        self._root_views = []  # type: List[DataTypeInspector.DataTypeNode]
+        self._schemas = {}
+        self._nodes_by_id = {}
+        self._top_by_schema = {}
+        self._root_views = []
+        self._deserializers_by_typename = {}
         self._load()
 
     @property
@@ -190,8 +189,27 @@ class DataTypeInspector:
                 return dict(node.enum_members)
         return None
 
-    def GetDeserializer(self, dtype_name):
-        # type: (str) -> Optional[object]
-        from viewer.model.data_deserializers import build_deserializer
+    def GetEnumBackingKind(self, enum_name):
+        # type: (str) -> Optional[Dict[str, int]]
+        """Member map for ``Kind == 'enum'`` where ``TypeName`` or field ``Name`` matches *enum_name*."""
+        for node in self._iter_nodes():
+            if node.kind != "enum":
+                continue
+            if node.type_name == enum_name or node.name == enum_name:
+                return node.enum_backing
+        return None
 
-        return build_deserializer(self, dtype_name)
+    def GetDeserializer(self, dtype_name, expect_exists=True):
+        if dtype_name in self._deserializers_by_typename:
+            return self._deserializers_by_typename[dtype_name]
+
+        from viewer.model.data_deserializers import CreateDeserializer
+        deserializer = CreateDeserializer(self, dtype_name)
+
+        if deserializer:
+            self._deserializers_by_typename[dtype_name] = deserializer
+
+        if expect_exists:
+            raise Exception(f'Unable to create deserializer for data type: {dtype_name}')
+
+        return None

@@ -362,7 +362,8 @@ private:
                         SQL_VALUES(
                             elem_tree_id,
                             clock_id,
-                            coll->collectableTypeNameForDb()));
+                            coll->collectableTypeNameForDb(),
+                            (uint32_t)coll->getID()));
                 }
             }
         });
