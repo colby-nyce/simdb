@@ -514,15 +514,12 @@ void TestEnabledLogic()
     // Disable and collect a few times (no-op)
     tick = 6;
     inst_collector->disable();
-    expected_insts[tick] = {};
 
     tick = 7;
     inst_collector->collect(Instruction::genRandom());
-    expected_insts[tick] = {};
 
     tick = 8;
     inst_collector->collect(Instruction::genRandom());
-    expected_insts[tick] = {};
 
     // Re-enable at tick 9, but do not collect anything.
     // We expect Argos to show the carry-over value from

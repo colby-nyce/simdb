@@ -1,6 +1,6 @@
 import sqlite3
 from typing import Dict, Iterator, List, Optional
-
+from viewer.model.tiny_strings import TinyStrings
 
 class DataTypeInspector:
     """Loads Argos data-type metadata written by CollectionPipeline / DataTypeSerializer."""
@@ -56,6 +56,7 @@ class DataTypeInspector:
         self._top_by_schema = {}
         self._root_views = []
         self._deserializers_by_typename = {}
+        self._tiny_strings = TinyStrings(db_file)
         self._load()
 
     @property
@@ -204,10 +205,11 @@ class DataTypeInspector:
             return self._deserializers_by_typename[dtype_name]
 
         from viewer.model.data_deserializers import CreateDeserializer
-        deserializer = CreateDeserializer(self, dtype_name)
+        deserializer = CreateDeserializer(self, dtype_name, self._tiny_strings)
 
         if deserializer:
             self._deserializers_by_typename[dtype_name] = deserializer
+            return deserializer
 
         if expect_exists:
             raise Exception(f'Unable to create deserializer for data type: {dtype_name}')

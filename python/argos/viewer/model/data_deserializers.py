@@ -17,18 +17,40 @@ UNPACK_FORMATS = {
     'bool':     'B'
 }
 
-# Helper to take the first N bytes off a byte stream, convert
-# according to the given format, and return the unpacked data
-# along with the updated byte stream.
+# Helper class used to minimize the number of byte array copies
+# we make during deserialization.
 import struct
-def ReadOffBytes(fmt, data_bytes):
-    if fmt in UNPACK_FORMATS:
-        fmt = UNPACK_FORMATS[fmt]
-    extracted = struct.unpack(fmt, data_bytes)
-    if len(fmt) == 1:
-        extracted = extracted[0]
-    data_bytes = data_bytes[struct.calcsize(fmt):]
-    return (extracted, data_bytes)
+class ByteBuffer:
+    def __init__(self, data_bytes):
+        assert isinstance(data_bytes, bytes)
+        self._read_idx = 0
+        self._end_idx = len(data_bytes)
+        self._data_bytes = data_bytes
+
+    def Read(self, fmt):
+        if fmt in UNPACK_FORMATS:
+            fmt = UNPACK_FORMATS[fmt]
+        nbytes = struct.calcsize(fmt)
+        assert self._read_idx + nbytes <= self._end_idx
+
+        val_bytes = self._data_bytes[self._read_idx : self._read_idx + nbytes]
+        val = struct.unpack(fmt, val_bytes)
+        if len(fmt) == 1:
+            val = val[0]
+
+        self._read_idx += nbytes
+        return val
+
+    def Done(self):
+        assert self._read_idx <= self._end_idx
+        return self._read_idx == self._end_idx
+
+    @classmethod
+    def CreateFrom(cls, obj):
+        if isinstance(obj, cls):
+            return obj
+        else:
+            return cls(obj)
 
 def CreateDeserializer(inspector, dtype_name, tiny_strings=None):
     # Extract sparse/contig and capacity from a data type name
@@ -90,18 +112,18 @@ def CreateDeserializer(inspector, dtype_name, tiny_strings=None):
 # This class deserializes non-enum POD types.
 class SimpleDeserializer:
     CONVERTERS = {
-        'char':     lambda(x): return str(x),
-        'int8_t':   lambda(x): return int(x),
-        'uint8_t':  lambda(x): return int(x),
-        'int16_t':  lambda(x): return int(x),
-        'uint16_t': lambda(x): return int(x),
-        'int32_t':  lambda(x): return int(x),
-        'uint32_t': lambda(x): return int(x),
-        'int64_t':  lambda(x): return int(x),
-        'uint64_t': lambda(x): return int(x),
-        'double':   lambda(x): return float(x),
-        'float':    lambda(x): return float(x),
-        'bool':     lambda(x): return bool(x)
+        'char':     lambda x: str(x),
+        'int8_t':   lambda x: int(x),
+        'uint8_t':  lambda x: int(x),
+        'int16_t':  lambda x: int(x),
+        'uint16_t': lambda x: int(x),
+        'int32_t':  lambda x: int(x),
+        'uint32_t': lambda x: int(x),
+        'int64_t':  lambda x: int(x),
+        'uint64_t': lambda x: int(x),
+        'double':   lambda x: float(x),
+        'float':    lambda x: float(x),
+        'bool':     lambda x: bool(x)
     }
 
     def __init__(self, dtype_name):
@@ -109,8 +131,9 @@ class SimpleDeserializer:
         self._converter = self.CONVERTERS[dtype_name]
 
     def Deserialize(self, data_bytes):
-        (val, data_bytes) = ReadOffBytes(self._fmt, data_bytes)
-        return (self._converter(val), data_bytes)
+        buf = ByteBuffer.CreateFrom(data_bytes)
+        val = buf.Read(self._fmt)
+        return self._converter(val)
 
 # This class deserializes string types.
 class StringDeserializer:
@@ -119,18 +142,20 @@ class StringDeserializer:
         self._tiny_strings = tiny_strings
 
     def Deserialize(self, data_bytes):
-        (string_id, data_bytes) = ReadOffBytes('uint32_t', data_bytes)
+        buf = ByteBuffer.CreateFrom(data_bytes)
+        string_id = buf.Read('uint32_t')
         return self._tiny_strings.GetString(string_id, must_exist=True)
 
 # This class deserializes enum types.
 class EnumDeserializer:
     def __init__(self, val_deserializer, enum_map):
         self._val_deserializer = val_deserializer
-        self._enum_map = enum_map
+        self._enum_map = {k:v for v,k in enum_map.items()}
 
     def Deserialize(self, data_bytes):
-        (enum_val, data_bytes) = self._val_deserializer.Deserialize(data_bytes)
-        return self._enum_map[(int)enum_val]
+        enum_val = self._val_deserializer.Deserialize(data_bytes)
+        enum_val = int(enum_val)
+        return self._enum_map[enum_val]
 
 # This class deserializes contiguous container types.
 class ContigContainerDeserializer:
@@ -139,14 +164,16 @@ class ContigContainerDeserializer:
         self._capacity = capacity
 
     def Deserialize(self, data_bytes):
+        buf = ByteBuffer.CreateFrom(data_bytes)
+
         # First 2 bytes always give the container size
-        (size, data_bytes) = ReadOffBytes('uint16_t', data_bytes)
+        size = buf.Read('uint16_t')
         assert size <= self._capacity
 
         # Create the container
         container = []
         while len(container) < size:
-            (bin_val, data_bytes) = self._bin_deserializer.Deserialize(data_bytes)
+            bin_val = self._bin_deserializer.Deserialize(buf)
             container.append(bin_val)
 
         return container
@@ -157,9 +184,11 @@ class SparseContainerDeserializer:
         self._bin_deserializer = bin_deserializer
         self._capacity = capacity
 
-    def Deserialize(self, *args):
+    def Deserialize(self, data_bytes):
+        buf = ByteBuffer.CreateFrom(data_bytes)
+
         # First 2 bytes always give the container size
-        (size, data_bytes) = ReadOffBytes('uint16_t', data_bytes)
+        size = buf.Read('uint16_t')
         assert size <= self._capacity
 
         # Create the container; recall that sparse containers
@@ -169,8 +198,8 @@ class SparseContainerDeserializer:
         # Read each element (bin), noting that each one is
         # preceeded by a uint16_t which gives the bin idx.
         while size > 0:
-            (bin_idx, data_bytes) = ReadOffBytes('uint16_t', data_bytes)
-            (bin_val, data_bytes) = self._bin_deserializer.Deserialize(data_bytes)
+            bin_idx = buf.Read('uint16_t')
+            bin_val = self._bin_deserializer.Deserialize(buf)
             container[bin_idx] = bin_val
             size -= 1
 
@@ -181,9 +210,9 @@ class StructDeserializer:
     def __init__(self, struct_defn, inspector, tiny_strings):
         self._field_deserializers = OrderedDict()
         for field in struct_defn.children:
-            if field.kind == 'pod':
+            if field.kind == 'pod' and field.type_name != 'std::string':
                 self._field_deserializers[field.name] = SimpleDeserializer(field.type_name)
-            elif field.kind == 'string':
+            elif field.type_name == 'std::string':
                 self._field_deserializers[field.name] = StringDeserializer(tiny_strings)
             elif field.kind == 'enum':
                 self._field_deserializers[field.name] = CreateDeserializer(inspector, field.type_name)
@@ -193,8 +222,10 @@ class StructDeserializer:
                 raise ValueError(f'Unknown field data type: {field.kind}')
 
     def Deserialize(self, data_bytes):
+        buf = ByteBuffer.CreateFrom(data_bytes)
         deserialized = OrderedDict()
+
         for field_name, deserializer in self._field_deserializers.items():
-            (field_val, data_bytes) = deserializer.Deserialize(data_bytes)
-            deserialized[field_name] = field_val
+            deserialized[field_name] = deserializer.Deserialize(buf)
+
         return deserialized
