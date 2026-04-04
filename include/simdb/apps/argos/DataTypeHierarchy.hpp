@@ -114,41 +114,41 @@ struct DataTypeNode
     void* source_field = nullptr;
 };
 
-inline const char* podTypeKindToTypeName(PodTypeKind kind)
+inline std::string podTypeKindToTypeName(PodTypeKind kind)
 {
     switch (kind)
     {
-    case PodTypeKind::c: return "char";
-    case PodTypeKind::i8: return "int8_t";
-    case PodTypeKind::ui8: return "uint8_t";
-    case PodTypeKind::i16: return "int16_t";
-    case PodTypeKind::ui16: return "uint16_t";
-    case PodTypeKind::i32: return "int32_t";
-    case PodTypeKind::ui32: return "uint32_t";
-    case PodTypeKind::i64: return "int64_t";
-    case PodTypeKind::ui64: return "uint64_t";
-    case PodTypeKind::d: return "double";
-    case PodTypeKind::f: return "float";
-    case PodTypeKind::logical: return "bool";
-    case PodTypeKind::str: return "std::string";
+    case PodTypeKind::c: return demangle_type<char>();
+    case PodTypeKind::i8: return demangle_type<int8_t>();
+    case PodTypeKind::ui8: return demangle_type<uint8_t>();
+    case PodTypeKind::i16: return demangle_type<int16_t>();
+    case PodTypeKind::ui16: return demangle_type<uint16_t>();
+    case PodTypeKind::i32: return demangle_type<int32_t>();
+    case PodTypeKind::ui32: return demangle_type<uint32_t>();
+    case PodTypeKind::i64: return demangle_type<int64_t>();
+    case PodTypeKind::ui64: return demangle_type<uint64_t>();
+    case PodTypeKind::d: return demangle_type<double>();
+    case PodTypeKind::f: return demangle_type<float>();
+    case PodTypeKind::logical: return demangle_type<bool>();
+    case PodTypeKind::str: return "string";
     }
     throw DBException("Unknown data type");
     return nullptr;
 }
 
-inline const char* enumBackingKindToString(EnumBackingKind kind)
+inline std::string enumBackingKindToString(EnumBackingKind kind)
 {
     switch (kind)
     {
-    case EnumBackingKind::i8: return "int8_t";
-    case EnumBackingKind::ui8: return "uint8_t";
-    case EnumBackingKind::i16: return "int16_t";
-    case EnumBackingKind::ui16: return "uint16_t";
-    case EnumBackingKind::i32: return "int32_t";
-    case EnumBackingKind::ui32: return "uint32_t";
-    case EnumBackingKind::i64: return "int64_t";
-    case EnumBackingKind::ui64: return "uint64_t";
-    }
+    case EnumBackingKind::i8: return demangle_type<int8_t>();
+    case EnumBackingKind::ui8: return demangle_type<uint8_t>();
+    case EnumBackingKind::i16: return demangle_type<int16_t>();
+    case EnumBackingKind::ui16: return demangle_type<uint16_t>();
+    case EnumBackingKind::i32: return demangle_type<int32_t>();
+    case EnumBackingKind::ui32: return demangle_type<uint32_t>();
+    case EnumBackingKind::i64: return demangle_type<int64_t>();
+    case EnumBackingKind::ui64: return demangle_type<uint64_t>();
+}
     throw DBException("Unknown enum backing kind");
     return nullptr;
 }

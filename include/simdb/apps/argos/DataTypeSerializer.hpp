@@ -50,15 +50,15 @@ private:
             PodTypeKind simple_type) override
         {
             const int32_t parent_id = parent_node_ids_.empty() ? 0 : parent_node_ids_.back();
-            const char* const pod_name = podTypeKindToTypeName(simple_type);
-            (void)db_mgr_->INSERT(SQL_TABLE("DataTypeNodes"),
-                                  SQL_VALUES(current_schema_id_,
-                                             parent_id,
-                                             std::string{"pod"},
-                                             var_name,
-                                             description,
-                                             std::string{pod_name},
-                                             std::string{}));
+            const auto pod_name = podTypeKindToTypeName(simple_type);
+            db_mgr_->INSERT(SQL_TABLE("DataTypeNodes"),
+                            SQL_VALUES(current_schema_id_,
+                                       parent_id,
+                                       "pod",
+                                       var_name,
+                                       description,
+                                       pod_name,
+                                       ""));
         }
 
         void visitEnumVariable(
@@ -73,11 +73,11 @@ private:
                 db_mgr_->INSERT(SQL_TABLE("DataTypeNodes"),
                                 SQL_VALUES(current_schema_id_,
                                            parent_id,
-                                           std::string{"enum"},
+                                           "enum",
                                            enum_name,
                                            description,
                                            enum_type_name,
-                                           std::string{enumBackingKindToString(backing_kind)}));
+                                           enumBackingKindToString(backing_kind)));
             const int32_t enum_node_id = node_rec->getId();
             for (const auto& [member_name, member_value] : name_value_pairs)
             {
@@ -96,11 +96,11 @@ private:
                 db_mgr_->INSERT(SQL_TABLE("DataTypeNodes"),
                                 SQL_VALUES(current_schema_id_,
                                            parent_id,
-                                           std::string{"struct"},
+                                           "struct",
                                            struct_key,
                                            description,
                                            struct_type_name,
-                                           std::string{}));
+                                           ""));
             parent_node_ids_.push_back(rec->getId());
             struct_stack_.push_back(struct_key);
         }
