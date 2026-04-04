@@ -254,7 +254,7 @@ void RunFrontEndValidation(const ExpectedInsts& expected_insts, simdb::DatabaseM
     const auto db_path = db_mgr->getDatabaseFilePath();
     std::ostringstream cmd;
     cmd << "python3 ./validate.py --db-file " << std::quoted(db_path)
-        << " --expected-json " << std::quoted("/tmp/expected_insts.json");
+        << " --json-file " << std::quoted("/tmp/expected_insts.json");
     const auto rc = std::system(cmd.str().c_str());
     EXPECT_EQUAL(rc, 0);
 #else
@@ -522,11 +522,13 @@ void TestEnabledLogic()
     inst_collector->collect(Instruction::genRandom());
 
     // Re-enable at tick 9, but do not collect anything.
-    // We expect Argos to show the carry-over value from
-    // tick 5 (last time it was enabled).
+    // There should not be anything in the database at
+    // this tick; we last saw a value at tick 5 before
+    // disabling collection, and the collector should
+    // know NOT to put the previously seen bytes back
+    // in the pipeline.
     tick = 9;
     inst_collector->enable();
-    expected_insts[tick] = expected_insts.at(5);
 
     // Collect ticks 10 and 11
     for (tick = 10; tick <= 11; ++tick)
@@ -535,20 +537,6 @@ void TestEnabledLogic()
         inst_collector->collect(I);
         expected_insts[tick] = {{inst_collector->getID(), I}};
     }
-
-    //   Tick       Enabled    Expect
-    //   ---------  ---------  ---------
-    //   1          y          A
-    //   2          y          B
-    //   3          y          C
-    //   4          y          D
-    //   5          y          E
-    //   6          n          -
-    //   7          n          -
-    //   8          n          -
-    //   9          y          E
-    //   10         y          F
-    //   11         y          G
 
     app_mgrs.postSimLoopTeardown();
     RunFrontEndValidation(expected_insts, app_mgr.getDatabaseManager());
