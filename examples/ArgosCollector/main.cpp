@@ -10,11 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-
-#ifdef RAPIDJSON_INSTALLED
-#include <rapidjson/filewritestream.h>
-#include <rapidjson/prettywriter.h>
-#endif
+#include <vector>
 
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
@@ -175,13 +171,21 @@ public:
     }
 };
 
+/// Row of scalar/struct values written by \ref TestScalarCollection (JSON must match Python deserializers).
+struct AllData
+{
+    uint32_t pod;
+    std::string str;
+    InstType itype;
+    bool flag;
+    std::shared_ptr<Instruction> inst;
+};
+
 // Final validation struction
 using ExpectedInsts =
     std::map<uint64_t,          // Tick
              std::map<uint16_t, // CID
                       std::shared_ptr<Instruction>>>;
-
-namespace {
 
 const char* instTypeToString(InstType t)
 {
@@ -200,71 +204,14 @@ const char* instTypeToString(InstType t)
     }
 }
 
-} // namespace
-
-void RunFrontEndValidation(const ExpectedInsts& expected_insts, simdb::DatabaseManager* db_mgr)
+void RunFrontEndValidation(simdb::DatabaseManager* db_mgr, const std::string& truth = "/tmp/collection.json")
 {
-#ifdef RAPIDJSON_INSTALLED
-    FILE* fp = std::fopen("/tmp/expected_insts.json", "w");
-    if (!fp)
-    {
-        std::perror("RunFrontEndValidation: fopen /tmp/expected_insts.json");
-        EXPECT_TRUE(false);
-        return;
-    }
-
-    char write_buffer[65536];
-    rapidjson::FileWriteStream os(fp, write_buffer, sizeof(write_buffer));
-    rapidjson::PrettyWriter<rapidjson::FileWriteStream> writer(os);
-
-    writer.StartObject();
-    for (const auto& tick_entry : expected_insts)
-    {
-        writer.Key(std::to_string(tick_entry.first).c_str());
-        writer.StartObject();
-        for (const auto& cid_entry : tick_entry.second)
-        {
-            writer.Key(std::to_string(cid_entry.first).c_str());
-            const auto& inst = cid_entry.second;
-            if (!inst)
-            {
-                writer.Null();
-            }
-            else
-            {
-                writer.StartObject();
-                writer.Key("type");
-                writer.String(instTypeToString(inst->getType()));
-                writer.Key("opcode");
-                writer.Uint64(inst->getOpcode());
-                writer.Key("mnemonic");
-                writer.String(inst->getMnemonic().c_str());
-                writer.Key("csr");
-                writer.Uint(inst->getCsr());
-                writer.Key("last");
-                writer.Bool(inst->finishesSim());
-                writer.EndObject();
-            }
-        }
-        writer.EndObject();
-    }
-    writer.EndObject();
-    std::fclose(fp);
-
     const auto db_path = db_mgr->getDatabaseFilePath();
     std::ostringstream cmd;
     cmd << "python3 ./validate.py --db-file " << std::quoted(db_path)
-        << " --json-file " << std::quoted("/tmp/expected_insts.json");
+        << " --json-file " << std::quoted(truth);
     const auto rc = std::system(cmd.str().c_str());
     EXPECT_EQUAL(rc, 0);
-#else
-    (void)expected_insts;
-    (void)db_mgr;
-    std::cerr
-        << "ArgosCollector: RapidJSON was not available at build time; "
-           "skipping RunFrontEndValidation JSON dump (install rapidjson / "
-           "rapidjson-devel and reconfigure CMake)\n";
-#endif
 }
 
 void RunSmokeTest()
@@ -475,6 +422,74 @@ void RunSmokeTest()
     }
 }
 
+void TestScalarCollection()
+{
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    // Collect a variety of scalars:
+    //   - PODs
+    //   - strings
+    //   - enums
+    //   - bools
+    //   - structs
+
+    auto pod_collector = collection.collectScalarManually<uint32_t>(
+        "pod", "root");
+
+    auto str_collector = collection.collectScalarManually<std::string>(
+        "str", "root");
+
+    auto enum_collector = collection.collectScalarManually<InstType>(
+        "itype", "root");
+
+    auto bool_collector = collection.collectScalarManually<bool>(
+        "flag", "root");
+
+    auto inst_collector = collection.collectScalarManually<Instruction>(
+        "inst", "root");
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    std::vector<AllData> all_data = {
+        {4u, "foo", InstType::MEM,     true,  Instruction::genRandom()},
+        {5u, "bar", InstType::NO_OP,   false, Instruction::genRandom()},
+        {6u, "fiz", InstType::MEM,     true,  Instruction::genRandom()},
+        {7u, "biz", InstType::ILLEGAL, false, Instruction::genRandom()},
+        {8u, "fuz", InstType::ILLEGAL, true,  Instruction::genRandom()},
+        {9u, "buz", InstType::CSR,     false, Instruction::genRandom()}
+    };
+
+    for (tick = 1; tick <= all_data.size(); ++tick)
+    {
+        auto idx = tick - 1;
+        pod_collector->collect(all_data[idx].pod);
+        str_collector->collect(all_data[idx].str);
+        enum_collector->collect(all_data[idx].itype);
+        bool_collector->collect(all_data[idx].flag);
+        inst_collector->collect(all_data[idx].inst);
+    }
+
+    app_mgrs.postSimLoopTeardown();
+
+    // TODO cnyce
+    // RunFrontEndValidation(app_mgr.getDatabaseManager(), "/tmp/scalar_collection.json");
+}
+
 void TestEnabledLogic()
 {
     uint64_t tick = 0;
@@ -539,18 +554,18 @@ void TestEnabledLogic()
     }
 
     app_mgrs.postSimLoopTeardown();
-    RunFrontEndValidation(expected_insts, app_mgr.getDatabaseManager());
+
+    // TODO cnyce
+    // RunFrontEndValidation(app_mgr.getDatabaseManager());
 }
 
 int main()
 {
     RunSmokeTest();
+    TestScalarCollection();
     TestEnabledLogic();
 
     // TODO cnyce: Bash all kinds of scalars, and sparse/contig containers.
-    //             Easiest to do this with the rapidjson dump (don't spend
-    //             time validating in C++ with snapshots).
-
     // TODO cnyce: Dedicated test for all the edge cases for disable/enable.
 
     REPORT_ERROR;

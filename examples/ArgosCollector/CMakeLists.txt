@@ -1,20 +1,5 @@
 simdb_test(ArgosCollector main.cpp)
 
-find_package(RapidJSON CONFIG QUIET)
-if(RapidJSON_FOUND)
-    if(TARGET RapidJSON)
-        target_link_libraries(ArgosCollector PRIVATE RapidJSON)
-    elseif(TARGET rapidjson)
-        target_link_libraries(ArgosCollector PRIVATE rapidjson)
-    else()
-        target_include_directories(ArgosCollector PRIVATE ${RapidJSON_INCLUDE_DIRS})
-    endif()
-    target_compile_definitions(ArgosCollector PRIVATE RAPIDJSON_INSTALLED=1)
-    message(STATUS "ArgosCollector: RapidJSON found; JSON dump in RunFrontEndValidation enabled")
-else()
-    message(STATUS "ArgosCollector: RapidJSON not found; RunFrontEndValidation will warn and skip")
-endif()
-
 add_custom_command(
     TARGET ArgosCollector
     POST_BUILD
