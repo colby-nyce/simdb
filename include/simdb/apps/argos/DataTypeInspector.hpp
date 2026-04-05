@@ -91,7 +91,15 @@ public:
     std::shared_ptr<DataTypeHierarchy<Type>> registerType()
     {
         using value_t = std::remove_cv_t<std::remove_reference_t<Type>>;
-        const auto type_name = simdb::demangle_type<value_t>();
+        std::string type_name;
+        if constexpr (std::is_same_v<value_t, std::string>)
+        {
+            type_name = "string";
+        }
+        else
+        {
+            type_name = simdb::demangle_type<value_t>();
+        }
         if (root_hierarchies_.count(type_name))
         {
             return std::dynamic_pointer_cast<DataTypeHierarchy<Type>>(

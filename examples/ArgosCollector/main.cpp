@@ -204,15 +204,24 @@ const char* instTypeToString(InstType t)
     }
 }
 
-void RunFrontEndValidation(simdb::DatabaseManager* db_mgr, const std::string& truth = "/tmp/collection.json")
+std::unordered_set<std::string> noisy_tests;
+
+void ValidateCollectionReadable(simdb::DatabaseManager* db_mgr, const std::string& test_name)
 {
     const auto db_path = db_mgr->getDatabaseFilePath();
+
     std::ostringstream cmd;
-    cmd << "python3 ./validate.py --db-file " << std::quoted(db_path)
-        << " --json-file " << std::quoted(truth);
+    cmd << "python3 ./dump.py --db-file " << std::quoted(db_path);
+    if (noisy_tests.count(test_name) == 0)
+    {
+        cmd << " --quiet";
+    }
+
     const auto rc = std::system(cmd.str().c_str());
     EXPECT_EQUAL(rc, 0);
 }
+
+#define POST_TEST_VALIDATE(db_mgr) ValidateCollectionReadable(db_mgr, __FUNCTION__)
 
 void RunSmokeTest()
 {
@@ -485,9 +494,7 @@ void TestScalarCollection()
     }
 
     app_mgrs.postSimLoopTeardown();
-
-    // TODO cnyce
-    // RunFrontEndValidation(app_mgr.getDatabaseManager(), "/tmp/scalar_collection.json");
+    POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
 void TestEnabledLogic()
@@ -554,13 +561,16 @@ void TestEnabledLogic()
     }
 
     app_mgrs.postSimLoopTeardown();
-
-    // TODO cnyce
-    // RunFrontEndValidation(app_mgr.getDatabaseManager());
+    POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    for (int i = 1; i < argc; ++i)
+    {
+        noisy_tests.insert(argv[i]);
+    }
+
     RunSmokeTest();
     TestScalarCollection();
     TestEnabledLogic();

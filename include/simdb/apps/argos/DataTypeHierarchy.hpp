@@ -320,7 +320,15 @@ inline std::unique_ptr<DataTypeHierarchy<detail::remove_cvref_t<T>>> createDataT
     using value_t = detail::remove_cvref_t<T>;
     auto hier = std::make_unique<DataTypeHierarchy<value_t>>();
     auto& node = hier->root_;
-    node.type_name = demangle_type<value_t>();
+
+    if constexpr (std::is_same_v<value_t, std::string>)
+    {
+        node.type_name = "string";
+    }
+    else
+    {
+        node.type_name = demangle_type<value_t>();
+    }
 
     if constexpr (std::is_enum_v<value_t>)
     {

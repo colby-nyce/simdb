@@ -11,16 +11,13 @@ if str(_ARGOS_PKG) not in sys.path:
 
 # Arguments
 import argparse
-parser = argparse.ArgumentParser(description='Script to validate collection data against JSON')
-parser.add_argument('--db-file', help='Full or relative path to the database file', required=True)
-parser.add_argument('--json-file', help='JSON file containing the expected data', required=True)
+parser = argparse.ArgumentParser('Collection dumper')
+parser.add_argument('--db-file', help='Full/relative path to the database file')
+parser.add_argument('--quiet', help='Do not print deserialized data to stdout', action='store_true')
 args = parser.parse_args()
 
 db_file = args.db_file
-assert(os.path.exists(db_file))
-
-json_file = args.json_file
-assert(os.path.exists(json_file))
+assert os.path.exists(db_file)
 
 # Access everything about collected data types
 from viewer.model.dtype_inspector import DataTypeInspector
@@ -37,20 +34,18 @@ for type_name, cid in cursor.fetchall():
     deserializer = dtype_inspector.GetDeserializer(type_name)
     deserializers_by_cid[cid] = deserializer
 
-# Expected data
-import json
-with open(json_file, 'r') as fin:
-    expected_data = json.load(fin)
-
-# Validate collected data bytes against the deserialized objects
-from viewer.model.data_deserializers import ByteBuffer
-def ValidateCollectionAtTime(timestamp_id, time_point):
+# Dump the deserialized collectable values to stdout
+def DumpCollectionAtTime(timestamp_id, time_point):
     cursor.execute(f'SELECT Records FROM CollectionRecords WHERE TimestampID={timestamp_id}')
     rows = cursor.fetchall()[0]
     assert len(rows) == 1
 
     import zlib
+    from viewer.model.data_deserializers import ByteBuffer
     buf = ByteBuffer(zlib.decompress(rows[0]))
+
+    if not args.quiet:
+        print(f'At time point {time_point} we collected:')
 
     while not buf.Done():
         # First 2 bytes are always the CID (uint16_t)
@@ -60,27 +55,20 @@ def ValidateCollectionAtTime(timestamp_id, time_point):
         deserializer = deserializers_by_cid[cid]
 
         # Ask it to deserialize the bytes
-        ours = deserializer.Deserialize(buf)
+        val = deserializer.Deserialize(buf)
 
-        # Compare against JSON
-        truth = expected_data[str(time_point)][str(cid)]
-        assert ours == truth
+        # Dump
+        if not args.quiet:
+            print(f'CID {cid}: {val}')
 
-        # Remove this CID from the expected data
-        del expected_data[str(time_point)][str(cid)]
+# Dump collection at every time point
+if not args.quiet:
+    print('All collectables found in database:\n')
 
-    # Assert that we consumed everything we were expecting to find
-    assert len(expected_data[str(time_point)]) == 0
-    del expected_data[str(time_point)]
-
-# Run validation for all collection timestamps
 cursor.execute('SELECT Id,Timestamp FROM Timestamps')
 for timestamp_id, time_point in cursor.fetchall():
     # Handle uint64_t (stored as strings)
     if isinstance(time_point, str):
         time_point = int(time_point)
 
-    ValidateCollectionAtTime(timestamp_id, time_point)
-
-# Assert that we consumed everything we were expecting to find
-assert len(expected_data) == 0
+    DumpCollectionAtTime(timestamp_id, time_point)

@@ -177,7 +177,14 @@ public:
 
     std::string collectableTypeNameForDb() const override
     {
-        return simdb::demangle_type<ValueType>();
+        if constexpr (std::is_same_v<ValueType, std::string>)
+        {
+            return "string";
+        }
+        else
+        {
+            return simdb::demangle_type<ValueType>();
+        }
     }
 
     /// \brief On-demand collection, also called by auto-collecting subclass
