@@ -96,6 +96,8 @@ private:
         }
     }
 
+    friend std::ostream& operator<<(std::ostream&, const Instruction&);
+
 public:
     InstType getType() const { return type_; }
     uint64_t getOpcode() const { return opcode_; }
@@ -171,7 +173,16 @@ public:
     }
 };
 
-/// Row of scalar/struct values written by \ref TestScalarCollection (JSON must match Python deserializers).
+std::ostream& operator<<(std::ostream& os, const Instruction& inst)
+{
+    os << "itype: "     << inst.getType() << ", ";
+    os << "opcode: "    << inst.getOpcode() << ", ";
+    os << "mnemonic: "  << inst.getMnemonic() << ", ";
+    os << "csr: "       << inst.getCsr() << ", ";
+    os << "last inst: " << inst.finishesSim() << std::endl;
+    return os;
+}
+
 struct AllData
 {
     uint32_t pod;
@@ -180,12 +191,6 @@ struct AllData
     bool flag;
     std::shared_ptr<Instruction> inst;
 };
-
-// Final validation struction
-using ExpectedInsts =
-    std::map<uint64_t,          // Tick
-             std::map<uint16_t, // CID
-                      std::shared_ptr<Instruction>>>;
 
 const char* instTypeToString(InstType t)
 {
@@ -204,24 +209,53 @@ const char* instTypeToString(InstType t)
     }
 }
 
-std::unordered_set<std::string> noisy_tests;
-
-void ValidateCollectionReadable(simdb::DatabaseManager* db_mgr, const std::string& test_name)
+void DumpCollection(simdb::DatabaseManager* db_mgr, const std::string& dump_file = "")
 {
     const auto db_path = db_mgr->getDatabaseFilePath();
 
     std::ostringstream cmd;
     cmd << "python3 ./dump.py --db-file " << std::quoted(db_path);
-    if (noisy_tests.count(test_name) == 0)
+
+    if (!dump_file.empty())
     {
-        cmd << " --quiet";
+        cmd << " --dump-file " << dump_file;
+        cmd << " --append-dump-file";
     }
 
     const auto rc = std::system(cmd.str().c_str());
     EXPECT_EQUAL(rc, 0);
 }
 
-#define POST_TEST_VALIDATE(db_mgr) ValidateCollectionReadable(db_mgr, __FUNCTION__)
+#define TEST_FILENAME std::string(__FUNCTION__) + ".test.out"
+#define GOLDEN_FILENAME std::string(__FUNCTION__) + ".golden.out"
+
+bool CompareFiles(const std::string& f1, const std::string& f2)
+{
+    std::ifstream file1(f1), file2(f2);
+
+    if (!file1 || !file2) return false;
+
+    std::string line1, line2;
+
+    while (true) {
+        bool r1 = static_cast<bool>(std::getline(file1, line1));
+        bool r2 = static_cast<bool>(std::getline(file2, line2));
+
+        if (r1 != r2) return false;       // different number of lines
+        if (!r1) break;                   // both reached EOF
+        if (line1 != line2) return false; // mismatch
+    }
+
+    return true;
+}
+
+#define TEST_OFSTREAM(varname) std::ofstream varname(TEST_FILENAME)
+
+#define POST_TEST_VALIDATE(db_mgr)                                 \
+    DumpCollection(db_mgr, TEST_FILENAME);                         \
+    if (std::filesystem::exists(GOLDEN_FILENAME)) {                \
+        EXPECT_TRUE(CompareFiles(TEST_FILENAME, GOLDEN_FILENAME)); \
+    }    
 
 void RunSmokeTest()
 {
@@ -483,9 +517,18 @@ void TestScalarCollection()
         {9u, "buz", InstType::CSR,     false, Instruction::genRandom()}
     };
 
+    TEST_OFSTREAM(fout);
     for (tick = 1; tick <= all_data.size(); ++tick)
     {
         auto idx = tick - 1;
+
+        fout << "Collecting scalar values at tick " << tick << "\n";
+        fout << "... pod: "   << all_data[idx].pod   << "\n";
+        fout << "... str: "   << all_data[idx].str   << "\n";
+        fout << "... itype: " << all_data[idx].itype << "\n";
+        fout << "... flag: "  << all_data[idx].flag  << "\n";
+        fout << "... inst: "  << *all_data[idx].inst << "\n";
+
         pod_collector->collect(all_data[idx].pod);
         str_collector->collect(all_data[idx].str);
         enum_collector->collect(all_data[idx].itype);
@@ -494,6 +537,7 @@ void TestScalarCollection()
     }
 
     app_mgrs.postSimLoopTeardown();
+    fout.close();
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
@@ -522,6 +566,12 @@ void TestEnabledLogic()
     app_mgrs.openPipelines();
 
     // Keep track of all expected Instructions and their ticks
+    // Final validation struction
+    using ExpectedInsts =
+        std::map<uint64_t,          // Tick
+                std::map<uint16_t,  // CID
+                        std::shared_ptr<Instruction>>>;
+
     ExpectedInsts expected_insts;
 
     // Collect data from ticks 1-5 while collectable is enabled
@@ -564,12 +614,9 @@ void TestEnabledLogic()
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
-int main(int argc, char** argv)
+int main()
 {
-    for (int i = 1; i < argc; ++i)
-    {
-        noisy_tests.insert(argv[i]);
-    }
+    system("rm -f *.test.out");
 
     RunSmokeTest();
     TestScalarCollection();
