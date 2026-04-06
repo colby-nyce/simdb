@@ -85,15 +85,21 @@ public:
     /// Enable collection
     void enable()
     {
-        enabled_ = true;
-        stager_->onEnabledChanged(getID(), enabled_);
+        if (!enabled_)
+        {
+            enabled_ = true;
+            stager_->onEnabledChanged(getID(), enabled_);
+        }
     }
 
     /// Disable collection
     void disable()
     {
-        enabled_ = false;
-        stager_->onEnabledChanged(getID(), enabled_);
+        if (enabled_)
+        {
+            enabled_ = false;
+            stager_->onEnabledChanged(getID(), enabled_);
+        }
     }
 
     /// Check enabled
