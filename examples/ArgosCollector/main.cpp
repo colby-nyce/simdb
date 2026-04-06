@@ -590,7 +590,7 @@ void TestEnabledLogic()
     tick = 1;
     val1 = 4;
     val2 = 5;
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Tick 2
     // val1: collect 5
@@ -598,7 +598,7 @@ void TestEnabledLogic()
     tick = 2;
     val1 = 5;
     val2_collector->disable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Tick 3
     // val1: collect 6
@@ -606,7 +606,7 @@ void TestEnabledLogic()
     tick = 3;
     val1 = 6;
     val2_collector->enable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Tick 4
     // val1: collect 7
@@ -614,7 +614,7 @@ void TestEnabledLogic()
     tick = 4;
     val1 = 7;
     val2_collector->disable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Ticks 5-8
     // val1: collect 8,9,10,11
@@ -622,7 +622,7 @@ void TestEnabledLogic()
     while (++tick < 9)
     {
         ++val1;
-        collection.performAutoCollection("root", true);
+        collection.performAutoCollection("root");
     }
 
     // Tick 9
@@ -631,7 +631,7 @@ void TestEnabledLogic()
     tick = 9;
     val1 = 12;
     val2_collector->enable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Tick 10
     // val1: collect 13
@@ -639,7 +639,7 @@ void TestEnabledLogic()
     tick = 10;
     val1 = 13;
     val2_collector->disable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Tick 11
     // val1: collect 14
@@ -648,7 +648,7 @@ void TestEnabledLogic()
     val1 = 14;
     val2 = 6;
     val2_collector->enable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Tick 12
     // val1: collect 15
@@ -656,7 +656,7 @@ void TestEnabledLogic()
     tick = 12;
     val1 = 15;
     val2_collector->disable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     // Ticks 13-16
     // val1: collect 16,17,18,19
@@ -664,7 +664,7 @@ void TestEnabledLogic()
     while (++tick < 17)
     {
         ++val1;
-        collection.performAutoCollection("root", true);
+        collection.performAutoCollection("root");
     }
 
     // Tick 17
@@ -674,10 +674,55 @@ void TestEnabledLogic()
     val1 = 20;
     val2 = 7;
     val2_collector->enable();
-    collection.performAutoCollection("root", true);
+    collection.performAutoCollection("root");
 
     app_mgrs.postSimLoopTeardown();
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
+}
+
+void TestMultiClock()
+{
+    TEST_METHOD_INIT;
+
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1); // Root clock, period 1
+    collection.addCollection("clk2", 2); // Another clock, period 2
+
+    auto root_pod = collection.collectScalarManually<uint32_t>(
+        "pod1", "root");
+
+    auto clk2_pod = collection.collectScalarManually<uint32_t>(
+        "pod2", "clk2");
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    for (tick = 1; tick <= 100; ++tick)
+    {
+        root_pod->collect(rand());
+        collection.sendCollectedDataToPipeline("root");
+
+        if (tick % 2 == 0)
+        {
+            clk2_pod->collect(rand());
+            collection.sendCollectedDataToPipeline("clk2");
+        }
+    }
+
+    app_mgrs.postSimLoopTeardown();
 }
 
 int main()
@@ -687,6 +732,7 @@ int main()
     RunSmokeTest();
     TestScalarCollection();
     TestEnabledLogic();
+    TestMultiClock();
 
     REPORT_ERROR;
     return ERROR_CODE;

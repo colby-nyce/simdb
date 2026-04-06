@@ -73,6 +73,37 @@ public:
     /// Create an entry in the Timestamps table and return the rowid
     int createTimestampInDatabase(DatabaseManager* db_mgr) const override final
     {
+        // Ensure we don't create multiple entries in the Timestamps table
+        // that have the same Timestamp column value (it will throw; must
+        // be unique).
+        //
+        // Note that this is called on the DB thread and it is not a big
+        // performance issue to query alongside the INSERT.
+        auto query = db_mgr->createQuery("Timestamps");
+        if constexpr (std::is_same_v<TimeT, uint64_t>)
+        {
+            query->addConstraintForUInt64("Timestamp", Constraints::EQUAL, time_);
+        }
+        else if constexpr (std::is_integral_v<TimeT>)
+        {
+            auto time = static_cast<int64_t>(time_);
+            query->addConstraintForInt64("Timestamp", Constraints::EQUAL, time);
+        }
+        else
+        {
+            static_assert(std::is_floating_point_v<TimeT>);
+            query->addConstraintForDouble("Timestamp", Constraints::EQUAL, time_);
+        }
+
+        int id;
+        query->select("Id", id);
+
+        if (query->getResultSet().getNextRecord())
+        {
+            assert(id > 0);
+            return id;
+        }
+
         return db_mgr->INSERT(SQL_TABLE("Timestamps"), SQL_VALUES(time_))->getId();
     }
 
