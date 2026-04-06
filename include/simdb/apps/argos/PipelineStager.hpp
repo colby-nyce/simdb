@@ -86,8 +86,6 @@ public:
 
     void onEnabledChanged(uint16_t cid, bool enabled) override
     {
-        all_known_cids_.insert(cid);
-
         auto current_time = timestamp_->snapshot();
         if (!last_stage_time_)
         {
@@ -119,6 +117,9 @@ public:
 private:
     void sendToPipeline_(QueueCollectionData& collection_at_time)
     {
+        // To account for the use case where the same collectable is collected
+        // multiple times at the same time point, only take the last collected
+        // value.
         std::map<uint16_t, std::unique_ptr<CollectedData>> collected_data_by_cid;
         for (auto rit = collection_at_time.collection_data.rbegin();
              rit != collection_at_time.collection_data.rend(); ++rit)
@@ -154,6 +155,36 @@ private:
             to_send.collection_data.emplace_back(std::move(data));
         }
 
+        // Append enabled/disabled info
+        const auto& changes_src = collection_at_time.enabled_changes;
+        auto& changes_dst = to_send.enabled_changes;
+        changes_dst.insert(
+            changes_dst.end(),
+            changes_src.begin(),
+            changes_src.end());
+
+        // Update our data structures to account for enabled/disabled
+        // changes at this time point.
+        for (const auto& [cid, enabled] : changes_dst)
+        {
+            if (!enabled)
+            {
+                // Remove this CID from our data structures so we don't
+                // end up sending any bytes down the pipeline until it
+                // is re-enabled.
+                all_known_cids_.erase(cid);
+            }
+            else
+            {
+                // Add this CID back into our data structures so we can
+                // consider "refreshing" its bytes every heartbeat.
+                all_known_cids_.insert(cid);
+                countdowns_to_refresh_[cid] = 1; // Force last seen bytes
+            }
+        }
+
+        // Periodically dump "last seen bytes" for any CIDs not
+        // encountered at this time point (disabled or not collected)
         auto missing_cids = all_known_cids_;
         for (auto& data : to_send.collection_data)
         {
@@ -163,8 +194,6 @@ private:
             last_sent_bytes_[cid] = data->getData();
         }
 
-        std::unordered_set<uint16_t> cids_requiring_dump;
-        std::unordered_set<uint16_t> cids_requiring_decrement;
         for (auto cid : missing_cids)
         {
             auto it = countdowns_to_refresh_.find(cid);
@@ -173,60 +202,26 @@ private:
                 continue;
             }
 
-            if (it->second == 1 && disabled_cids_.count(cid) == 0)
+            assert(it->second > 0);
+            if (--it->second == 0)
             {
-                cids_requiring_dump.insert(cid);
-            }
-            else
-            {
-                cids_requiring_decrement.insert(cid);
-            }
-        }
-
-        for (auto cid : cids_requiring_decrement)
-        {
-            auto& count = countdowns_to_refresh_.at(cid);
-            assert(count > 0 || disabled_cids_.count(cid) > 0);
-            if (count > 0)
-            {
-                --count;
+                // The CollectedData object will immediately add the uint16_t cid
+                // to the underlying buffer. Our last_sent_bytes_ also has the
+                // cid at the head of the bytes. That's why we are using the
+                // StreamBuffer::append() api below with a uint16_t offset.
+                auto injected_data = std::make_unique<CollectedData>(cid);
+                const auto& last_sent_bytes = last_sent_bytes_.at(cid);
+                const auto src = last_sent_bytes.data() + sizeof(uint16_t);
+                const auto src_bytes = last_sent_bytes.size() - sizeof(uint16_t);
+                auto& buffer = injected_data->getBuffer();
+                buffer.append(src, src_bytes);
+                to_send.collection_data.emplace_back(std::move(injected_data));
+                countdowns_to_refresh_[cid] = heartbeat_;
             }
         }
 
-        for (auto [cid, enabled] : collection_at_time.enabled_changes)
-        {
-            if (enabled)
-            {
-                disabled_cids_.erase(cid);
-            }
-            else
-            {
-                disabled_cids_.insert(cid);
-            }
-        }
-
-        if (to_send.collection_data.empty() && cids_requiring_dump.empty())
-        {
-            return;
-        }
-
-        for (auto cid : cids_requiring_dump)
-        {
-            // The CollectedData object will immediately add the uint16_t cid
-            // to the underlying buffer. Our last_sent_bytes_ also has the
-            // cid at the head of the bytes. That's why we are using the
-            // StreamBuffer::append() api below with a uint16_t offset.
-            auto injected_data = std::make_unique<CollectedData>(cid);
-            const auto& last_sent_bytes = last_sent_bytes_.at(cid);
-            const auto src = last_sent_bytes.data() + sizeof(uint16_t);
-            const auto src_bytes = last_sent_bytes.size() - sizeof(uint16_t);
-            auto& buffer = injected_data->getBuffer();
-            buffer.append(src, src_bytes);
-            to_send.collection_data.emplace_back(std::move(injected_data));
-            countdowns_to_refresh_[cid] = heartbeat_;
-        }
-
-        if (!to_send.collection_data.empty())
+        // Send everything to the pipeline
+        if (!to_send.collection_data.empty() || !to_send.enabled_changes.empty())
         {
             pipeline_head_->emplace(std::move(to_send));
         }
@@ -239,7 +234,6 @@ private:
     CollectionTime last_stage_time_;
     CollectionTime last_sent_time_;
     std::unordered_set<uint16_t> all_known_cids_;
-    std::unordered_set<uint16_t> disabled_cids_;
     std::unordered_map<uint16_t, size_t> countdowns_to_refresh_;
     std::unordered_map<uint16_t, std::vector<char>> last_sent_bytes_;
 };

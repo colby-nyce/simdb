@@ -37,7 +37,7 @@ public:
 
         if (auto_collect)
         {
-            all_auto_collectables_.insert(collectable.get());
+            all_auto_collectables_.push_back(collectable.get());
         }
     }
 
@@ -115,7 +115,7 @@ protected:
 
 private:
     std::vector<std::shared_ptr<CollectableBase>> all_collectables_;
-    std::unordered_set<CollectableBase*> all_auto_collectables_;
+    std::vector<CollectableBase*> all_auto_collectables_;
     std::map<std::string, std::shared_ptr<CollectableBase>> collectables_by_path_;
     CollectionBase* collection_if_ = nullptr;
     ConcurrentQueue<QueueCollectionData>* pipeline_head_ = nullptr;

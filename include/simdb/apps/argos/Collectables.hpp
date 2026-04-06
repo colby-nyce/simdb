@@ -111,6 +111,12 @@ public:
     /// Demangled element type for scalars, or element demangle + \c _contig_capacityN / \c _sparse_capacityN for queues.
     virtual std::string collectableTypeNameForDb() const = 0;
 
+    /// For testing purposes only. DO NOT CALL IN PRODUCTION.
+    static void resetCIDs()
+    {
+        nextID_() = 0;
+    }
+
 protected:
     CollectableBase(DomainCollection* collection, size_t heartbeat)
         : collection_(collection)
@@ -131,10 +137,11 @@ protected:
 
 private:
     /// Unique ID generator.
-    static uint16_t nextID_()
+    static uint16_t& nextID_()
     {
-        static uint16_t id = 1;
-        return id++;
+        static uint16_t counter = 0;
+        ++counter;
+        return counter;
     }
 
     /// Unique collectable ID

@@ -15,6 +15,9 @@
 /// This test shows how to use the SimDB data collection system for Argos.
 TEST_INIT;
 
+/// Call once per test function.
+#define TEST_METHOD_INIT simdb::collection::CollectableBase::resetCIDs()
+
 constexpr size_t RUN_TICKS = 1000;
 
 enum InstType
@@ -259,6 +262,8 @@ bool CompareFiles(const std::string& f1, const std::string& f2)
 
 void RunSmokeTest()
 {
+    TEST_METHOD_INIT;
+
     uint64_t tick = 0;
     size_t heartbeat = 3;
     simdb::collection::Collection<uint64_t> collection(heartbeat);
@@ -467,6 +472,8 @@ void RunSmokeTest()
 
 void TestScalarCollection()
 {
+    TEST_METHOD_INIT;
+
     uint64_t tick = 0;
     size_t heartbeat = 3;
     simdb::collection::Collection<uint64_t> collection(heartbeat);
@@ -543,14 +550,26 @@ void TestScalarCollection()
 
 void TestEnabledLogic()
 {
+    TEST_METHOD_INIT;
+
     uint64_t tick = 0;
     size_t heartbeat = 3;
     simdb::collection::Collection<uint64_t> collection(heartbeat);
     collection.timestampWith(&tick);
     collection.addCollection("root", 1);
 
-    auto inst_collector = collection.collectScalarManually<Instruction>(
-        "inst", "root");
+    // The collection system does not know about the difference between
+    // automatically-collected (backpointer) and manually-collected data.
+    // To test enable/disable logic, we will use two auto-collectors and
+    // enable/disable each of them appropriately to test all logic edge
+    // cases.
+    int32_t val1 = 0;
+    auto val1_collector = collection.collectScalarWithAutoCollection<int32_t>(
+        "val1", "root", &val1);
+
+    int32_t val2 = 0;
+    auto val2_collector = collection.collectScalarWithAutoCollection<int32_t>(
+        "val2", "root", &val2);
 
     simdb::AppManagers app_mgrs;
     app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
@@ -565,50 +584,97 @@ void TestEnabledLogic()
     app_mgrs.initializePipelines();
     app_mgrs.openPipelines();
 
-    // Keep track of all expected Instructions and their ticks
-    // Final validation struction
-    using ExpectedInsts =
-        std::map<uint64_t,          // Tick
-                std::map<uint16_t,  // CID
-                        std::shared_ptr<Instruction>>>;
+    // Tick 1
+    // val1: collect 4
+    // val2: collect 5
+    tick = 1;
+    val1 = 4;
+    val2 = 5;
+    collection.performAutoCollection("root", true);
 
-    ExpectedInsts expected_insts;
+    // Tick 2
+    // val1: collect 5
+    // val2: disable (re-enable within this heartbeat interval)
+    tick = 2;
+    val1 = 5;
+    val2_collector->disable();
+    collection.performAutoCollection("root", true);
 
-    // Collect data from ticks 1-5 while collectable is enabled
-    std::shared_ptr<Instruction> I;
-    for (tick = 1; tick <= 5; ++tick)
+    // Tick 3
+    // val1: collect 6
+    // val2: re-enable and collect same value as before
+    tick = 3;
+    val1 = 6;
+    val2_collector->enable();
+    collection.performAutoCollection("root", true);
+
+    // Tick 4
+    // val1: collect 7
+    // val2: disable (re-enable in next heartbeat interval)
+    tick = 4;
+    val1 = 7;
+    val2_collector->disable();
+    collection.performAutoCollection("root", true);
+
+    // Ticks 5-8
+    // val1: collect 8,9,10,11
+    // val2: leave disabled
+    while (++tick < 9)
     {
-        I = Instruction::genRandom();
-        inst_collector->collect(I);
-        expected_insts[tick] = {{inst_collector->getID(), I}};
+        ++val1;
+        collection.performAutoCollection("root", true);
     }
 
-    // Disable and collect a few times (no-op)
-    tick = 6;
-    inst_collector->disable();
-
-    tick = 7;
-    inst_collector->collect(Instruction::genRandom());
-
-    tick = 8;
-    inst_collector->collect(Instruction::genRandom());
-
-    // Re-enable at tick 9, but do not collect anything.
-    // There should not be anything in the database at
-    // this tick; we last saw a value at tick 5 before
-    // disabling collection, and the collector should
-    // know NOT to put the previously seen bytes back
-    // in the pipeline.
+    // Tick 9
+    // val1: collect 12
+    // val2: re-enable and collect same value as before
     tick = 9;
-    inst_collector->enable();
+    val1 = 12;
+    val2_collector->enable();
+    collection.performAutoCollection("root", true);
 
-    // Collect ticks 10 and 11
-    for (tick = 10; tick <= 11; ++tick)
+    // Tick 10
+    // val1: collect 13
+    // val2: disable (re-enable within this heartbeat interval)
+    tick = 10;
+    val1 = 13;
+    val2_collector->disable();
+    collection.performAutoCollection("root", true);
+
+    // Tick 11
+    // val1: collect 14
+    // val2: re-enable and collect different value as before (was 5, now 6)
+    tick = 11;
+    val1 = 14;
+    val2 = 6;
+    val2_collector->enable();
+    collection.performAutoCollection("root", true);
+
+    // Tick 12
+    // val1: collect 15
+    // val2: disable (re-enable in next heartbeat interval)
+    tick = 12;
+    val1 = 15;
+    val2_collector->disable();
+    collection.performAutoCollection("root", true);
+
+    // Ticks 13-16
+    // val1: collect 16,17,18,19
+    // val2: leave disabled
+    while (++tick < 17)
     {
-        I = Instruction::genRandom();
-        inst_collector->collect(I);
-        expected_insts[tick] = {{inst_collector->getID(), I}};
+        ++val1;
+        collection.performAutoCollection("root", true);
     }
+
+    // Tick 17
+    // val1: collect 20
+    // val2: re-enable and collect different value as before (was 6, now 7)
+    tick = 17;
+    val1 = 20;
+    val2 = 7;
+    val2_collector->enable();
+    collection.performAutoCollection("root", true);
 
     app_mgrs.postSimLoopTeardown();
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
@@ -621,9 +687,6 @@ int main()
     RunSmokeTest();
     TestScalarCollection();
     TestEnabledLogic();
-
-    // TODO cnyce: Bash all kinds of scalars, and sparse/contig containers.
-    // TODO cnyce: Dedicated test for all the edge cases for disable/enable.
 
     REPORT_ERROR;
     return ERROR_CODE;
