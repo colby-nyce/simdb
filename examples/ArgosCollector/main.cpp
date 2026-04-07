@@ -736,6 +736,13 @@ public:
     double getBar() const { return bar_; }
     std::shared_ptr<Instruction> getInstPtr() const { return inst_; }
 
+    void randomize()
+    {
+        foo_ = rand();
+        bar_ = rand() * M_PI;
+        inst_ = Instruction::genRandom();
+    }
+
     class ArgosCollector : public simdb::collection::ArgosCollectorBase<Unit>
     {
         ARGOS_COLLECT(foo, &Unit::getFoo);
@@ -753,7 +760,8 @@ void TestFlatten()
     simdb::collection::Collection<uint64_t> collection(heartbeat);
     collection.timestampWith(&tick);
     collection.addCollection("root", 1);
-    collection.collectScalarManually<Unit>("some_unit", "root");
+
+    auto collector = collection.collectScalarManually<Unit>("some_unit", "root");
 
     simdb::AppManagers app_mgrs;
     app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
@@ -765,9 +773,18 @@ void TestFlatten()
     app_mgrs.createEnabledApps();
     app_mgrs.createSchemas();
     app_mgrs.postInit(0, nullptr);
-    app_mgrs.postSimLoopTeardown();
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
 
-    // TODO cnyce: verify database
+    Unit unit;
+    for (tick = 1; tick <= 100; ++tick)
+    {
+        unit.randomize();
+        collector->collect(unit);
+    }
+
+    app_mgrs.postSimLoopTeardown();
+    POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
 int main()

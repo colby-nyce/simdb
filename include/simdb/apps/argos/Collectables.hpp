@@ -85,6 +85,11 @@ public:
     /// Enable collection
     void enable()
     {
+        if (!stager_) [[unlikely]]
+        {
+            throw DBException("Pipeline was never opened!");
+        }
+
         if (!enabled_)
         {
             enabled_ = true;
@@ -95,6 +100,11 @@ public:
     /// Disable collection
     void disable()
     {
+        if (!stager_) [[unlikely]]
+        {
+            throw DBException("Pipeline was never opened!");
+        }
+
         if (enabled_)
         {
             enabled_ = false;
@@ -138,6 +148,10 @@ protected:
     /// Stage collected bytes for pipeline processing.
     void stage_(CollectedData&& data)
     {
+        if (!stager_) [[unlikely]]
+        {
+            throw DBException("Pipeline was never opened!");
+        }
         stager_->stage(std::move(data));
     }
 
