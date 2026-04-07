@@ -302,6 +302,11 @@ public:
         }
     }
 
+    virtual void reattach(const ScalarT*)
+    {
+        throw DBException("Cannot reattach a manually-collected object");
+    }
+
 private:
     std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy_;
 };
@@ -349,8 +354,14 @@ public:
         return auto_collecting_;
     }
 
+    void reattach(const ScalarT* scalar) override
+    {
+        assert(scalar != nullptr);
+        scalar_ = scalar;
+    }
+
 private:
-    const ScalarT *const scalar_;
+    const ScalarT* scalar_;
     bool auto_collecting_ = true;
 };
 
@@ -481,6 +492,11 @@ public:
         return max_size_collected_;
     }
 
+    virtual void reattach(const ContainerT*)
+    {
+        throw DBException("Cannot reattach a manually-collected object");
+    }
+
 protected:
     const size_t expected_capacity_;
 
@@ -538,8 +554,14 @@ public:
         return auto_collecting_;
     }
 
+    virtual void reattach(const ContainerT* container)
+    {
+        assert(container != nullptr);
+        container_ = container;
+    }
+
 private:
-    const ContainerT *const container_;
+    const ContainerT* container_;
     bool auto_collecting_ = true;
 };
 
