@@ -92,6 +92,12 @@ public:
 
         if (!enabled_)
         {
+            if (initial_value_)
+            {
+                assert(getID() == initial_value_->getCID());
+                stager_->stage(std::move(*initial_value_));
+                initial_value_.reset();
+            }
             enabled_ = true;
             stager_->onEnabledChanged(getID(), enabled_);
         }
@@ -124,6 +130,26 @@ public:
         throw DBException("This collectable does not support auto-collection");
     }
 
+    virtual void enableAutoCollect(bool enable = true)
+    {
+        (void)enable;
+        throw DBException("This collectable does not support auto-collection");
+    }
+
+    virtual bool autoCollecting() const
+    {
+        return false;
+    }
+
+    void forgetValue()
+    {
+        if (!stager_)
+        {
+            throw DBException("Pipeline not opened!");
+        }
+        stager_->forget(getID());
+    }
+
     /// Demangled element type for scalars, or element demangle + \c _contig_capacityN / \c _sparse_capacityN for queues.
     virtual std::string collectableTypeNameForDb() const = 0;
 
@@ -134,9 +160,10 @@ public:
     }
 
 protected:
-    CollectableBase(DomainCollection* collection, size_t heartbeat)
+    CollectableBase(DomainCollection* collection, size_t heartbeat, bool default_enabled=true)
         : collection_(collection)
         , heartbeat_(heartbeat)
+        , enabled_(default_enabled)
     {}
 
     /// Get the heartbeat value for all collection points.
@@ -155,11 +182,25 @@ protected:
         stager_->stage(std::move(data));
     }
 
+    void setInitialValue_(CollectedData&& initial)
+    {
+        if (stager_)
+        {
+            throw DBException("Cannot set collectable initial value after pipeline is opened");
+        }
+        initial_value_ = std::make_unique<CollectedData>(std::move(initial));
+    }
+
 private:
     /// Unique ID generator.
     static uint16_t& nextID_()
     {
         static uint16_t counter = 0;
+        if (counter == UINT16_MAX)
+        {
+            throw DBException("Max number of collectables exceeded (")
+                << UINT16_MAX << ")";
+        }
         ++counter;
         return counter;
     }
@@ -186,6 +227,9 @@ private:
 
     /// \note Friendship needed to the enabled_ flag can be set
     friend class DomainCollection;
+
+private:
+    std::unique_ptr<CollectedData> initial_value_;
 };
 
 /// Template class for all scalar types (POD, struct-like, string, enum, bool)
@@ -197,8 +241,9 @@ public:
 
     ScalarCollector(DomainCollection* collection,
                     size_t heartbeat,
-                    std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
-        : CollectableBase(collection, heartbeat)
+                    std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy,
+                    bool default_enabled = true)
+        : CollectableBase(collection, heartbeat, default_enabled)
         , dtype_hierarchy_(std::move(dtype_hierarchy))
     {}
 
@@ -212,6 +257,21 @@ public:
         {
             return simdb::demangle_type<ValueType>();
         }
+    }
+
+    void initializeValue(const ValueType& value)
+    {
+        CollectedData initial(getID());
+        dtype_hierarchy_->writeBuffer(initial.getBuffer(), value);
+        setInitialValue_(std::move(initial));
+    }
+
+    template <typename T>
+    std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
+    initializeValue(const T& ptr)
+    {
+        assert(ptr != nullptr);
+        initializeValue(*ptr);
     }
 
     /// \brief On-demand collection, also called by auto-collecting subclass
@@ -257,20 +317,41 @@ public:
     AutoScalarCollector(DomainCollection* collection,
                         size_t heartbeat,
                         std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy,
-                        const ScalarT* scalar)
-        : ScalarCollector<ScalarT>(collection, heartbeat, std::move(dtype_hierarchy))
+                        const ScalarT* scalar,
+                        bool default_enabled = true,
+                        bool initialize_value = false)
+        : ScalarCollector<ScalarT>(collection, heartbeat, std::move(dtype_hierarchy), default_enabled)
         , scalar_(scalar)
-    {}
+        , auto_collecting_(default_enabled)
+    {
+        if (initialize_value)
+        {
+            this->initializeValue(scalar);
+        }
+    }
 
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
-        assert(this->enabled());
-        this->collect(*scalar_);
+        if (auto_collecting_)
+        {
+            this->collect(*scalar_);
+        }
+    }
+
+    void enableAutoCollect(bool enable = true) override
+    {
+        auto_collecting_ = enable;
+    }
+
+    bool autoCollecting() const
+    {
+        return auto_collecting_;
     }
 
 private:
     const ScalarT *const scalar_;
+    bool auto_collecting_ = true;
 };
 
 /// ContainerCollector base class which adds non-template metadata APIs
@@ -288,11 +369,12 @@ class ContainerCollector : public ContainerCollectorBase
 public:
     using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
 
-    explicit ContainerCollector(DomainCollection* collection,
-                                size_t heartbeat,
-                                size_t expected_capacity,
-                                std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
-        : ContainerCollectorBase(collection, heartbeat)
+    ContainerCollector(DomainCollection* collection,
+                       size_t heartbeat,
+                       size_t expected_capacity,
+                       std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy,
+                       bool default_enabled = true)
+        : ContainerCollectorBase(collection, heartbeat, default_enabled)
         , expected_capacity_(expected_capacity)
         , dtype_hierarchy_(std::move(dtype_hierarchy))
     {}
@@ -305,6 +387,23 @@ public:
             return base + "_sparse_capacity" + std::to_string(expected_capacity_);
         }
         return base + "_contig_capacity" + std::to_string(expected_capacity_);
+    }
+
+    template <typename T = ContainerT>
+    std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
+    initializeValue(const T& container)
+    {
+        CollectedData initial(getID());
+        dtype_hierarchy_->writeBuffer(initial.getBuffer(), container);
+        setInitialValue_(std::move(initial));
+    }
+
+    template <typename T = ContainerT>
+    std::enable_if_t<type_traits::is_any_pointer_v<T>, void>
+    initializeValue(const T& ptr)
+    {
+        assert(ptr != nullptr);
+        initializeValue(*ptr);
     }
 
     /// \brief On-demand collection, also called by auto-collecting subclass
@@ -405,20 +504,43 @@ public:
                            size_t heartbeat,
                            const ContainerT* container,
                            size_t expected_capacity,
-                           std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy)
-        : ContainerCollector<ContainerT, Sparse>(collection, heartbeat, expected_capacity, std::move(dtype_hierarchy))
+                           std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy,
+                           bool default_enabled = true,
+                           bool initialize_value = false)
+        : ContainerCollector<ContainerT, Sparse>(
+            collection, heartbeat, expected_capacity,
+            std::move(dtype_hierarchy), default_enabled)
         , container_(container)
-    {}
+        , auto_collecting_(default_enabled)
+    {
+        if (initialize_value)
+        {
+            this->initializeValue(container);
+        }
+    }
 
     /// Run auto-collection for this collectable
     void autoCollect() override
     {
-        assert(this->enabled());
-        this->collect(*container_);
+        if (auto_collecting_)
+        {
+            this->collect(*container_);
+        }
+    }
+
+    void enableAutoCollect(bool enable = true) override
+    {
+        auto_collecting_ = enable;
+    }
+
+    bool autoCollecting() const
+    {
+        return auto_collecting_;
     }
 
 private:
     const ContainerT *const container_;
+    bool auto_collecting_ = true;
 };
 
 } // namespace simdb::collection

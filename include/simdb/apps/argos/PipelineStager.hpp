@@ -27,6 +27,7 @@ public:
     virtual void stage(CollectedData&& data) = 0;
     virtual void sendCollectedDataToPipeline() = 0;
     virtual void onEnabledChanged(uint16_t cid, bool enabled) = 0;
+    virtual void forget(uint16_t cid) = 0;
 };
 
 template <typename TimeT>
@@ -112,6 +113,11 @@ public:
             entry.enabled_changes.emplace_back(std::make_pair(cid, enabled));
             waiting_queue_.emplace(std::move(entry));
         }
+    }
+
+    void forget(uint16_t cid) override
+    {
+        last_sent_bytes_.erase(cid);
     }
 
 private:

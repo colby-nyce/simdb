@@ -797,6 +797,9 @@ int main()
     TestMultiClock();
     TestFlatten();
 
+    // TODO cnyce: initial value/bytes
+    // TODO cnyce: default disabled
+
     REPORT_ERROR;
     return ERROR_CODE;
 }
