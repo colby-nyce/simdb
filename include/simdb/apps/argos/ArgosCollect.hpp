@@ -111,6 +111,34 @@ struct has_nested_argos_collector<T, std::void_t<typename remove_cvref_t<T>::Arg
 template <typename T>
 inline constexpr bool has_nested_argos_collector_v = has_nested_argos_collector<T>::value;
 
+// Bare getter return type (reference stripped) -> nested struct type for ArgosStructField.
+template <typename BareRet>
+struct argos_struct_nested_type {
+    using stripped = std::remove_cv_t<BareRet>;
+    using type = std::conditional_t<std::is_pointer_v<stripped>,
+                                    std::remove_pointer_t<stripped>,
+                                    stripped>;
+};
+
+template <typename T>
+struct argos_struct_nested_type<std::shared_ptr<T>> {
+    using type = std::remove_cv_t<T>;
+};
+
+template <typename T>
+struct argos_struct_nested_type<const std::shared_ptr<T>> {
+    using type = std::remove_cv_t<T>;
+};
+
+template <typename T>
+struct is_std_shared_ptr : std::false_type {};
+
+template <typename T>
+struct is_std_shared_ptr<std::shared_ptr<T>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_std_shared_ptr_v = is_std_shared_ptr<std::remove_cv_t<T>>::value;
+
 } // namespace detail
 
 // POD-only field implementation: invokes a getter and memcpy's returned scalar bytes.
@@ -222,18 +250,18 @@ private:
     std::string description_;
 };
 
-// Nested aggregate: getter returns const Nested& or const Nested* (or non-const pointer).
-// Nested must define nested ArgosCollector : ArgosCollectorBase<Nested>.
+// Nested aggregate: getter returns const Nested&, Nested*, or std::shared_ptr<Nested>
+// (by value or const ref). Nested must define nested ArgosCollector : ArgosCollectorBase<Nested>.
+// For shared_ptr-by-value getters, the pointee must stay alive after the temporary smart
+// pointer is destroyed (e.g. still held by a member on OwnerT).
 template <typename OwnerT, auto Getter>
 class ArgosStructField final : public ArgosFieldBase
 {
     using traits = detail::getter_traits<Getter>;
     using raw_ret = typename traits::return_t;
     using bare_ret = std::remove_reference_t<raw_ret>;
-    using nested_t = std::conditional_t<
-        std::is_pointer_v<std::remove_cv_t<bare_ret>>,
-        std::remove_pointer_t<std::remove_cv_t<bare_ret>>,
-        std::remove_cv_t<bare_ret>>;
+    using nested_t = typename detail::argos_struct_nested_type<bare_ret>::type;
+    using stripped_ret = std::remove_cv_t<bare_ret>;
 
 public:
     ArgosStructField(ArgosCollectorBase<OwnerT>* owner, const char* name, const char* description = nullptr)
@@ -268,10 +296,15 @@ public:
     const void* getStructPtrErased(const void* owner_void) const override
     {
         const auto* owner = static_cast<const OwnerT*>(owner_void);
-        if constexpr (std::is_pointer_v<bare_ret>)
+        if constexpr (std::is_pointer_v<stripped_ret>)
         {
             return std::invoke(Getter, owner);
-        } else
+        }
+        else if constexpr (detail::is_std_shared_ptr_v<stripped_ret>)
+        {
+            return std::invoke(Getter, owner).get();
+        }
+        else
         {
             // Invoking the getter here yields an lvalue into `*owner`; do not
             // assign it to `auto` (that would copy temporaries and dangle).
@@ -321,3 +354,4 @@ using auto_field_t = std::conditional_t<
     simdb::collection::ArgosStructField<collected_type, getter_ptr>                           \
         ARGOS_COLLECT_CAT(argos_collect_struct_, __COUNTER__){this, #field_name};
 
+#define ARGOS_FLATTEN(...) ARGOS_COLLECT_STRUCT("", __VA_ARGS__)

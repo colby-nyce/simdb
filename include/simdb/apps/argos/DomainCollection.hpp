@@ -144,7 +144,10 @@ public:
 
     void sendCollectedDataToPipeline() override final
     {
-        stager_->sendCollectedDataToPipeline();
+        if (stager_)
+        {
+            stager_->sendCollectedDataToPipeline();
+        }
     }
 
     std::shared_ptr<TimePointBase> getCurrentTime() const override final

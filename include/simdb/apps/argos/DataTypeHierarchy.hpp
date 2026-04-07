@@ -85,7 +85,7 @@ inline size_t podKindToBytes(PodTypeKind kind)
 struct EnumMember
 {
     std::string name;
-    int64_t value = 0;
+    int64_t value = 0; // TODO cnyce: should this be a string?
 };
 
 struct EnumMeta

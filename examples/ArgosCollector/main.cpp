@@ -159,11 +159,11 @@ public:
     class ArgosCollector : public simdb::collection::ArgosCollectorBase<Instruction>
     {
     public:
-        ARGOS_COLLECT(type, &Instruction::getType, "Instruction type");
-        ARGOS_COLLECT(opcode, &Instruction::getOpcode, "Opcode");
+        ARGOS_COLLECT(type,     &Instruction::getType, "Instruction type");
+        ARGOS_COLLECT(opcode,   &Instruction::getOpcode, "Opcode");
         ARGOS_COLLECT(mnemonic, &Instruction::getMnemonic, "Mnemonic");
-        ARGOS_COLLECT(csr, &Instruction::getCsr, "CSR number");
-        ARGOS_COLLECT(last, &Instruction::finishesSim, "Last instruction");
+        ARGOS_COLLECT(csr,      &Instruction::getCsr, "CSR number");
+        ARGOS_COLLECT(last,     &Instruction::finishesSim, "Last instruction");
     };
 
     void compare(const char*& bytes, simdb::TinyStrings<>* tiny_strings) const
@@ -725,6 +725,51 @@ void TestMultiClock()
     app_mgrs.postSimLoopTeardown();
 }
 
+class Unit
+{
+    uint64_t foo_ = 0;
+    double bar_ = 0;
+    std::shared_ptr<Instruction> inst_{Instruction::genRandom()};
+
+public:
+    uint64_t getFoo() const { return foo_; }
+    double getBar() const { return bar_; }
+    std::shared_ptr<Instruction> getInstPtr() const { return inst_; }
+
+    class ArgosCollector : public simdb::collection::ArgosCollectorBase<Unit>
+    {
+        ARGOS_COLLECT(foo, &Unit::getFoo);
+        ARGOS_COLLECT(bar, &Unit::getBar);
+        ARGOS_FLATTEN(     &Unit::getInstPtr);
+    };
+};
+
+void TestFlatten()
+{
+    TEST_METHOD_INIT;
+
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+    collection.collectScalarManually<Unit>("some_unit", "root");
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.postSimLoopTeardown();
+
+    // TODO cnyce: verify database
+}
+
 int main()
 {
     system("rm -f *.test.out");
@@ -733,6 +778,7 @@ int main()
     TestScalarCollection();
     TestEnabledLogic();
     TestMultiClock();
+    TestFlatten();
 
     REPORT_ERROR;
     return ERROR_CODE;
