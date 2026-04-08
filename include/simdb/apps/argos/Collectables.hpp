@@ -404,9 +404,12 @@ public:
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
     initializeValue(const T& container)
     {
-        CollectedData initial(getID());
-        dtype_hierarchy_->writeBuffer(initial.getBuffer(), container);
-        setInitialValue_(std::move(initial));
+        //TODO cnyce
+        (void)container;
+
+        //CollectedData initial(getID());
+        //dtype_hierarchy_->writeBuffer(initial.getBuffer(), container);
+        //setInitialValue_(std::move(initial));
     }
 
     template <typename T = ContainerT>

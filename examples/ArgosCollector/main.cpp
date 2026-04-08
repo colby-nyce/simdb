@@ -859,6 +859,83 @@ void TestFlatten()
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
+void TestContainers()
+{
+    TEST_METHOD_INIT;
+
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    constexpr size_t capacity = 32;
+
+    using ContigQ = std::vector<std::shared_ptr<Instruction>>;
+    ContigQ contig_q;
+    collection.collectContainerWithAutoCollection<ContigQ, false>(
+        "contig", "root", &contig_q, capacity);
+
+    // TODO cnyce: collect vector of SharedPtr
+    using SparseQ = std::vector<std::shared_ptr<Instruction>>;
+    SparseQ sparse_q;
+    collection.collectContainerWithAutoCollection<SparseQ, true>(
+        "sparse", "root", &sparse_q, capacity);
+
+    auto randomize = [&]()
+    {
+        auto contig_count = rand() % (capacity + 1);
+        contig_q.clear();
+        while (contig_q.size() < contig_count)
+        {
+            contig_q.push_back(Instruction::genRandom());
+        }
+
+        sparse_q.clear();
+        sparse_q.resize(capacity);
+        for (auto& item : sparse_q)
+        {
+            if (rand() % 8 == 0)
+            {
+                item = Instruction::genRandom();
+            }
+        }
+    };
+
+    auto collect = [&]()
+    {
+        collection.performAutoCollection("root");
+    };
+
+    auto step = [&]()
+    {
+        randomize();
+        collect();
+    };
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    size_t NUM_TICKS = 1;
+    for (tick = 1; tick <= NUM_TICKS; ++tick)
+    {
+        step();
+    }
+
+    app_mgrs.postSimLoopTeardown();
+    POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
+}
+
 int main()
 {
     system("rm -f *.test.out");
@@ -868,9 +945,12 @@ int main()
     TestEnabledLogic();
     TestMultiClock();
     TestFlatten();
+    TestContainers();
 
     // TODO cnyce: initial value/bytes
     // TODO cnyce: default disabled
+    // TODO cnyce: reattach
+    // TODO cnyce: iterators with isValid (non-std::vector)
 
     REPORT_ERROR;
     return ERROR_CODE;

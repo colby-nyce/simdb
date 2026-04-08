@@ -342,19 +342,19 @@ using auto_field_t = std::conditional_t<
 // Scalar field: registers one getter-based scalar field in the owning ArgosCollector.
 // Enums are auto-routed to ArgosEnumField; all other scalar types use ArgosPodField.
 // Optional third argument: const char* description string literal (or other const char*).
-#define ARGOS_COLLECT(...)                                                                                 \
+#define ARGOS_COLLECT(...)                                                                    \
     ARGOS_COLLECT_SELECT(__VA_ARGS__, ARGOS_COLLECT_3, ARGOS_COLLECT_2)(__VA_ARGS__)
 
-#define ARGOS_COLLECT_2(field_name, getter_ptr)                                                            \
-    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                                    \
-        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name, nullptr};
+#define ARGOS_COLLECT_2(field_name, getter_ptr)                                               \
+    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                       \
+        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name, nullptr}
 
-#define ARGOS_COLLECT_3(field_name, getter_ptr, desc)                                                      \
-    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                                    \
-        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name, desc};
+#define ARGOS_COLLECT_3(field_name, getter_ptr, desc)                                         \
+    simdb::collection::detail::auto_field_t<collected_type, getter_ptr>                       \
+        ARGOS_COLLECT_CAT(argos_collect_field_, __COUNTER__){this, #field_name, desc}
 
 #define ARGOS_COLLECT_STRUCT(field_name, getter_ptr)                                          \
     simdb::collection::ArgosStructField<collected_type, getter_ptr>                           \
-        ARGOS_COLLECT_CAT(argos_collect_struct_, __COUNTER__){this, #field_name};
+        ARGOS_COLLECT_CAT(argos_collect_struct_, __COUNTER__){this, #field_name}
 
 #define ARGOS_FLATTEN(...) ARGOS_COLLECT_STRUCT("", __VA_ARGS__)

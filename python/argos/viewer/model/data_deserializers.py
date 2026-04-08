@@ -60,7 +60,8 @@ def CreateDeserializer(inspector, dtype_name, tiny_strings=None):
             idx = dtype_name.find(key)
             if idx != -1:
                 base_dtype_name = dtype_name[:idx]
-                capacity = int(dtype_name[len(key):])
+                capacity = dtype_name.replace(base_dtype_name + key, '')
+                capacity = int(capacity)
                 return (base_dtype_name, capacity)
 
             return None
@@ -71,7 +72,7 @@ def CreateDeserializer(inspector, dtype_name, tiny_strings=None):
         if not meta:
             meta = GetMeta('contig')
             if meta:
-                return (meta[0], meta[1], 'sparse')
+                return (meta[0], meta[1], 'contig')
 
         return None
 
@@ -94,7 +95,7 @@ def CreateDeserializer(inspector, dtype_name, tiny_strings=None):
     container_meta = GetContainerMeta(dtype_name)
     if container_meta:
         dtype_name, capacity, sparse_mode = container_meta
-        bin_deserializer = inspector.GetSerializer(dtype_name)
+        bin_deserializer = inspector.GetDeserializer(dtype_name)
         if sparse_mode == 'sparse':
             return SparseContainerDeserializer(bin_deserializer, capacity)
         else:
