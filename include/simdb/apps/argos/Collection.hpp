@@ -225,7 +225,9 @@ public:
         bool initialize_value = false)
     {
         verifyNoDupPaths_(path);
-        using ElemT = typename detail::dtype_register_element<typename ContainerT::value_type>::type;
+        using InnerContainerT = type_traits::remove_any_pointer_t<ContainerT>;
+        using ElemT =
+            typename detail::dtype_register_element<typename InnerContainerT::value_type>::type;
         auto dtype_hier = dtype_inspector_.registerType<ElemT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);
@@ -245,7 +247,9 @@ public:
         bool default_enabled = true)
     {
         verifyNoDupPaths_(path);
-        using ElemT = typename detail::dtype_register_element<typename ContainerT::value_type>::type;
+        using InnerContainerT = type_traits::remove_any_pointer_t<ContainerT>;
+        using ElemT =
+            typename detail::dtype_register_element<typename InnerContainerT::value_type>::type;
         auto dtype_hier = dtype_inspector_.registerType<ElemT>();
         collectables_tree_.createNodes(path);
         auto collection = getCollection_(clk_name, true /*must exist*/);

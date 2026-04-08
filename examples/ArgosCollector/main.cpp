@@ -118,6 +118,7 @@ public:
     {}
 
     Instruction(const Instruction&) = default;
+    Instruction& operator=(const Instruction&) = default;
 
     static Instruction* newRandom()
     {
@@ -160,6 +161,11 @@ public:
         bytes += sizeof(uint8_t);
 
         return bytes;
+    }
+
+    void randomize()
+    {
+        *this = *genRandom();
     }
 
     class ArgosCollector : public simdb::collection::ArgosCollectorBase<Instruction>
@@ -766,6 +772,10 @@ public:
     const T* operator->() const { assert(obj_); return obj_; }
     const T* get() const { return obj_; }
 
+    T& operator*() { assert(obj_); return *obj_; }
+    T* operator->() { assert(obj_); return obj_; }
+    T* get() { return obj_; }
+
     explicit operator bool() const noexcept { return obj_ != nullptr; }
 
     bool operator==(std::nullptr_t) const noexcept { return obj_ == nullptr; }
@@ -995,6 +1005,95 @@ void TestContainers()
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
+void TestPointers()
+{
+    TEST_METHOD_INIT;
+
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    using Int = std::shared_ptr<int>;
+    auto intval = std::make_shared<int>(4);
+    collection.collectScalarWithAutoCollection<Int>(
+        "int", "root", &intval);
+
+    using Inst = SharedPtr<Instruction>;
+    auto inst = SharedPtr<Instruction>(Instruction::newRandom());
+    collection.collectScalarWithAutoCollection<Inst>(
+        "inst", "root", &inst);
+
+    constexpr size_t capacity = 32;
+
+    using ContigQ = std::shared_ptr<std::vector<std::shared_ptr<Instruction>>>;
+    ContigQ contig_q(new std::vector<std::shared_ptr<Instruction>>);
+    collection.collectContainerWithAutoCollection<ContigQ, false>(
+        "contig", "root", &contig_q, capacity);
+
+    using SparseQ = SharedPtr<std::vector<SharedPtr<Instruction>>>;
+    SparseQ sparse_q(new std::vector<SharedPtr<Instruction>>);
+    collection.collectContainerWithAutoCollection<SparseQ, true>(
+        "sparse", "root", &sparse_q, capacity);
+
+    auto randomize = [&]()
+    {
+        *intval = rand();
+        inst->randomize();
+
+        auto contig_count = rand() % (capacity + 1);
+        contig_q->clear();
+        while (contig_q->size() < contig_count)
+        {
+            contig_q->push_back(Instruction::genRandom());
+        }
+
+        sparse_q->clear();
+        sparse_q->resize(capacity);
+        for (auto& item : *sparse_q)
+        {
+            if (rand() % 8 == 0)
+            {
+                item = SharedPtr<Instruction>(Instruction::newRandom());
+            }
+        }
+    };
+
+    auto collect = [&]()
+    {
+        collection.performAutoCollection("root");
+    };
+
+    auto step = [&]()
+    {
+        randomize();
+        collect();
+    };
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    size_t NUM_TICKS = 50;
+    for (tick = 1; tick <= NUM_TICKS; ++tick)
+    {
+        step();
+    }
+
+    app_mgrs.postSimLoopTeardown();
+    POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
+}
+
 int main()
 {
     system("rm -f *.test.out");
@@ -1005,6 +1104,7 @@ int main()
     TestMultiClock();
     TestFlatten();
     TestContainers();
+    TestPointers();
 
     // TODO cnyce: initial value/bytes
     // TODO cnyce: default disabled

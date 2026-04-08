@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 namespace simdb::collection {
 
@@ -378,7 +379,9 @@ template <typename ContainerT, bool Sparse>
 class ContainerCollector : public ContainerCollectorBase
 {
 public:
-    using ValueType = typename type_traits::remove_any_pointer_t<typename ContainerT::value_type>;
+    using InnerContainerT = type_traits::remove_any_pointer_t<ContainerT>;
+    using ValueType =
+        typename type_traits::remove_any_pointer_t<typename InnerContainerT::value_type>;
 
     ContainerCollector(DomainCollection* collection,
                        size_t heartbeat,
@@ -441,7 +444,7 @@ public:
         for (auto it = container.begin(), end = container.end(); it != end; ++it)
         {
             bool valid = false;
-            if constexpr (is_collectable_stl_v<ContainerT>)
+            if constexpr (is_collectable_stl_v<std::remove_cv_t<T>>)
             {
                 if (*it)
                 {
