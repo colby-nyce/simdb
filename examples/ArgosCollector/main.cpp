@@ -1094,6 +1094,91 @@ void TestPointers()
     POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
 }
 
+class Outer
+{
+public:
+    class InnerA
+    {
+    private:
+        int val_ = 44;
+    public:
+        int getValue() const { return val_; }
+        class ArgosCollector : public simdb::collection::ArgosCollectorBase<InnerA>
+        {
+        public:
+            ARGOS_COLLECT(valA, &InnerA::getValue);
+        };
+    };
+
+    class InnerB
+    {
+        private:
+        int val_ = 55;
+    public:
+        int getValue() const { return val_; }
+        class ArgosCollector : public simdb::collection::ArgosCollectorBase<InnerB>
+        {
+        public:
+            ARGOS_COLLECT(valB, &InnerB::getValue);
+        };
+    };
+
+    std::shared_ptr<InnerA> getA() const { return inner_a_; }
+    std::shared_ptr<InnerB> getB() const { return inner_b_; }
+
+    class ArgosCollector : public simdb::collection::ArgosCollectorBase<Outer>
+    {
+    public:
+        ARGOS_FLATTEN(&Outer::getA);
+        ARGOS_FLATTEN(&Outer::getB);
+    };
+
+private:
+    std::shared_ptr<InnerA> inner_a_{std::make_shared<InnerA>()};
+    std::shared_ptr<InnerB> inner_b_{std::make_shared<InnerB>()};
+};
+
+void TestMultiArgosCollectors()
+{
+    TEST_METHOD_INIT;
+
+    uint64_t tick = 0;
+    size_t heartbeat = 3;
+    simdb::collection::Collection<uint64_t> collection(heartbeat);
+    collection.timestampWith(&tick);
+    collection.addCollection("root", 1);
+
+    Outer outer1;
+    collection.collectScalarWithAutoCollection<Outer>("a", "root", &outer1);
+    collection.collectScalarManually<Outer>("b", "root");
+
+    SharedPtr<Outer> outer2;
+    collection.collectScalarWithAutoCollection<SharedPtr<Outer>>("c", "root", &outer2);
+    collection.collectScalarManually<SharedPtr<Outer>>("d", "root");
+
+    simdb::AppManagers app_mgrs;
+    app_mgrs.registerApp<simdb::collection::CollectionPipeline>();
+
+    auto& app_mgr = app_mgrs.createAppManager("test.db");
+    app_mgr.enableApp<simdb::collection::CollectionPipeline>();
+
+    app_mgr.parameterizeAppFactory<simdb::collection::CollectionPipeline>(&collection);
+    app_mgrs.createEnabledApps();
+    app_mgrs.createSchemas();
+    app_mgrs.postInit(0, nullptr);
+    app_mgrs.initializePipelines();
+    app_mgrs.openPipelines();
+
+    size_t NUM_TICKS = 50;
+    for (tick = 1; tick <= NUM_TICKS; ++tick)
+    {
+        collection.performAutoCollection("root");
+    }
+
+    app_mgrs.postSimLoopTeardown();
+    POST_TEST_VALIDATE(app_mgr.getDatabaseManager());
+}
+
 int main()
 {
     system("rm -f *.test.out");
@@ -1105,6 +1190,7 @@ int main()
     TestFlatten();
     TestContainers();
     TestPointers();
+    TestMultiArgosCollectors();
 
     // TODO cnyce: initial value/bytes
     // TODO cnyce: default disabled

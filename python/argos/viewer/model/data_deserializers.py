@@ -208,15 +208,22 @@ class SparseContainerDeserializer:
 class StructDeserializer:
     def __init__(self, struct_defn, inspector, tiny_strings):
         self._field_deserializers = OrderedDict()
+        StructDeserializer.__RecurseFindCollectableFields(
+            struct_defn, inspector, tiny_strings, self._field_deserializers)
+        assert self._field_deserializers
+
+    @staticmethod
+    def __RecurseFindCollectableFields(struct_defn, inspector, tiny_strings, field_deserializers):
         for field in struct_defn.children:
+            assert not field.name or field.name not in field_deserializers
             if field.kind == 'pod' and field.type_name != 'string':
-                self._field_deserializers[field.name] = SimpleDeserializer(field.type_name)
+                field_deserializers[field.name] = SimpleDeserializer(field.type_name)
             elif field.type_name == 'string':
-                self._field_deserializers[field.name] = StringDeserializer(tiny_strings)
+                field_deserializers[field.name] = StringDeserializer(tiny_strings)
             elif field.kind == 'enum':
-                self._field_deserializers[field.name] = CreateDeserializer(inspector, field.type_name)
+                field_deserializers[field.name] = CreateDeserializer(inspector, field.type_name)
             elif field.kind == 'struct':
-                self._field_deserializers[field.name] = StructDeserializer(field, inspector, tiny_strings)
+                StructDeserializer.__RecurseFindCollectableFields(field, inspector, tiny_strings, field_deserializers)
             else:
                 raise ValueError(f'Unknown field data type: {field.kind}')
 
