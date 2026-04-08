@@ -118,7 +118,7 @@ public:
 
     Instruction(const Instruction&) = default;
 
-    static std::shared_ptr<Instruction> genRandom()
+    static Instruction* newRandom()
     {
         auto type = static_cast<InstType>(rand() % InstType::__N);
         auto opcode = rand();
@@ -129,7 +129,12 @@ public:
         auto mnemonic = mnemonics[rand() % 5];
         auto csr = type == InstType::CSR ? rand() % 256 : 0;
         auto last_inst = rand() % 1000 == 500;
-        return std::make_shared<Instruction>(type, opcode, mnemonic, csr, last_inst);
+        return new Instruction(type, opcode, mnemonic, csr, last_inst);
+    }
+
+    static std::shared_ptr<Instruction> genRandom()
+    {
+        return std::shared_ptr<Instruction>(newRandom());
     }
 
     static size_t getFixedNumBytes()
@@ -725,22 +730,89 @@ void TestMultiClock()
     app_mgrs.postSimLoopTeardown();
 }
 
+// Thic class is used to ensure we can collect from non-standard smart pointers.
+template <typename T>
+class SharedPtr
+{
+public:
+    explicit SharedPtr(T* obj = nullptr)
+        : obj_(obj), ref_count_(obj ? new size_t(1) : nullptr) {}
+
+    ~SharedPtr() { release_(); }
+
+    SharedPtr(const SharedPtr& rhs)
+        : obj_(rhs.obj_), ref_count_(rhs.ref_count_)
+    {
+        if (ref_count_)
+        {
+            ++(*ref_count_);
+        }
+    }
+
+    SharedPtr& operator=(const SharedPtr& rhs)
+    {
+        if (this != &rhs)
+        {
+            release_();
+            obj_ = rhs.obj_;
+            ref_count_ = rhs.ref_count_;
+            if (ref_count_) ++(*ref_count_);
+        }
+        return *this;
+    }
+
+    const T& operator*()  const { assert(obj_); return *obj_; }
+    const T* operator->() const { assert(obj_); return obj_; }
+    const T* get() const { return obj_; }
+
+    void reset(T* obj = nullptr)
+    {
+        release_();
+        obj_ = obj;
+        ref_count_ = obj ? new size_t(1) : nullptr;
+    }
+
+private:
+    void release_()
+    {
+        if (ref_count_ && --(*ref_count_) == 0)
+        {
+            delete obj_;
+            delete ref_count_;
+        }
+    }
+
+    T* obj_ = nullptr;
+    size_t* ref_count_ = nullptr;
+};
+
+namespace simdb::collection::detail {
+    template <typename T>
+    struct argos_struct_nested_type<SharedPtr<T>>
+    {
+        using type = std::remove_cv_t<T>;
+    };
+
+    template <typename T>
+    struct is_smart_pointer<SharedPtr<T>> : std::true_type {};
+}
+
 class Unit
 {
     uint64_t foo_ = 0;
     double bar_ = 0;
-    std::shared_ptr<Instruction> inst_{Instruction::genRandom()};
+    SharedPtr<Instruction> inst_{Instruction::newRandom()};
 
 public:
     uint64_t getFoo() const { return foo_; }
     double getBar() const { return bar_; }
-    std::shared_ptr<Instruction> getInstPtr() const { return inst_; }
+    SharedPtr<Instruction> getInstPtr() const { return inst_; }
 
     void randomize()
     {
         foo_ = rand();
         bar_ = rand() * M_PI;
-        inst_ = Instruction::genRandom();
+        inst_.reset(Instruction::newRandom());
     }
 
     class ArgosCollector : public simdb::collection::ArgosCollectorBase<Unit>

@@ -131,13 +131,16 @@ struct argos_struct_nested_type<const std::shared_ptr<T>> {
 };
 
 template <typename T>
-struct is_std_shared_ptr : std::false_type {};
+struct is_smart_pointer : std::false_type {};
 
 template <typename T>
-struct is_std_shared_ptr<std::shared_ptr<T>> : std::true_type {};
+struct is_smart_pointer<std::shared_ptr<T>> : std::true_type {};
+
+template <typename T, class Deleter>
+struct is_smart_pointer<std::unique_ptr<T, Deleter>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_std_shared_ptr_v = is_std_shared_ptr<std::remove_cv_t<T>>::value;
+inline constexpr bool is_smart_ptr_v = is_smart_pointer<std::remove_cv_t<T>>::value;
 
 } // namespace detail
 
@@ -300,7 +303,7 @@ public:
         {
             return std::invoke(Getter, owner);
         }
-        else if constexpr (detail::is_std_shared_ptr_v<stripped_ret>)
+        else if constexpr (detail::is_smart_ptr_v<stripped_ret>)
         {
             return std::invoke(Getter, owner).get();
         }
