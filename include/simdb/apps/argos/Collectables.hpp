@@ -19,7 +19,8 @@ class DomainCollection;
 template <typename T>
 static constexpr bool is_collectable_stl_v =
     type_traits::is_std_vector_v<T> ||
-    type_traits::is_std_deque_v<T>;
+    type_traits::is_std_deque_v<T>  ||
+    type_traits::is_std_list_v<T>;
 
 template <typename ContainerT, bool Sparse>
 inline uint16_t getNumElements(const ContainerT& container)
@@ -36,7 +37,7 @@ inline uint16_t getNumElements(const ContainerT& container)
     for (auto it = container.begin(), end = container.end(); it != end; ++it)
     {
         bool valid = false;
-        if constexpr (type_traits::is_std_vector_v<ContainerT>)
+        if constexpr (is_collectable_stl_v<ContainerT>)
         {
             if (*it)
             {

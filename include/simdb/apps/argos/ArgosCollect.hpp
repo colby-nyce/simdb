@@ -115,19 +115,14 @@ inline constexpr bool has_nested_argos_collector_v = has_nested_argos_collector<
 template <typename BareRet>
 struct argos_struct_nested_type {
     using stripped = std::remove_cv_t<BareRet>;
-    using type = std::conditional_t<std::is_pointer_v<stripped>,
-                                    std::remove_pointer_t<stripped>,
+    using type = std::conditional_t<type_traits::is_any_pointer_v<stripped>,
+                                    type_traits::remove_any_pointer_t<stripped>,
                                     stripped>;
 };
 
 template <typename T>
 struct argos_struct_nested_type<std::shared_ptr<T>> {
-    using type = std::remove_cv_t<T>;
-};
-
-template <typename T>
-struct argos_struct_nested_type<const std::shared_ptr<T>> {
-    using type = std::remove_cv_t<T>;
+    using type = T;
 };
 
 // Other owning pointer types need matching argos_struct_nested_type and
@@ -144,7 +139,7 @@ template <typename T, class Deleter>
 struct is_smart_pointer<std::unique_ptr<T, Deleter>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_smart_ptr_v = is_smart_pointer<std::remove_cv_t<T>>::value;
+inline constexpr bool is_smart_ptr_v = is_smart_pointer<T>::value;
 
 } // namespace detail
 
@@ -188,6 +183,17 @@ public:
                 throw DBException("TinyStrings not set before string collection");
             }
             const uint32_t id = tiny_strings_->getStringID(std::invoke(Getter, owner));
+            buffer << id;
+        }
+        else if constexpr (std::is_pointer_v<value_t> &&
+                           std::is_same_v<std::remove_cv_t<std::remove_pointer_t<value_t>>, char>)
+        {
+            if (tiny_strings_ == nullptr)
+            {
+                throw DBException("TinyStrings not set before string collection");
+            }
+            const char* cstr = std::invoke(Getter, owner);
+            const uint32_t id = tiny_strings_->getStringID(cstr ? std::string{cstr} : std::string{});
             buffer << id;
         }
         else if constexpr (std::is_same_v<value_t, bool>)

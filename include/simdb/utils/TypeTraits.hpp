@@ -214,6 +214,16 @@ template <typename T, typename Alloc> struct is_std_deque<std::deque<T, Alloc>> 
 
 template <typename T> constexpr auto is_std_deque_v = is_std_deque<T>::value;
 
+template <typename T> struct is_std_list : std::false_type
+{
+};
+
+template <typename T, typename Alloc> struct is_std_list<std::list<T, Alloc>> : std::true_type
+{
+};
+
+template <typename T> constexpr auto is_std_list_v = is_std_list<T>::value;
+
 // TypeAt<N, Ts...> gets the N-th type in the parameter pack Ts...
 template <std::size_t N, typename... Ts> struct TypeAt;
 

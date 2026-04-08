@@ -216,6 +216,11 @@ constexpr PodTypeKind getPodTypeKind()
     {
         return PodTypeKind::str;
     }
+    else if constexpr (std::is_pointer_v<value_t> &&
+                       std::is_same_v<std::remove_cv_t<std::remove_pointer_t<value_t>>, char>)
+    {
+        return PodTypeKind::str;
+    }
     else if constexpr (std::is_same_v<value_t, char>)
     {
         return PodTypeKind::c;
@@ -256,7 +261,7 @@ template <typename T, typename = void>
 struct has_argos_collector : std::false_type {};
 
 template <typename T>
-struct has_argos_collector<T, std::void_t<typename remove_cvref_t<T>::ArgosCollector>> : std::true_type {};
+struct has_argos_collector<T, std::void_t<typename type_traits::remove_any_pointer_t<T>::ArgosCollector>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool has_argos_collector_v = has_argos_collector<T>::value;
