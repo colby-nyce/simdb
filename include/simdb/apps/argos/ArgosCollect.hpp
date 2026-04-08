@@ -130,6 +130,10 @@ struct argos_struct_nested_type<const std::shared_ptr<T>> {
     using type = std::remove_cv_t<T>;
 };
 
+// Other owning pointer types need matching argos_struct_nested_type and
+// is_smart_pointer specializations in namespace simdb::collection::detail (see
+// simdb::utils TypeTraits.hpp for is_any_pointer / remove_any_pointer).
+
 template <typename T>
 struct is_smart_pointer : std::false_type {};
 

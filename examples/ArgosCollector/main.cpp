@@ -4,6 +4,7 @@
 #include "simdb/apps/argos/Collection.hpp"
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <iomanip>
@@ -765,6 +766,11 @@ public:
     const T* operator->() const { assert(obj_); return obj_; }
     const T* get() const { return obj_; }
 
+    explicit operator bool() const noexcept { return obj_ != nullptr; }
+
+    bool operator==(std::nullptr_t) const noexcept { return obj_ == nullptr; }
+    bool operator!=(std::nullptr_t) const noexcept { return obj_ != nullptr; }
+
     void reset(T* obj = nullptr)
     {
         release_();
@@ -786,9 +792,63 @@ private:
     size_t* ref_count_ = nullptr;
 };
 
+namespace simdb::type_traits {
+
+template <typename T>
+struct is_any_pointer<SharedPtr<T>> : public std::true_type
+{
+};
+
+template <typename T>
+struct is_any_pointer<SharedPtr<T> const> : public std::true_type
+{
+};
+
+template <typename T>
+struct is_any_pointer<SharedPtr<T>&> : public std::true_type
+{
+};
+
+template <typename T>
+struct is_any_pointer<SharedPtr<T> const&> : public std::true_type
+{
+};
+
+template <typename T>
+struct remove_any_pointer<SharedPtr<T>>
+{
+    using type = T;
+};
+
+template <typename T>
+struct remove_any_pointer<SharedPtr<T> const>
+{
+    using type = T;
+};
+
+template <typename T>
+struct remove_any_pointer<SharedPtr<T>&>
+{
+    using type = T;
+};
+
+template <typename T>
+struct remove_any_pointer<SharedPtr<T> const&>
+{
+    using type = T;
+};
+
+} // namespace simdb::type_traits
+
 namespace simdb::collection::detail {
     template <typename T>
     struct argos_struct_nested_type<SharedPtr<T>>
+    {
+        using type = std::remove_cv_t<T>;
+    };
+
+    template <typename T>
+    struct argos_struct_nested_type<const SharedPtr<T>>
     {
         using type = std::remove_cv_t<T>;
     };
@@ -876,8 +936,7 @@ void TestContainers()
     collection.collectContainerWithAutoCollection<ContigQ, false>(
         "contig", "root", &contig_q, capacity);
 
-    // TODO cnyce: collect vector of SharedPtr
-    using SparseQ = std::vector<std::shared_ptr<Instruction>>;
+    using SparseQ = std::vector<SharedPtr<Instruction>>;
     SparseQ sparse_q;
     collection.collectContainerWithAutoCollection<SparseQ, true>(
         "sparse", "root", &sparse_q, capacity);
@@ -897,7 +956,7 @@ void TestContainers()
         {
             if (rand() % 8 == 0)
             {
-                item = Instruction::genRandom();
+                item = SharedPtr<Instruction>(Instruction::newRandom());
             }
         }
     };
@@ -926,7 +985,7 @@ void TestContainers()
     app_mgrs.initializePipelines();
     app_mgrs.openPipelines();
 
-    size_t NUM_TICKS = 1;
+    size_t NUM_TICKS = 50;
     for (tick = 1; tick <= NUM_TICKS; ++tick)
     {
         step();

@@ -23,24 +23,28 @@ namespace simdb::collection {
 
 namespace detail {
 
-/// Strip one level of smart pointer (and raw pointer) so container \c value_types like
-/// \c std::shared_ptr<T> register the same data-type schema as \c T.
-template <typename T>
-struct dtype_register_element {
-    using type = std::remove_cv_t<std::remove_reference_t<T>>;
+/// Strip smart/raw pointer layers so container \c value_types like \c std::shared_ptr<T>
+/// or other \c is_any_pointer types register the same schema as the pointee (mirrors
+/// \c ContainerCollector::ValueType).
+template <typename T, bool = type_traits::is_any_pointer_v<T>>
+struct dtype_register_element_impl
+{
+    using type = T;
 };
 
 template <typename T>
-struct dtype_register_element<std::shared_ptr<T>> : dtype_register_element<T>
-{};
+struct dtype_register_element_impl<T, true>
+{
+    using type = typename dtype_register_element_impl<
+        type_traits::remove_any_pointer_t<T>>::type;
+};
 
 template <typename T>
-struct dtype_register_element<std::unique_ptr<T>> : dtype_register_element<T>
-{};
-
-template <typename T>
-struct dtype_register_element<T*> : dtype_register_element<T>
-{};
+struct dtype_register_element
+{
+    using bare = std::remove_cv_t<std::remove_reference_t<T>>;
+    using type = typename dtype_register_element_impl<bare>::type;
+};
 
 } // namespace detail
 

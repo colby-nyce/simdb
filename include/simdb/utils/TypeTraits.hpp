@@ -89,6 +89,12 @@ template <typename T> struct is_any_pointer<std::weak_ptr<T> const&> : public st
 
 template <typename T> constexpr auto is_any_pointer_v = is_any_pointer<T>::value;
 
+// Custom smart pointers used in collected containers or passed to
+// DataTypeHierarchy::writeBuffer must specialize is_any_pointer and
+// remove_any_pointer in namespace simdb::type_traits (mirror the std::shared_ptr
+// shapes below). They should be boolean-testable (e.g. explicit operator bool,
+// nullptr comparison) and dereferenceable via unary * to the collected value.
+
 template <typename T> struct remove_any_pointer
 {
     using type = T;
