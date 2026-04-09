@@ -152,6 +152,11 @@ public:
         stager_->forget(getID());
     }
 
+    void autoEnableOnCollect(bool auto_enable = true)
+    {
+        auto_enable_on_collect_ = auto_enable;
+    }
+
     /// Demangled element type for scalars, or element demangle + \c _contig_capacityN / \c _sparse_capacityN for queues.
     virtual std::string collectableTypeNameForDb() const = 0;
 
@@ -193,6 +198,11 @@ protected:
         initial_value_ = std::make_unique<CollectedData>(std::move(initial));
     }
 
+    bool autoEnableOnCollect_() const
+    {
+        return auto_enable_on_collect_;
+    }
+
 private:
     /// Unique ID generator.
     static uint16_t& nextID_()
@@ -227,11 +237,15 @@ private:
     /// \brief Main entry point into the pipeline
     PipelineStagerBase* stager_ = nullptr;
 
+    /// \brief Captured initial bytes
+    std::unique_ptr<CollectedData> initial_value_;
+
+    /// \brief Should we enable() when collect() is called while
+    /// we are disabled?
+    bool auto_enable_on_collect_ = false;
+
     /// \note Friendship needed to the enabled_ flag can be set
     friend class DomainCollection;
-
-private:
-    std::unique_ptr<CollectedData> initial_value_;
 };
 
 /// Template class for all scalar types (POD, struct-like, string, enum, bool)
@@ -281,6 +295,11 @@ public:
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
     collect(const T& value)
     {
+        if (!enabled() && autoEnableOnCollect_())
+        {
+            enable();
+        }
+
         if (enabled())
         {
             CollectedData collected(getID());
@@ -429,7 +448,11 @@ public:
     std::enable_if_t<!type_traits::is_any_pointer_v<T>, void>
     collect(const T& container)
     {
-        if (!enabled())
+        if (!enabled() && autoEnableOnCollect_())
+        {
+            enable();
+        }
+        else if (!enabled())
         {
             return;
         }
