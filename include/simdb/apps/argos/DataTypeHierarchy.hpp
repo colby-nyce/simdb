@@ -133,7 +133,7 @@ inline std::string podTypeKindToTypeName(PodTypeKind kind)
     case PodTypeKind::str: return "string";
     }
     throw DBException("Unknown data type");
-    return nullptr;
+    return "";
 }
 
 inline std::string enumBackingKindToString(EnumBackingKind kind)
@@ -150,7 +150,7 @@ inline std::string enumBackingKindToString(EnumBackingKind kind)
     case EnumBackingKind::ui64: return demangle_type<uint64_t>();
 }
     throw DBException("Unknown enum backing kind");
-    return nullptr;
+    return "";
 }
 
 inline size_t enumBackingKindToBytes(EnumBackingKind kind)
@@ -194,17 +194,16 @@ constexpr EnumBackingKind getBackingKind()
     static_assert(std::is_integral_v<IntT>, "IntT must be integral");
     static_assert(!std::is_same_v<IntT, bool>, "bool is not a valid enum backing type");
 
-    if constexpr (std::is_same_v<IntT, int8_t>)  return EnumBackingKind::i8;
-    if constexpr (std::is_same_v<IntT, uint8_t>) return EnumBackingKind::ui8;
-    if constexpr (std::is_same_v<IntT, int16_t>) return EnumBackingKind::i16;
+    if constexpr (std::is_same_v<IntT, int8_t>)   return EnumBackingKind::i8;
+    if constexpr (std::is_same_v<IntT, uint8_t>)  return EnumBackingKind::ui8;
+    if constexpr (std::is_same_v<IntT, int16_t>)  return EnumBackingKind::i16;
     if constexpr (std::is_same_v<IntT, uint16_t>) return EnumBackingKind::ui16;
-    if constexpr (std::is_same_v<IntT, int32_t>) return EnumBackingKind::i32;
+    if constexpr (std::is_same_v<IntT, int32_t>)  return EnumBackingKind::i32;
     if constexpr (std::is_same_v<IntT, uint32_t>) return EnumBackingKind::ui32;
-    if constexpr (std::is_same_v<IntT, int64_t>) return EnumBackingKind::i64;
+    if constexpr (std::is_same_v<IntT, int64_t>)  return EnumBackingKind::i64;
     if constexpr (std::is_same_v<IntT, uint64_t>) return EnumBackingKind::ui64;
-
-    if constexpr (std::is_signed_v<IntT>) return EnumBackingKind::i64;
-    return EnumBackingKind::ui64;
+    if constexpr (std::is_signed_v<IntT>)         return EnumBackingKind::i64;
+    return EnumBackingKind::i32;
 }
 
 template <typename PodT>
