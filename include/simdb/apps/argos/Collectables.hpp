@@ -255,7 +255,8 @@ public:
         if (enabled())
         {
             CollectedData collected(getID());
-            minifier_.minifyAndAppend(value, collected.getBuffer());
+            dtype_hierarchy_->writeBuffer(collected.getBuffer(), value);
+            //minifier_.minifyAndAppend(value, collected.getBuffer());
             stage_(std::move(collected));
         }
     }

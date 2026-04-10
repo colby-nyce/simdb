@@ -118,8 +118,8 @@ template <typename T, typename ValueType = std::remove_cv_t<std::remove_referenc
           std::enable_if_t<!std::is_enum_v<ValueType> && !std::is_same_v<ValueType, bool>, int> = 0>
 StreamBuffer& operator<<(StreamBuffer& buf, const T& val)
 {
-    static_assert(std::is_scalar_v<ValueType> && std::is_trivially_copyable_v<ValueType> &&
-                  std::is_standard_layout_v<ValueType> && "StreamBuffer::operator<< requires scalar POD-like types");
+    static_assert(std::is_trivial_v<ValueType> && std::is_standard_layout_v<ValueType>,
+                  "StreamBuffer::operator<< requires memcpy-able data");
     buf.append(&val, sizeof(T));
     return buf;
 }
@@ -129,12 +129,8 @@ template <typename T, typename ValueType = std::remove_cv_t<std::remove_referenc
 StreamBuffer& operator<<(StreamBuffer& buf, const T& val)
 {
     using Underlying = std::underlying_type_t<ValueType>;
-    static_assert(std::is_scalar_v<Underlying> && std::is_trivially_copyable_v<Underlying> &&
-                      std::is_standard_layout_v<Underlying> && !std::is_same_v<Underlying, bool>,
-                  "StreamBuffer enum operator<< requires a scalar underlying type (excluding bool)");
-
     const auto underlying = static_cast<Underlying>(val);
-    buf.append(&underlying, sizeof(Underlying));
+    buf << underlying;
     return buf;
 }
 
