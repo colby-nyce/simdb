@@ -224,6 +224,12 @@ template <typename T, typename Alloc> struct is_std_list<std::list<T, Alloc>> : 
 
 template <typename T> constexpr auto is_std_list_v = is_std_list<T>::value;
 
+template <typename T>
+static constexpr bool is_collectable_stl_v =
+    type_traits::is_std_vector_v<T> ||
+    type_traits::is_std_deque_v<T>  ||
+    type_traits::is_std_list_v<T>;
+
 // TypeAt<N, Ts...> gets the N-th type in the parameter pack Ts...
 template <std::size_t N, typename... Ts> struct TypeAt;
 

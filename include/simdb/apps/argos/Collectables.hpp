@@ -4,6 +4,7 @@
 
 #include "simdb/apps/argos/DataTypeHierarchy.hpp"
 #include "simdb/apps/argos/PipelineStager.hpp"
+#include "simdb/apps/argos/Minifiers.hpp"
 #include "simdb/utils/Demangle.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 
@@ -15,59 +16,6 @@
 namespace simdb::collection {
 
 class DomainCollection;
-
-template <typename T>
-static constexpr bool is_collectable_stl_v =
-    type_traits::is_std_vector_v<T> ||
-    type_traits::is_std_deque_v<T>  ||
-    type_traits::is_std_list_v<T>;
-
-template <typename ContainerT, bool Sparse>
-inline uint16_t getNumElements(const ContainerT& container)
-{
-    // TODO cnyce: Do we support collecting things like vector<int>?
-    // We use "if (*it)" to match legacy behavior, but that stops
-    // vector<int> from collecting actual values of 0. It looks like
-    // the legacy behavior is to assume that queues always store
-    // pointers (which is a reasonable assumption for simulators,
-    // but not so much for general-purpose collection).
-    static_assert(type_traits::is_any_pointer_v<typename ContainerT::value_type>);
-
-    size_t count = 0;
-    for (auto it = container.begin(), end = container.end(); it != end; ++it)
-    {
-        bool valid = false;
-        if constexpr (is_collectable_stl_v<ContainerT>)
-        {
-            if (*it)
-            {
-                valid = true;
-            }
-        }
-        else
-        {
-            if (it.isValid())
-            {
-                valid = true;
-            }
-        }
-
-        if (valid)
-        {
-            ++count;
-        }
-        else if (!Sparse)
-        {
-            break;
-        }
-    }
-
-    if (count > UINT16_MAX)
-    {
-        throw DBException("Queue too large to collect; uint16_t exceeded");
-    }
-    return static_cast<uint16_t>(count);
-}
 
 /// Base class for all collectables.
 class CollectableBase
@@ -261,6 +209,7 @@ public:
                     bool default_enabled = true)
         : CollectableBase(collection, heartbeat, default_enabled)
         , dtype_hierarchy_(std::move(dtype_hierarchy))
+        , minifier_(dtype_hierarchy, heartbeat)
     {}
 
     std::string collectableTypeNameForDb() const override
@@ -277,9 +226,12 @@ public:
 
     void initializeValue(const ValueType& value)
     {
-        CollectedData initial(getID());
-        dtype_hierarchy_->writeBuffer(initial.getBuffer(), value);
-        setInitialValue_(std::move(initial));
+        //TODO cnyce
+        (void)value;
+
+        //CollectedData initial(getID());
+        //dtype_hierarchy_->writeBuffer(initial.getBuffer(), value);
+        //setInitialValue_(std::move(initial));
     }
 
     template <typename T>
@@ -303,7 +255,7 @@ public:
         if (enabled())
         {
             CollectedData collected(getID());
-            dtype_hierarchy_->writeBuffer(collected.getBuffer(), value);
+            minifier_.minifyAndAppend(value, collected.getBuffer());
             stage_(std::move(collected));
         }
     }
@@ -330,6 +282,7 @@ public:
 
 private:
     std::shared_ptr<DataTypeHierarchy<ValueType>> dtype_hierarchy_;
+    Minifier<ValueType> minifier_;
 };
 
 /// Same as ScalarCollector, but supports auto-collection using a backpointer
@@ -468,7 +421,7 @@ public:
         for (auto it = container.begin(), end = container.end(); it != end; ++it)
         {
             bool valid = false;
-            if constexpr (is_collectable_stl_v<std::remove_cv_t<T>>)
+            if constexpr (type_traits::is_collectable_stl_v<std::remove_cv_t<T>>)
             {
                 if (*it)
                 {
