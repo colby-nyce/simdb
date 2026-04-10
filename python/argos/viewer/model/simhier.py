@@ -1,7 +1,7 @@
 import copy, re
 
 class SimHierarchy:
-    def __init__(self, db):
+    def __init__(self, db, dtype_inspector):
         child_ids_by_parent_id = {}
         cursor = db.cursor()
         self._root_id = None
@@ -20,15 +20,15 @@ class SimHierarchy:
 
         dtype_by_elem_id = {}
         self._widget_types_by_elem_id = {}
-        cursor.execute('SELECT ElementTreeNodeID,DataType FROM CollectableTreeNodes')
+        cursor.execute('SELECT ElementTreeNodeID,TypeName FROM CollectableTreeNodes')
         for id, dtype in cursor.fetchall():
             dtype_by_elem_id[id] = dtype
             if '_contig_capacity' in dtype or '_sparse_capacity' in dtype:
                 self._widget_types_by_elem_id[id] = 'QueueTable'
-            elif dtype in ('char', 'int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'float', 'double', 'bool'):
-                self._widget_types_by_elem_id[id] = 'Timeseries'
-            else:
+            elif dtype_inspector.GetStructDefn(dtype) is not None:
                 self._widget_types_by_elem_id[id] = 'ScalarStruct'
+            else:
+                self._widget_types_by_elem_id[id] = 'Timeseries'
 
         def GetLineage(elem_id, parent_ids_by_child_id):
             lineage = []
@@ -55,12 +55,12 @@ class SimHierarchy:
         self._container_elem_paths = []
 
         for id, dtype in dtype_by_elem_id.items():
-            if dtype in ('int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'float', 'double', 'bool'):
-                self._scalar_stats_elem_paths.append(elem_paths_by_id[id])
-            elif '_contig_capacity' in dtype or '_sparse_capacity' in dtype:
+            if '_contig_capacity' in dtype or '_sparse_capacity' in dtype:
                 self._container_elem_paths.append(elem_paths_by_id[id])
-            else:
+            elif dtype_inspector.GetStructDefn(dtype) is not None:
                 self._scalar_structs_elem_paths.append(elem_paths_by_id[id])
+            else:
+                self._scalar_stats_elem_paths.append(elem_paths_by_id[id])
 
         self._capacities_by_collectable_id = {}
         self._sparse_collectable_ids = set()
