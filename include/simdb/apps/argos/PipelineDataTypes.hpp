@@ -28,7 +28,7 @@ namespace simdb::argos {
 //! time (example: one clock might be exactly twice as fast as another).
 //!
 //! Used as input to the zlib pipeline stage.
-struct QueueCollectionData
+struct CollectionEntries
 {
     ValidValue<uint64_t> sim_time;
     std::vector<std::unique_ptr<CollectedData>> entries;
@@ -36,10 +36,10 @@ struct QueueCollectionData
 };
 
 //! \brief Output data structure from the zlib pipeline stage.
-struct CompressedQueueCollectionData
+struct CompressedCollectionEntries
 {
     ValidValue<uint64_t> sim_time;
-    std::vector<char> compressed_collection_data;
+    std::vector<char> compressed_entries;
     std::unordered_set<uint32_t> clock_ids;
 };
 
