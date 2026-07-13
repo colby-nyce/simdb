@@ -1,19 +1,43 @@
 #pragma once
 
 #include "simdb/Exceptions.hpp"
+#include "simdb/utils/TypeTraits.hpp"
+#include <iostream>
+#include <utility>
 
 namespace simdb {
 
 template <typename T> class ValidValue
 {
 private:
-    T value_ = 0;
+    T value_{};
     bool valid_ = false;
 
 public:
-    ValidValue& operator=(T val)
+    ValidValue() = default;
+
+    explicit ValidValue(const T& val) :
+        value_(val),
+        valid_(true)
+    {
+    }
+
+    explicit ValidValue(T&& val) :
+        value_(std::move(val)),
+        valid_(true)
+    {
+    }
+
+    ValidValue& operator=(const T& val)
     {
         value_ = val;
+        valid_ = true;
+        return *this;
+    }
+
+    ValidValue& operator=(T&& val)
+    {
+        value_ = std::move(val);
         valid_ = true;
         return *this;
     }
@@ -46,3 +70,13 @@ public:
 };
 
 } // namespace simdb
+
+template <typename T> inline std::ostream& operator<<(std::ostream& os, const simdb::ValidValue<T>& vv)
+{
+    static_assert(simdb::type_traits::has_ostream_operator_v<T>);
+    if (!vv.isValid())
+    {
+        return os << "<INVALID>";
+    }
+    return os << vv.getValue();
+}

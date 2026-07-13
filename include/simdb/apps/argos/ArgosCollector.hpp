@@ -4,6 +4,7 @@
 
 #include "simdb/apps/App.hpp"
 #include "simdb/apps/argos/EnumInspector.hpp"
+#include "simdb/apps/argos/PipelineStagerInterface.hpp"
 #include "simdb/apps/argos/Timestamps.hpp"
 #include "simdb/sqlite/Dump.hpp"
 #include "simdb/utils/TinyStrings.hpp"
@@ -14,7 +15,7 @@ inline constexpr size_t DEFAULT_HEARTBEAT = 10;
 
 //! \class ArgosCollector
 //! \brief Main entry point into the Argos collection system.
-class ArgosCollector : public App
+class ArgosCollector : public App, public PipelineStagerInterface
 {
 public:
     //! Required by all SimDB apps
@@ -109,6 +110,12 @@ public:
 
     EnumInspector* getEnumInspector() { return &enum_inspector_; }
 
+    void createPipeline(pipeline::PipelineManager* pipeline_mgr) override
+    {
+        // TODO
+        (void)pipeline_mgr;
+    }
+
     void postInit(int, char**) override
     {
         db_mgr_->INSERT(SQL_TABLE("CollectionGlobals"), SQL_VALUES(heartbeat_));
@@ -120,6 +127,40 @@ public:
             auto id = clk_inserter->createRecordWithColValues(_clk_name, _period, _numer, _denom);
             clk_ids[_clk_name] = id;
         }
+    }
+
+    void stage(uint16_t cid, std::vector<char>&& scalar_bytes) override
+    {
+        // TODO
+        (void)cid;
+        (void)scalar_bytes;
+    }
+
+    void stage(uint16_t cid, std::vector<std::vector<char>>&& contig_bin_bytes) override
+    {
+        // TODO
+        (void)cid;
+        (void)contig_bin_bytes;
+    }
+
+    void stage(uint16_t cid, std::map<uint16_t, std::vector<char>>&& sparse_bin_bytes) override
+    {
+        // TODO
+        (void)cid;
+        (void)sparse_bin_bytes;
+    }
+
+    void closeRecord(uint16_t cid) override
+    {
+        // TODO
+        (void)cid;
+    }
+
+    void postNotif(const std::string& notif, NotifType type) override
+    {
+        // TODO
+        (void)notif;
+        (void)type;
     }
 
     void postTeardown() override
