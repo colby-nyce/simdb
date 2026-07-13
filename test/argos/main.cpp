@@ -38,6 +38,7 @@ int main(int argc, char** argv)
 {
     simdb::AppManagers app_mgrs;
     app_mgrs.registerApp<simdb::argos::ArgosCollector>();
+    app_mgrs.setVerbose(true);
 
     // Create the app/db managers
     auto& app_mgr = app_mgrs.createAppManager("test.db");
