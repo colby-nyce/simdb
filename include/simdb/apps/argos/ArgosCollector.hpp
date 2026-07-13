@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
+#include "simdb/apps/argos/EntryPoint.hpp"
 #include "simdb/apps/argos/EnumInspector.hpp"
 #include "simdb/apps/argos/PipelineStagerInterface.hpp"
 #include "simdb/apps/argos/Timestamps.hpp"
@@ -40,6 +41,17 @@ public:
         clks_tbl.addColumn("Denom", dt::uint32_t);
         clks_tbl.setColumnDefaultValue("Numer", 0);
         clks_tbl.setColumnDefaultValue("Denom", 0);
+
+        auto& collectable_tns_tbl = schema.addTable("CollectableTreeNodes");
+        collectable_tns_tbl.addColumn("CID", dt::int32_t);
+        collectable_tns_tbl.addColumn("FullPath", dt::string_t);
+        collectable_tns_tbl.addColumn("ClockID", dt::int32_t);
+        collectable_tns_tbl.addColumn("TypeName", dt::string_t);
+        collectable_tns_tbl.addColumn("ShowInUI", dt::int32_t);
+        collectable_tns_tbl.setColumnDefaultValue("ShowInUI", 0);
+        collectable_tns_tbl.ensureUnique("CID");
+        collectable_tns_tbl.createIndexOn("CID");
+        collectable_tns_tbl.unsetPrimaryKey();
 
         auto& enum_itypes_tbl = schema.addTable("CollectedEnums");
         enum_itypes_tbl.addColumn("EnumName", dt::string_t);
@@ -106,6 +118,63 @@ public:
         timestamp_ = std::make_unique<Timestamp>(fn);
     }
 
+    //! TODO cnyce: Once the collection code from Sparta is moved to SimDB, change this
+    //! to a template method so we can figure out the encoded data type name ourselves.
+    //! Scalar types are encoded as follows:
+    //!
+    //!   For scalar PODs:
+    //!   typeid(T).name()
+    //!       "bool"
+    //!       "unsigned long"
+    //!       ...
+    //!
+    //!   For scalar enums with operator<< (defn held in separate table for string-int map):
+    //!   typeid(T).name()
+    //!       "IssueType"
+    //!       "MMUState"
+    //!       ...
+    //!   Enum values in collection blobs are serialized as std::underlying_type_t<T>.
+    //!
+    //!   For scalar enums without operator<< (treated just like int PODs):
+    //!   typeid(std::underlying_type_t<T>).name()
+    //!       "int"
+    //!       "unsigned int"
+    //!       ...
+    //!
+    //!   For scalar struct-like types:
+    //!   typeid(T).name()
+    //!       "Packet"
+    //!       "Inst"
+    //!       ...
+    //!
+    //!   For scalar string-like types (std::string, const char*):
+    //!       "string"
+    EntryPoint* createScalarCollector(const std::string& path, const std::string& clk_name,
+                                      const std::string& encoded_scalar_type)
+    {
+        auto entry_point = std::make_unique<EntryPoint>(this, &tiny_strings_);
+        meta_by_cid_[entry_point->getID()] = std::make_tuple(path, clk_name, encoded_scalar_type);
+        entry_points_.emplace_back(std::move(entry_point));
+        return entry_points_.back().get();
+    }
+
+    //! TODO cnyce: Once the collection code from Sparta is moved to SimDB, change this
+    //! to a template method so we can figure out the encoded data type name ourselves.
+    //! Container types are encoded as follows:
+    //!
+    //!   <encoded_scalar_type>_<sparse/contig>_capacity<N>
+    //!       "Inst_sparse_capacity32"
+    //!       "bool_contig_capacity4"
+    //!       ...
+    EntryPoint* createContainerCollector(const std::string& path, const std::string& clk_name,
+                                         const std::string& encoded_container_type)
+    {
+        auto entry_point = std::make_unique<EntryPoint>(this, &tiny_strings_);
+        meta_by_cid_[entry_point->getID()] = std::make_tuple(path, clk_name, encoded_container_type);
+        entry_points_.emplace_back(std::move(entry_point));
+        return entry_points_.back().get();
+    }
+
     TinyStrings<>* getTinyStrings() { return &tiny_strings_; }
 
     EnumInspector* getEnumInspector() { return &enum_inspector_; }
@@ -126,6 +195,17 @@ public:
         {
             auto id = clk_inserter->createRecordWithColValues(_clk_name, _period, _numer, _denom);
             clk_ids[_clk_name] = id;
+        }
+
+        auto ctn_inserter = db_mgr_->prepareINSERT(SQL_TABLE("CollectableTreeNodes"));
+        for (const auto& collector : entry_points_)
+        {
+            auto cid = (int)collector->getID();
+            const auto& full_path = std::get<0>(meta_by_cid_.at(cid));
+            const auto& clk_name = std::get<1>(meta_by_cid_.at(cid));
+            const auto& dtype_name = std::get<2>(meta_by_cid_.at(cid));
+            const auto clk_id = clk_ids.at(clk_name);
+            ctn_inserter->createRecordWithColValues(cid, full_path, clk_id, dtype_name);
         }
     }
 
@@ -175,6 +255,7 @@ public:
             dumpTable(db_mgr_, "Clocks");
             dumpTable(db_mgr_, "CollectedEnums");
             dumpTable(db_mgr_, "EnumMembers");
+            dumpTable(db_mgr_, "CollectableTreeNodes");
         }
     }
 
@@ -189,7 +270,14 @@ private:
                                        >;
     std::vector<ClockDescriptor> clocks_;
 
+    using CollectableMeta = std::tuple<std::string, // dot-delimited path
+                                       std::string, // clk name
+                                       std::string  // encoded data type
+                                       >;
+    std::map<uint16_t, CollectableMeta> meta_by_cid_;
+
     std::unique_ptr<Timestamp> timestamp_;
+    std::vector<std::unique_ptr<EntryPoint>> entry_points_;
     TinyStrings<> tiny_strings_;
     EnumInspector enum_inspector_;
 };
