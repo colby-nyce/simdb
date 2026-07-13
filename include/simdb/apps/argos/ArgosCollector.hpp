@@ -5,6 +5,7 @@
 #include "simdb/apps/App.hpp"
 #include "simdb/apps/argos/EnumInspector.hpp"
 #include "simdb/apps/argos/Timestamps.hpp"
+#include "simdb/sqlite/Dump.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::argos {
@@ -125,6 +126,15 @@ public:
     {
         tiny_strings_.serialize(db_mgr_);
         enum_inspector_.serializeEnumMaps(db_mgr_);
+
+        if (verbose())
+        {
+            std::cout << "[simdb] Collection tables at the end of simulation (except timestamps/blobs):\n\n";
+            dumpTable(db_mgr_, "CollectionGlobals");
+            dumpTable(db_mgr_, "Clocks");
+            dumpTable(db_mgr_, "CollectedEnums");
+            dumpTable(db_mgr_, "EnumMembers");
+        }
     }
 
 private:

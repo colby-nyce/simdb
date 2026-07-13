@@ -85,6 +85,9 @@ public:
     /// \brief Return the app logger (set by AppManager); may be null.
     ThreadSafeLogger* getAppLogger() const { return app_logger_; }
 
+    /// \brief Check if we are running in verbose mode.
+    bool verbose() const { return verbose_; }
+
 protected:
     void setAppLogger_(ThreadSafeLogger* logger) { app_logger_ = logger; }
 
@@ -95,6 +98,10 @@ private:
 
     /// Thread-safe loggers.
     ThreadSafeLogger* app_logger_ = nullptr;
+
+    /// Verbose flag.
+    bool verbose_ = false;
+
     friend class AppManager;
 };
 
