@@ -21,8 +21,7 @@ enum class CompressionLevel {
 };
 
 /// Perform zlib compression.
-inline void compressData(const void* data_ptr, size_t num_bytes, std::vector<char>& out,
-                         CompressionLevel compression_level = CompressionLevel::DEFAULT)
+inline void compressData(const void* data_ptr, size_t num_bytes, std::vector<char>& out, const int compression_level)
 {
     if (num_bytes == 0)
     {
@@ -52,7 +51,7 @@ inline void compressData(const void* data_ptr, size_t num_bytes, std::vector<cha
     defstream.avail_out = (uInt)(out.size());
     defstream.next_out = (Bytef*)(out.data());
 
-    deflateInit(&defstream, static_cast<int>(compression_level));
+    deflateInit(&defstream, compression_level);
     deflate(&defstream, Z_FINISH);
     deflateEnd(&defstream);
 
@@ -60,14 +59,28 @@ inline void compressData(const void* data_ptr, size_t num_bytes, std::vector<cha
     out.resize(num_bytes_after);
 }
 
+/// Perform zlib compression.
+inline void compressData(const void* data_ptr, size_t num_bytes, std::vector<char>& out,
+                         CompressionLevel compression_level = CompressionLevel::DEFAULT)
+{
+    compressData(data_ptr, num_bytes, out, static_cast<int>(compression_level));
+}
+
+/// Perform zlib compression on a vector.
+template <typename T>
+inline void compressData(const std::vector<T>& in, std::vector<char>& out, const int compression_level)
+{
+    const void* data_ptr = in.data();
+    size_t num_bytes = in.size() * sizeof(T);
+    compressData(data_ptr, num_bytes, out, compression_level);
+}
+
 /// Perform zlib compression on a vector.
 template <typename T>
 inline void compressData(const std::vector<T>& in, std::vector<char>& out,
                          CompressionLevel compression_level = CompressionLevel::DEFAULT)
 {
-    const void* data_ptr = in.data();
-    size_t num_bytes = in.size() * sizeof(T);
-    compressData(data_ptr, num_bytes, out, compression_level);
+    compressData(in, out, static_cast<int>(compression_level));
 }
 
 /// Perform zlib decompression.
