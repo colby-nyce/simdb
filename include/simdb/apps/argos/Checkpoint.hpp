@@ -26,6 +26,8 @@ enum class Action : uint8_t {
 
     CONTIG_ARRIVE = 0x20,
     CONTIG_DEPART = 0x21,
+    CONTIG_BOOKENDS = 0x22,
+    CONTIG_MIMO = 0x23,
 };
 
 //! \class CollectableCheckpoint
@@ -320,6 +322,10 @@ private:
             return Action::CONTIG_ARRIVE;
         case ContigDeltaKind::DEPART:
             return Action::CONTIG_DEPART;
+        case ContigDeltaKind::BOOKENDS:
+            return Action::CONTIG_BOOKENDS;
+        case ContigDeltaKind::MIMO:
+            return Action::CONTIG_MIMO;
         case ContigDeltaKind::FULL:
             break;
         }
@@ -389,8 +395,17 @@ private:
         case Action::CARRY:
             break;
         case Action::CONTIG_ARRIVE:
+        case Action::CONTIG_BOOKENDS:
             assert(!classification.payload.empty());
             buf.append(classification.payload);
+            break;
+        case Action::CONTIG_MIMO:
+            buf.append(classification.depart_count);
+            buf.append(classification.arrive_count);
+            for (const auto& arrive_payload : classification.arrive_payloads)
+            {
+                buf.append(arrive_payload);
+            }
             break;
         case Action::CONTIG_DEPART:
             break;

@@ -41,7 +41,7 @@ inline std::ostream& operator<<(std::ostream& os, ScalarDeltaKind kind)
 }
 
 //! Contiguous-container delta kinds.
-enum class ContigDeltaKind { CARRY, SWAP, MULTI_SWAP, ARRIVE, DEPART, FULL };
+enum class ContigDeltaKind { CARRY, SWAP, MULTI_SWAP, BOOKENDS, ARRIVE, DEPART, MIMO, FULL };
 
 //! Result of classifying a contig container transition.
 struct ContigDeltaClassification
@@ -49,6 +49,9 @@ struct ContigDeltaClassification
     ContigDeltaKind kind = ContigDeltaKind::FULL;
     simdb::ValidValue<uint16_t> swap_index;
     std::vector<char> payload;
+    uint8_t depart_count = 0;
+    uint8_t arrive_count = 0;
+    std::vector<std::vector<char>> arrive_payloads;
     std::vector<uint16_t> swap_indices;
     std::vector<std::vector<char>> swap_payloads;
 };
@@ -68,6 +71,25 @@ inline uint16_t countContigElements(const std::vector<std::vector<char>>& contig
     }
     assert(count <= UINT16_MAX);
     return count;
+}
+
+inline bool contigPrefixMatchesAfterDepart(const std::vector<std::vector<char>>& prev,
+                                           const std::vector<std::vector<char>>& curr, uint16_t prev_size,
+                                           uint16_t curr_size, uint16_t depart_count)
+{
+    const auto overlap = static_cast<uint16_t>(prev_size - depart_count);
+    if (overlap + static_cast<uint16_t>(curr_size - overlap) != curr_size)
+    {
+        return false;
+    }
+    for (uint16_t i = 0; i < overlap; ++i)
+    {
+        if (curr[i] != prev[i + depart_count])
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 //! Classify how a contiguous container changed between consecutive collections.
@@ -121,6 +143,26 @@ inline ContigDeltaClassification classifyContigChange(const std::vector<std::vec
             return result;
         }
 
+        if (curr_size > 0)
+        {
+            bool bookends = true;
+            for (size_t i = 0; i + 1 < curr_size; ++i)
+            {
+                if (curr[i] != prev[i + 1])
+                {
+                    bookends = false;
+                    break;
+                }
+            }
+
+            if (bookends)
+            {
+                result.kind = ContigDeltaKind::BOOKENDS;
+                result.payload = curr[curr_size - 1];
+                return result;
+            }
+        }
+
         result.kind = ContigDeltaKind::MULTI_SWAP;
         result.swap_indices = std::move(changed_idxs);
         result.swap_payloads.reserve(result.swap_indices.size());
@@ -168,6 +210,41 @@ inline ContigDeltaClassification classifyContigChange(const std::vector<std::vec
         }
     }
 
+    for (uint16_t depart_count = 0; depart_count <= prev_size; ++depart_count)
+    {
+        const int64_t arrive_count64 = static_cast<int64_t>(curr_size) - static_cast<int64_t>(prev_size) + depart_count;
+        if (arrive_count64 < 0 || arrive_count64 > UINT8_MAX)
+        {
+            continue;
+        }
+
+        const auto arrive_count = static_cast<uint8_t>(arrive_count64);
+        if (depart_count + arrive_count <= 1)
+        {
+            continue;
+        }
+        if (depart_count == 1 && arrive_count == 1 && curr_size == prev_size)
+        {
+            continue;
+        }
+
+        if (!contigPrefixMatchesAfterDepart(prev, curr, prev_size, curr_size, depart_count))
+        {
+            continue;
+        }
+
+        const auto overlap = static_cast<uint16_t>(prev_size - depart_count);
+        result.kind = ContigDeltaKind::MIMO;
+        result.depart_count = static_cast<uint8_t>(depart_count);
+        result.arrive_count = arrive_count;
+        result.arrive_payloads.reserve(arrive_count);
+        for (uint8_t j = 0; j < arrive_count; ++j)
+        {
+            result.arrive_payloads.push_back(curr[overlap + j]);
+        }
+        return result;
+    }
+
     result.kind = ContigDeltaKind::FULL;
     return result;
 }
@@ -182,10 +259,14 @@ inline std::ostream& operator<<(std::ostream& os, ContigDeltaKind kind)
         return os << "SWAP";
     case ContigDeltaKind::MULTI_SWAP:
         return os << "MULTI_SWAP";
+    case ContigDeltaKind::BOOKENDS:
+        return os << "BOOKENDS";
     case ContigDeltaKind::ARRIVE:
         return os << "ARRIVE";
     case ContigDeltaKind::DEPART:
         return os << "DEPART";
+    case ContigDeltaKind::MIMO:
+        return os << "MIMO";
     case ContigDeltaKind::FULL:
         return os << "FULL";
     }
