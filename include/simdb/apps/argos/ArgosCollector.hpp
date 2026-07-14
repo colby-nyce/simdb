@@ -626,7 +626,7 @@ private:
 
     /// \class Compressor
     /// \brief 2nd async stage. Performs zlib compression.
-    class Compressor : public pipeline::Stage
+    class Compressor : public pipeline::CompressionStage
     {
     public:
         Compressor()
@@ -649,7 +649,7 @@ private:
                 }
 
                 CompressedCollectionEntries compressed;
-                compressData(uncompressed, compressed.compressed_entries);
+                compressData(uncompressed, compressed.compressed_entries, getBestCompressionLevel_());
                 compressed.sim_time = collection_at_time.sim_time;
                 compressed.clock_ids = std::move(collection_at_time.clock_ids);
                 output_queue_->emplace(std::move(compressed));
