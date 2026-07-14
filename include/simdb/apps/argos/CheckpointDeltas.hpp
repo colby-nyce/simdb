@@ -274,7 +274,7 @@ inline std::ostream& operator<<(std::ostream& os, ContigDeltaKind kind)
 }
 
 //! Sparse-container delta kinds.
-enum class SparseDeltaKind { CARRY, SWAP, MULTI_SWAP, FULL };
+enum class SparseDeltaKind { CARRY, SWAP, MULTI_SWAP, REMOVE, ADD, MULTI_REMOVE, FULL };
 
 //! Result of classifying a sparse container transition.
 struct SparseDeltaClassification
@@ -315,14 +315,130 @@ inline SparseDeltaClassification classifySparseChange(const std::map<uint16_t, s
         return result;
     }
 
+    const auto curr_size = countSparseElements(curr);
+    const auto prev_size = countSparseElements(prev);
+
     if (curr == prev)
     {
         result.kind = SparseDeltaKind::CARRY;
         return result;
     }
 
-    const auto curr_size = countSparseElements(curr);
-    const auto prev_size = countSparseElements(prev);
+    if (curr_size + 1 == prev_size)
+    {
+        ValidValue<uint16_t> removed_idx;
+        uint16_t removed_count = 0;
+        bool other_change = false;
+        for (const auto& [prev_idx, prev_bytes] : prev)
+        {
+            if (auto it = curr.find(prev_idx); it == curr.end())
+            {
+                ++removed_count;
+                removed_idx = prev_idx;
+            } else if (prev_bytes != it->second)
+            {
+                other_change = true;
+                break;
+            }
+        }
+
+        if (!other_change && removed_count == 1)
+        {
+            for (const auto& [curr_idx, _] : curr)
+            {
+                if (prev.find(curr_idx) == prev.end())
+                {
+                    other_change = true;
+                    break;
+                }
+            }
+        }
+
+        if (!other_change && removed_count == 1)
+        {
+            result.kind = SparseDeltaKind::REMOVE;
+            result.bin_index = removed_idx.getValue();
+            return result;
+        }
+    }
+
+    if (curr_size == prev_size + 1)
+    {
+        ValidValue<uint16_t> added_idx;
+        uint16_t added_count = 0;
+        bool other_change = false;
+        for (const auto& [curr_idx, curr_bytes] : curr)
+        {
+            if (auto it = prev.find(curr_idx); it == prev.end())
+            {
+                ++added_count;
+                added_idx = curr_idx;
+                result.payload = curr_bytes;
+            } else if (it->second != curr_bytes)
+            {
+                other_change = true;
+                break;
+            }
+        }
+
+        if (!other_change && added_count == 1)
+        {
+            for (const auto& [prev_idx, _] : prev)
+            {
+                if (curr.find(prev_idx) == curr.end())
+                {
+                    other_change = true;
+                    break;
+                }
+            }
+        }
+
+        if (!other_change && added_count == 1)
+        {
+            result.kind = SparseDeltaKind::ADD;
+            result.bin_index = added_idx.getValue();
+            return result;
+        }
+    }
+
+    if (curr_size + 1 <= prev_size)
+    {
+        std::vector<uint16_t> removed_idxs;
+        bool other_change = false;
+        for (const auto& [prev_idx, prev_bytes] : prev)
+        {
+            if (auto it = curr.find(prev_idx); it == curr.end())
+            {
+                removed_idxs.push_back(prev_idx);
+            } else if (prev_bytes != it->second)
+            {
+                other_change = true;
+                break;
+            }
+        }
+
+        if (!other_change && removed_idxs.size() >= 2 &&
+            removed_idxs.size() == static_cast<size_t>(prev_size - curr_size))
+        {
+            for (const auto& [curr_idx, _] : curr)
+            {
+                if (prev.find(curr_idx) == prev.end())
+                {
+                    other_change = true;
+                    break;
+                }
+            }
+        }
+
+        if (!other_change && removed_idxs.size() >= 2 &&
+            removed_idxs.size() == static_cast<size_t>(prev_size - curr_size))
+        {
+            result.kind = SparseDeltaKind::MULTI_REMOVE;
+            result.bin_indices = std::move(removed_idxs);
+            return result;
+        }
+    }
+
     if (curr_size != prev_size)
     {
         result.kind = SparseDeltaKind::FULL;
@@ -330,6 +446,9 @@ inline SparseDeltaClassification classifySparseChange(const std::map<uint16_t, s
     }
 
     std::vector<uint16_t> changed_idxs;
+    std::vector<uint16_t> removed_idxs;
+    std::vector<uint16_t> added_idxs;
+
     for (const auto& [prev_idx, prev_bytes] : prev)
     {
         if (auto it = curr.find(prev_idx); it != curr.end())
@@ -340,8 +459,7 @@ inline SparseDeltaClassification classifySparseChange(const std::map<uint16_t, s
             }
         } else
         {
-            result.kind = SparseDeltaKind::FULL;
-            return result;
+            removed_idxs.push_back(prev_idx);
         }
     }
 
@@ -349,9 +467,36 @@ inline SparseDeltaClassification classifySparseChange(const std::map<uint16_t, s
     {
         if (prev.find(curr_idx) == prev.end())
         {
-            result.kind = SparseDeltaKind::FULL;
+            added_idxs.push_back(curr_idx);
+        }
+    }
+
+    if (!added_idxs.empty() || !removed_idxs.empty())
+    {
+        if (added_idxs.size() == 1 && removed_idxs.empty() && changed_idxs.empty())
+        {
+            result.kind = SparseDeltaKind::ADD;
+            result.bin_index = added_idxs[0];
+            result.payload = curr.at(added_idxs[0]);
             return result;
         }
+
+        if (removed_idxs.size() == 1 && added_idxs.empty() && changed_idxs.empty())
+        {
+            result.kind = SparseDeltaKind::REMOVE;
+            result.bin_index = removed_idxs[0];
+            return result;
+        }
+
+        if (removed_idxs.size() >= 2 && added_idxs.empty() && changed_idxs.empty())
+        {
+            result.kind = SparseDeltaKind::MULTI_REMOVE;
+            result.bin_indices = std::move(removed_idxs);
+            return result;
+        }
+
+        result.kind = SparseDeltaKind::FULL;
+        return result;
     }
 
     if (changed_idxs.size() == 1)
@@ -388,6 +533,12 @@ inline std::ostream& operator<<(std::ostream& os, SparseDeltaKind kind)
         return os << "SWAP";
     case SparseDeltaKind::MULTI_SWAP:
         return os << "MULTI_SWAP";
+    case SparseDeltaKind::REMOVE:
+        return os << "REMOVE";
+    case SparseDeltaKind::ADD:
+        return os << "ADD";
+    case SparseDeltaKind::MULTI_REMOVE:
+        return os << "MULTI_REMOVE";
     case SparseDeltaKind::FULL:
         return os << "FULL";
     }

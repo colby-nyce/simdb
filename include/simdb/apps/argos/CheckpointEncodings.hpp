@@ -44,6 +44,9 @@
  * CONTIG_MIMO              Contig only      FIFO MIMO: D elements depart from the front and A arrive at the tail; after
  *                                           the depart shift, prefixes match; `D + A > 1`; not a simpler single-op pattern
  *                                           (e.g. not 1 depart + 1 arrive at same size).
+ * SPARSE_REMOVE            Sparse only      Exactly one bin removed; no value changes or adds elsewhere.
+ * SPARSE_ADD               Sparse only      Exactly one new bin added; all overlapping bins unchanged.
+ * SPARSE_MULTI_REMOVE      Sparse only      Two or more bins removed; no adds and no value changes on survivors.
  * \endverbatim
  *
  * Scalars only ever emit CLOSED, FULL, or CARRY.
@@ -76,6 +79,9 @@
  * | CONTIG_DEPART          |                                                        |
  * | CONTIG_BOOKENDS        | [pushed bytes]                                         |
  * | CONTIG_MIMO            | [num popped][num pushed][pushed bytes]..[pushed bytes] |
+ * | SPARSE_REMOVE          | [removed idx]                                          |
+ * | SPARSE_ADD             | [added idx][added bytes]                               |
+ * | SPARSE_MULTI_REMOVE    | [num removed][removed idx]..[removed idx]              |
  *
  * \par Related implementation files
  *

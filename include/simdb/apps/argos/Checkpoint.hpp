@@ -28,6 +28,10 @@ enum class Action : uint8_t {
     CONTIG_DEPART = 0x21,
     CONTIG_BOOKENDS = 0x22,
     CONTIG_MIMO = 0x23,
+
+    SPARSE_REMOVE = 0x30,
+    SPARSE_ADD = 0x31,
+    SPARSE_MULTI_REMOVE = 0x32,
 };
 
 //! \class CollectableCheckpoint
@@ -524,6 +528,12 @@ private:
             return Action::CONTAINER_SWAP;
         case SparseDeltaKind::MULTI_SWAP:
             return Action::CONTAINER_MULTI_SWAP;
+        case SparseDeltaKind::REMOVE:
+            return Action::SPARSE_REMOVE;
+        case SparseDeltaKind::ADD:
+            return Action::SPARSE_ADD;
+        case SparseDeltaKind::MULTI_REMOVE:
+            return Action::SPARSE_MULTI_REMOVE;
         case SparseDeltaKind::FULL:
             break;
         }
@@ -592,6 +602,24 @@ private:
             {
                 buf.append(classification.bin_indices[i]);
                 buf.append(classification.payloads[i]);
+            }
+            break;
+        case Action::SPARSE_REMOVE:
+            assert(classification.bin_index.isValid());
+            buf.append(classification.bin_index.getValue());
+            break;
+        case Action::SPARSE_ADD:
+            assert(classification.bin_index.isValid());
+            assert(!classification.payload.empty());
+            buf.append(classification.bin_index.getValue());
+            buf.append(classification.payload);
+            break;
+        case Action::SPARSE_MULTI_REMOVE:
+            assert(classification.bin_indices.size() >= 2);
+            buf.append(static_cast<uint8_t>(classification.bin_indices.size()));
+            for (const auto idx : classification.bin_indices)
+            {
+                buf.append(idx);
             }
             break;
         case Action::CARRY:
