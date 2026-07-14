@@ -35,6 +35,8 @@
  *                                           (`shouldRefreshAbsentCid_`).
  * CARRY                    All              Payload unchanged since the prior data checkpoint and none of the FULL forcing
  *                                           rules apply.
+ * CONTAINER_SWAP           Contig, Sparse   Same occupied count; exactly one bin's value changed (same index).
+ * CONTAINER_MULTI_SWAP     Contig, Sparse   Same occupied count; two or more bin values changed with no adds or removes.
  * \endverbatim
  *
  * Scalars only ever emit CLOSED, FULL, or CARRY.
@@ -61,6 +63,8 @@
  * | FULL (scalar)          | [scalar bytes]                                         |
  * | FULL (contig)          | [count][bin bytes]..[bin bytes]                        |
  * | FULL (sparse)          | [count][bin idx][bin bytes]..[bin idx][bin bytes]      |
+ * | CONTAINER_SWAP         | [bin idx][bin bytes]                                   |
+ * | CONTAINER_MULTI_SWAP   | [count][bin idx][bin bytes]..[bin idx][bin bytes]      |
  *
  * \par Related implementation files
  *
