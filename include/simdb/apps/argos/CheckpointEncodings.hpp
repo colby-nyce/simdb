@@ -39,6 +39,11 @@
  * CONTAINER_MULTI_SWAP     Contig, Sparse   Same occupied count; two or more bin values changed with no adds or removes.
  * CONTIG_ARRIVE            Contig only      Size +1; prefix unchanged; one new element appended at the tail.
  * CONTIG_DEPART            Contig only      Size -1; front pop — `curr[i] == prev[i+1]` for all remaining indices.
+ * CONTIG_BOOKENDS          Contig only      Same size; shift-left with new tail — `curr[i] == prev[i+1]` for all but the
+ *                                           last index (last bin is a new value).
+ * CONTIG_MIMO              Contig only      FIFO MIMO: D elements depart from the front and A arrive at the tail; after
+ *                                           the depart shift, prefixes match; `D + A > 1`; not a simpler single-op pattern
+ *                                           (e.g. not 1 depart + 1 arrive at same size).
  * \endverbatim
  *
  * Scalars only ever emit CLOSED, FULL, or CARRY.
@@ -69,6 +74,8 @@
  * | CONTAINER_MULTI_SWAP   | [count][bin idx][bin bytes]..[bin idx][bin bytes]      |
  * | CONTIG_ARRIVE          | [pushed bytes]                                         |
  * | CONTIG_DEPART          |                                                        |
+ * | CONTIG_BOOKENDS        | [pushed bytes]                                         |
+ * | CONTIG_MIMO            | [num popped][num pushed][pushed bytes]..[pushed bytes] |
  *
  * \par Related implementation files
  *
