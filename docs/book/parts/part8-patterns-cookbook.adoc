@@ -187,10 +187,11 @@ in flight. Flush only at genuine synchronization points (<<part-vi,Part VI>>) --
 item throws the batching advantage away.
 
 *Compression level.* Compression shrinks the database and the disk I/O the funnel
-must do, but it costs CPU on a worker stage. Choose the level by the compressor
-stage's active/sleep balance, exactly as tabulated in <<part-v,Part V>>: a compressor that
-never sleeps wants a *lower* ratio (or to be split); one that always sleeps can
-afford a *higher* ratio (or to be merged into a neighbor).
+must do, but it costs CPU on a worker stage. Derive from
+`CompressionStage::getBestCompressionLevel_()` (<<part-iv,Part IV>>, SimplePipeline;
+rationale in <<part-v,Part V>>): a compressor that never sleeps gets a *lower* ratio
+(or should be split); one that always sleeps can afford a *higher* ratio (or be
+merged into a neighbor).
 
 *Polling cadence.* Each stage's polling interval (default 100&nbsp;ms, <<part-vi,Part VI>>)
 trades latency against wasted wakeups. Shorter intervals lower latency but wake

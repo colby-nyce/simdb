@@ -205,8 +205,9 @@ never compresses, encodes, or touches the database itself:
 
 Three stages, three threads, plus the one database thread -- the exact shape from
 <<part-iv,Part IV>>. The stager does the interesting work (turning raw snapshots into
-snapshots-plus-deltas); the compressor is the same zlib compression from <<part-iii,Part III>>;
-and the writer is a `DatabaseStage`, so all persistence funnels onto the single
+snapshots-plus-deltas); the compressor subclasses `pipeline::CompressionStage`
+and zlib-compresses the encoded window with adaptive levels from
+<<part-iii,Part III>>; and the writer is a `DatabaseStage`, so all persistence funnels onto the single
 database thread. Because the hand-off is a queue push, the simulation is never
 blocked waiting on encoding or disk.
 

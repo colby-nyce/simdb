@@ -3875,13 +3875,25 @@ protected:
 </div>
 </div>
 <div class="paragraph">
-<p>The compression stage is a plain <code>Stage</code> with one input and one output port. Its
-<code>run_</code> is the pop / transform / emplace / <code>PROCEED</code> pattern from earlier, falling
-back to <code>SLEEP</code> when there is nothing to compress:</p>
+<p>The compression stage derives from <code>simdb::pipeline::CompressionStage</code>, SimDB&#8217;s
+optional helper base for zlib compression stages. It still runs on its own worker
+thread like any <code>Stage</code>; the base class adds one protected API,
+<code>getBestCompressionLevel_()</code>, which maps the thread&#8217;s sleep percentage to a zlib
+level from <code>CompressionLevel::FASTEST</code> (when the thread is busy) through
+<code>HIGHEST</code> (when it is idle). Pass that level as the third argument to
+<code>compressData</code>. The constructor accepts <code>force_compress_regardless</code> (default
+<code>true</code>): when set to <code>false</code>, a saturated thread can receive level
+<code>CompressionLevel::DISABLED</code> (skip compression) instead of always compressing at
+least at <code>FASTEST</code>. The sleep percentage comes from the per-thread performance
+report printed at teardown (<a href="#part-v">Part V</a>).</p>
+</div>
+<div class="paragraph">
+<p>Its <code>run_</code> is the pop / transform / emplace / <code>PROCEED</code> pattern from earlier,
+falling back to <code>SLEEP</code> when there is nothing to compress:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-cpp hljs" data-lang="cpp">class CompressionStage : public simdb::pipeline::Stage
+<pre class="highlightjs highlight"><code class="language-cpp hljs" data-lang="cpp">class CompressionStage : public simdb::pipeline::CompressionStage
 {
 public:
     CompressionStage()
@@ -3897,7 +3909,7 @@ private:
         if (input_queue_-&gt;try_pop(data))
         {
             std::vector&lt;char&gt; compressed_data;
-            simdb::compressData(data, compressed_data);
+            simdb::compressData(data, compressed_data, getBestCompressionLevel_());
             output_queue_-&gt;emplace(std::move(compressed_data));
             return simdb::pipeline::PROCEED;
         }
@@ -4475,10 +4487,19 @@ others idle&#8201;&#8212;&#8201;is how you turn the abstract advice about stage 
 polling intervals into concrete adjustments for <em>your</em> pipeline.</p>
 </div>
 <div class="paragraph">
+<p>For compression stages specifically, SimDB ships
+<code>simdb::pipeline::CompressionStage</code> (<a href="#part-iv">Part IV</a>, SimplePipeline) to apply the
+sleep-percent logic automatically: subclasses call <code>getBestCompressionLevel_()</code>
+inside <code>compressData</code>, and the base maps the thread&#8217;s sleep percentage to a zlib
+level from <code>FASTEST</code> through <code>HIGHEST</code>. The table below remains the rationale&#8201;&#8212;&#8201;and the guide if you write a custom compression stage that does not use the
+helper.</p>
+</div>
+<div class="paragraph">
 <p>To make this concrete, take the <code>compressor</code> stage from our running example. Its
-per-item cost is the zlib compression, which you dial with the
+per-item cost is the zlib compression, which you <em>would</em> dial with the
 <code>compression_level</code> argument to <code>simdb::compressData</code> (from <code>CompressionLevel::
-FASTEST</code> through <code>HIGHEST</code>). Its report tells you which way to turn that dial:</p>
+FASTEST</code> through <code>HIGHEST</code>); with <code>CompressionStage</code>, SimDB dials it for you using
+the same reasoning. Its report tells you which way that automatic dial is turned:</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
@@ -6007,8 +6028,9 @@ never compresses, encodes, or touches the database itself:</p>
 <div class="paragraph">
 <p>Three stages, three threads, plus the one database thread&#8201;&#8212;&#8201;the exact shape from
 <a href="#part-iv">Part IV</a>. The stager does the interesting work (turning raw snapshots into
-snapshots-plus-deltas); the compressor is the same zlib compression from <a href="#part-iii">Part III</a>;
-and the writer is a <code>DatabaseStage</code>, so all persistence funnels onto the single
+snapshots-plus-deltas); the compressor subclasses <code>pipeline::CompressionStage</code>
+and zlib-compresses the encoded window with adaptive levels from
+<a href="#part-iii">Part III</a>; and the writer is a <code>DatabaseStage</code>, so all persistence funnels onto the single
 database thread. Because the hand-off is a queue push, the simulation is never
 blocked waiting on encoding or disk.</p>
 </div>
@@ -6899,10 +6921,11 @@ item throws the batching advantage away.</p>
 </div>
 <div class="paragraph">
 <p><strong>Compression level.</strong> Compression shrinks the database and the disk I/O the funnel
-must do, but it costs CPU on a worker stage. Choose the level by the compressor
-stage&#8217;s active/sleep balance, exactly as tabulated in <a href="#part-v">Part V</a>: a compressor that
-never sleeps wants a <strong>lower</strong> ratio (or to be split); one that always sleeps can
-afford a <strong>higher</strong> ratio (or to be merged into a neighbor).</p>
+must do, but it costs CPU on a worker stage. Derive from
+<code>CompressionStage::getBestCompressionLevel_()</code> (<a href="#part-iv">Part IV</a>, SimplePipeline;
+rationale in <a href="#part-v">Part V</a>): a compressor that never sleeps gets a <strong>lower</strong> ratio
+(or should be split); one that always sleeps can afford a <strong>higher</strong> ratio (or be
+merged into a neighbor).</p>
 </div>
 <div class="paragraph">
 <p><strong>Polling cadence.</strong> Each stage&#8217;s polling interval (default 100&nbsp;ms, <a href="#part-vi">Part VI</a>)
@@ -8156,6 +8179,10 @@ supplying every column in schema order.</p>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Stage</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Subclass; implement <code>run_(bool force)</code>; return <code>PROCEED</code> or <code>SLEEP</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>CompressionStage</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional base for zlib compression stages; <code>getBestCompressionLevel_()</code> maps thread sleep % to a <code>CompressionLevel</code>.</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Ports</p></td>

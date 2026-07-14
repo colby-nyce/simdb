@@ -188,6 +188,7 @@ supplying every column in schema order.
 | Concept | API / behavior
 
 | `Stage` | Subclass; implement `run_(bool force)`; return `PROCEED` or `SLEEP`.
+| `CompressionStage` | Optional base for zlib compression stages; `getBestCompressionLevel_()` maps thread sleep % to a `CompressionLevel`.
 | Ports | `addInPort_<T>("name", queue_ptr)` / `addOutPort_<T>(…)` in constructor.
 | `PipelineManager` | Owns pipelines for one or more apps.
 | `createPipeline(name, app)` | Register one pipeline for an app (typical: one call per app). Multiple apps ⇒ multiple pipelines on the shared manager.

@@ -608,13 +608,24 @@ protected:
 };
 ----
 
-The compression stage is a plain `Stage` with one input and one output port. Its
-`run_` is the pop / transform / emplace / `PROCEED` pattern from earlier, falling
-back to `SLEEP` when there is nothing to compress:
+The compression stage derives from `simdb::pipeline::CompressionStage`, SimDB's
+optional helper base for zlib compression stages. It still runs on its own worker
+thread like any `Stage`; the base class adds one protected API,
+`getBestCompressionLevel_()`, which maps the thread's sleep percentage to a zlib
+level from `CompressionLevel::FASTEST` (when the thread is busy) through
+`HIGHEST` (when it is idle). Pass that level as the third argument to
+`compressData`. The constructor accepts `force_compress_regardless` (default
+`true`): when set to `false`, a saturated thread can receive level
+`CompressionLevel::DISABLED` (skip compression) instead of always compressing at
+least at `FASTEST`. The sleep percentage comes from the per-thread performance
+report printed at teardown (<<part-v,Part V>>).
+
+Its `run_` is the pop / transform / emplace / `PROCEED` pattern from earlier,
+falling back to `SLEEP` when there is nothing to compress:
 
 [source,cpp]
 ----
-class CompressionStage : public simdb::pipeline::Stage
+class CompressionStage : public simdb::pipeline::CompressionStage
 {
 public:
     CompressionStage()
@@ -630,7 +641,7 @@ private:
         if (input_queue_->try_pop(data))
         {
             std::vector<char> compressed_data;
-            simdb::compressData(data, compressed_data);
+            simdb::compressData(data, compressed_data, getBestCompressionLevel_());
             output_queue_->emplace(std::move(compressed_data));
             return simdb::pipeline::PROCEED;
         }

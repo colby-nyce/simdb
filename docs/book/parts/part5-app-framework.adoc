@@ -315,10 +315,19 @@ Balancing these numbers across stages -- no single stage pinned at 100% while
 others idle -- is how you turn the abstract advice about stage granularity and
 polling intervals into concrete adjustments for _your_ pipeline.
 
+For compression stages specifically, SimDB ships
+`simdb::pipeline::CompressionStage` (<<part-iv,Part IV>>, SimplePipeline) to apply the
+sleep-percent logic automatically: subclasses call `getBestCompressionLevel_()`
+inside `compressData`, and the base maps the thread's sleep percentage to a zlib
+level from `FASTEST` through `HIGHEST`. The table below remains the rationale --
+and the guide if you write a custom compression stage that does not use the
+helper.
+
 To make this concrete, take the `compressor` stage from our running example. Its
-per-item cost is the zlib compression, which you dial with the
+per-item cost is the zlib compression, which you _would_ dial with the
 `compression_level` argument to `simdb::compressData` (from `CompressionLevel::
-FASTEST` through `HIGHEST`). Its report tells you which way to turn that dial:
+FASTEST` through `HIGHEST`); with `CompressionStage`, SimDB dials it for you using
+the same reasoning. Its report tells you which way that automatic dial is turned:
 
 [cols="1,1,3"]
 |===
