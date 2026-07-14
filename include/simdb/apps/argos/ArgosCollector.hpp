@@ -421,124 +421,15 @@ private:
         /// Must be called from main thread
         void writeMetaOnPostTeardown(DatabaseManager* db_mgr)
         {
-            writeShowInUI_(db_mgr);
-            writeQueueMaxSizes_(db_mgr);
+            // TODO
+            (void)db_mgr;
         }
 
     private:
         pipeline::PipelineAction run_(bool) override
         {
-            // TODO
+            // TODO (until this is filled in, the rest of the pipeline has nothing to do)
             return pipeline::PipelineAction::SLEEP;
-        }
-
-        void updateContainerMaxSize_(uint16_t cid, uint16_t size)
-        {
-            auto it = container_max_sizes_.find(cid);
-            if (it == container_max_sizes_.end())
-            {
-                container_max_sizes_.emplace(cid, size);
-            } else
-            {
-                it->second = std::max(it->second, size);
-            }
-        }
-
-        // Set ShowInUI=1 for all the collectables that actually collected data
-        void writeShowInUI_(DatabaseManager* db_mgr) const
-        {
-            const std::vector<int> valid_cids(cids_with_data_.begin(), cids_with_data_.end());
-            if (!valid_cids.empty())
-            {
-                std::ostringstream oss;
-                oss << "UPDATE CollectableTreeNodes SET ShowInUI=1 WHERE CID IN (";
-
-                bool comma = false;
-                for (const auto cid : valid_cids)
-                {
-                    if (comma)
-                    {
-                        oss << ",";
-                    }
-                    oss << cid;
-                    comma = true;
-                }
-                oss << ")";
-                db_mgr->EXECUTE(oss.str());
-            }
-
-            auto query = db_mgr->createQuery("CollectableTreeNodes");
-            query->addConstraintForInt("CID", SetConstraints::NOT_IN_SET, valid_cids);
-
-            struct CID_Info
-            {
-                std::string path;
-                std::string type;
-
-                CID_Info(const std::string& path, const std::string& type) :
-                    path(path),
-                    type(type)
-                {
-                }
-            };
-
-            std::string path;
-            query->select("FullPath", path);
-
-            std::string type;
-            query->select("TypeName", type);
-
-            std::vector<CID_Info> cid_infos;
-            auto results = query->getResultSet();
-            while (results.getNextRecord())
-            {
-                cid_infos.emplace_back(path, type);
-            }
-
-            if (!cid_infos.empty())
-            {
-                std::ostringstream oss;
-                oss << "No data was ever collected for the following collectables, and will not be shown in Argos:\n";
-                size_t leftcol_w = 0;
-                for (const auto& info : cid_infos)
-                {
-                    leftcol_w = std::max(leftcol_w, info.path.size());
-                }
-
-                leftcol_w += 12;
-                for (const auto& info : cid_infos)
-                {
-                    oss << std::left << std::setw(leftcol_w) << info.path;
-                    if (auto idx = info.type.find("_sparse"); idx != std::string::npos)
-                    {
-                        auto base_type = info.type.substr(0, idx);
-                        oss << "(Sparse container of '" << base_type << "')";
-                    } else if (auto idx = info.type.find("_contig"); idx != std::string::npos)
-                    {
-                        auto base_type = info.type.substr(0, idx);
-                        oss << "(Contig container of '" << base_type << "')";
-                    } else
-                    {
-                        oss << "(" << info.type << ")";
-                    }
-                    oss << "\n";
-                }
-
-                auto warning = oss.str();
-                warning.pop_back();
-
-                db_mgr->INSERT(SQL_TABLE("Notifications"), SQL_COLUMNS("NotifStr", "NotifType"),
-                               SQL_VALUES(warning, (int)NotifType::WARNING));
-            }
-        }
-
-        void writeQueueMaxSizes_(DatabaseManager* db_mgr) const
-        {
-            auto inserter = db_mgr->prepareINSERT(SQL_TABLE("QueueMaxSizes"));
-            for (const auto& [cid, max_size] : container_max_sizes_)
-            {
-                inserter->createRecordWithColValues((int)cid, (int)max_size);
-            }
         }
 
         const size_t heartbeat_;
