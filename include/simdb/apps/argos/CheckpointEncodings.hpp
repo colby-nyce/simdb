@@ -37,6 +37,8 @@
  *                                           rules apply.
  * CONTAINER_SWAP           Contig, Sparse   Same occupied count; exactly one bin's value changed (same index).
  * CONTAINER_MULTI_SWAP     Contig, Sparse   Same occupied count; two or more bin values changed with no adds or removes.
+ * CONTIG_ARRIVE            Contig only      Size +1; prefix unchanged; one new element appended at the tail.
+ * CONTIG_DEPART            Contig only      Size -1; front pop — `curr[i] == prev[i+1]` for all remaining indices.
  * \endverbatim
  *
  * Scalars only ever emit CLOSED, FULL, or CARRY.
@@ -65,6 +67,8 @@
  * | FULL (sparse)          | [count][bin idx][bin bytes]..[bin idx][bin bytes]      |
  * | CONTAINER_SWAP         | [bin idx][bin bytes]                                   |
  * | CONTAINER_MULTI_SWAP   | [count][bin idx][bin bytes]..[bin idx][bin bytes]      |
+ * | CONTIG_ARRIVE          | [pushed bytes]                                         |
+ * | CONTIG_DEPART          |                                                        |
  *
  * \par Related implementation files
  *

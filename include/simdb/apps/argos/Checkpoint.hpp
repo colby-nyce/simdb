@@ -23,6 +23,9 @@ enum class Action : uint8_t {
 
     CONTAINER_SWAP = 0x10,
     CONTAINER_MULTI_SWAP = 0x11,
+
+    CONTIG_ARRIVE = 0x20,
+    CONTIG_DEPART = 0x21,
 };
 
 //! \class CollectableCheckpoint
@@ -313,6 +316,10 @@ private:
             return Action::CONTAINER_SWAP;
         case ContigDeltaKind::MULTI_SWAP:
             return Action::CONTAINER_MULTI_SWAP;
+        case ContigDeltaKind::ARRIVE:
+            return Action::CONTIG_ARRIVE;
+        case ContigDeltaKind::DEPART:
+            return Action::CONTIG_DEPART;
         case ContigDeltaKind::FULL:
             break;
         }
@@ -380,6 +387,12 @@ private:
             }
             break;
         case Action::CARRY:
+            break;
+        case Action::CONTIG_ARRIVE:
+            assert(!classification.payload.empty());
+            buf.append(classification.payload);
+            break;
+        case Action::CONTIG_DEPART:
             break;
         default:
             throw DBException("Unexpected contig delta action");

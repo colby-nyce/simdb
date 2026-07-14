@@ -41,7 +41,7 @@ inline std::ostream& operator<<(std::ostream& os, ScalarDeltaKind kind)
 }
 
 //! Contiguous-container delta kinds.
-enum class ContigDeltaKind { CARRY, SWAP, MULTI_SWAP, FULL };
+enum class ContigDeltaKind { CARRY, SWAP, MULTI_SWAP, ARRIVE, DEPART, FULL };
 
 //! Result of classifying a contig container transition.
 struct ContigDeltaClassification
@@ -131,6 +131,43 @@ inline ContigDeltaClassification classifyContigChange(const std::vector<std::vec
         return result;
     }
 
+    if (curr_size == prev_size + 1)
+    {
+        bool arrive = true;
+        for (uint16_t i = 0; i < prev_size; ++i)
+        {
+            if (curr[i] != prev[i])
+            {
+                arrive = false;
+                break;
+            }
+        }
+
+        if (arrive)
+        {
+            result.kind = ContigDeltaKind::ARRIVE;
+            result.payload = curr[curr_size - 1];
+            return result;
+        }
+    } else if (prev_size == curr_size + 1)
+    {
+        bool depart = true;
+        for (uint16_t i = 0; i < curr_size; ++i)
+        {
+            if (curr[i] != prev[i + 1])
+            {
+                depart = false;
+                break;
+            }
+        }
+
+        if (depart)
+        {
+            result.kind = ContigDeltaKind::DEPART;
+            return result;
+        }
+    }
+
     result.kind = ContigDeltaKind::FULL;
     return result;
 }
@@ -145,6 +182,10 @@ inline std::ostream& operator<<(std::ostream& os, ContigDeltaKind kind)
         return os << "SWAP";
     case ContigDeltaKind::MULTI_SWAP:
         return os << "MULTI_SWAP";
+    case ContigDeltaKind::ARRIVE:
+        return os << "ARRIVE";
+    case ContigDeltaKind::DEPART:
+        return os << "DEPART";
     case ContigDeltaKind::FULL:
         return os << "FULL";
     }
