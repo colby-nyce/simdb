@@ -8,6 +8,7 @@
 #include "simdb/apps/argos/PipelineStagerInterface.hpp"
 #include "simdb/apps/argos/Timestamps.hpp"
 #include "simdb/sqlite/Dump.hpp"
+#include "simdb/utils/Compress.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::argos {
@@ -61,6 +62,44 @@ public:
         enum_members_tbl.addColumn("EnumID", dt::int32_t);
         enum_members_tbl.addColumn("MemberName", dt::string_t);
         enum_members_tbl.addColumn("MemberValueStr", dt::string_t);
+
+        auto& timestamps_tbl = schema.addTable("Timestamps");
+        timestamps_tbl.addColumn("Timestamp", dt::uint64_t);
+        timestamps_tbl.ensureUnique("Timestamp");
+
+        auto& collection_records_tbl = schema.addTable("CollectionRecords");
+        collection_records_tbl.addColumn("TimestampID", dt::int32_t);
+        collection_records_tbl.addColumn("Records", dt::blob_t);
+        collection_records_tbl.ensureUnique("TimestampID");
+        collection_records_tbl.unsetPrimaryKey();
+
+        auto& timestamp_clocks_tbl = schema.addTable("TimestampClocks");
+        timestamp_clocks_tbl.addColumn("TimestampID", dt::int32_t);
+        timestamp_clocks_tbl.addColumn("ClockID", dt::int32_t);
+        timestamp_clocks_tbl.createCompoundIndexOn({"TimestampID", "ClockID"});
+        timestamp_clocks_tbl.unsetPrimaryKey();
+
+        auto& queue_max_sizes_tbl = schema.addTable("QueueMaxSizes");
+        queue_max_sizes_tbl.addColumn("CID", dt::int32_t);
+        queue_max_sizes_tbl.addColumn("MaxSize", dt::int32_t);
+        queue_max_sizes_tbl.ensureUnique("CID");
+        queue_max_sizes_tbl.unsetPrimaryKey();
+
+        auto& notif_tbl = schema.addTable("Notifications");
+        notif_tbl.addColumn("Timestamp", dt::uint64_t);
+        notif_tbl.addColumn("NotifType", dt::int32_t);
+        notif_tbl.addColumn("NotifStr", dt::string_t);
+
+        // TODO cnyce: populate this table in SimDB (Sparta will handle it for now)
+        auto& dtype_schemas_tbl = schema.addTable("DataTypeSchemas");
+        dtype_schemas_tbl.addColumn("RootTypeName", dt::string_t);
+
+        // TODO cnyce: populate this table in SimDB (Sparta will handle it for now)
+        auto& dtype_nodes_tbl = schema.addTable("DataTypeNodes");
+        dtype_nodes_tbl.addColumn("SchemaId", dt::int32_t);
+        dtype_nodes_tbl.addColumn("Name", dt::string_t);
+        dtype_nodes_tbl.addColumn("TypeName", dt::string_t);
+        dtype_nodes_tbl.addColumn("FormatStr", dt::string_t);
     }
 
     void setHeartbeat(size_t heartbeat)
@@ -181,8 +220,48 @@ public:
 
     void createPipeline(pipeline::PipelineManager* pipeline_mgr) override
     {
-        // TODO
-        (void)pipeline_mgr;
+        auto pipeline = pipeline_mgr->createPipeline(NAME, this);
+
+        pipeline_stager_ = pipeline->addStage<PipelineStager>("stager", heartbeat_);
+        pipeline->addStage<Compressor>("compressor");
+        pipeline->addStage<Writer>("writer");
+        pipeline->noMoreStages();
+
+        pipeline->bind("stager.data_output_queue", "compressor.data_input_queue");
+        pipeline->bind("compressor.data_output_queue", "writer.data_input_queue");
+        pipeline->noMoreBindings();
+
+        pipeline_head_ = pipeline->getInPortQueue<LedgerPtr>("stager.main_input_queue");
+        notif_head_ = pipeline->getInPortQueue<NotifEntry>("writer.notif_input_queue");
+
+        for (const auto& [cid, meta] : meta_by_cid_)
+        {
+            const auto& encoded_dtype = std::get<2>(meta);
+
+            ContainerMeta container_meta;
+            if (extractContainerMeta_(encoded_dtype, container_meta))
+            {
+                pipeline_stager_->setContainerDataType(cid, container_meta.sparse, container_meta.capacity);
+            } else
+            {
+                pipeline_stager_->setScalarDataType(cid);
+            }
+        }
+
+        NotifEntry notif_entry;
+        while (pending_notif_entries_.try_pop(notif_entry))
+        {
+            notif_head_->emplace(std::move(notif_entry));
+        }
+
+        for (const auto& collector : entry_points_)
+        {
+            auto cid = collector->getID();
+            const auto& clk_name = std::get<1>(meta_by_cid_.at(cid));
+            pipeline_stager_->setCollectableClock(cid, getClockId_(clk_name));
+        }
+
+        is_live_ = true;
     }
 
     void postInit(int, char**) override
@@ -211,40 +290,53 @@ public:
 
     void stage(uint16_t cid, std::vector<char>&& scalar_bytes) override
     {
-        // TODO
-        (void)cid;
-        (void)scalar_bytes;
+        assertLive_();
+        checkTimeAdvanced_();
+        ledger_->recordScalar(cid, std::move(scalar_bytes));
     }
 
     void stage(uint16_t cid, std::vector<std::vector<char>>&& contig_bin_bytes) override
     {
-        // TODO
-        (void)cid;
-        (void)contig_bin_bytes;
+        assertLive_();
+        checkTimeAdvanced_();
+        ledger_->recordContig(cid, std::move(contig_bin_bytes));
     }
 
     void stage(uint16_t cid, std::map<uint16_t, std::vector<char>>&& sparse_bin_bytes) override
     {
-        // TODO
-        (void)cid;
-        (void)sparse_bin_bytes;
+        assertLive_();
+        checkTimeAdvanced_();
+        ledger_->recordSparse(cid, std::move(sparse_bin_bytes));
     }
 
     void closeRecord(uint16_t cid) override
     {
-        // TODO
-        (void)cid;
+        assertLive_();
+        checkTimeAdvanced_();
+        ledger_->closeRecord(cid);
     }
 
     void postNotif(const std::string& notif, NotifType type) override
     {
-        // TODO
-        (void)notif;
-        (void)type;
+        NotifEntry entry(timestamp_.get(), notif, type);
+        auto notif_entries = is_live_ ? notif_head_ : &pending_notif_entries_;
+        notif_entries->emplace(std::move(entry));
+    }
+
+    void preTeardown() override
+    {
+        if (ledger_ && ledger_->hasEntries())
+        {
+            pipeline_head_->emplace(std::move(ledger_));
+        }
     }
 
     void postTeardown() override
     {
+        if (pipeline_stager_)
+        {
+            pipeline_stager_->writeMetaOnPostTeardown(db_mgr_);
+        }
         tiny_strings_.serialize(db_mgr_);
         enum_inspector_.serializeEnumMaps(db_mgr_);
 
@@ -256,10 +348,287 @@ public:
             dumpTable(db_mgr_, "CollectedEnums");
             dumpTable(db_mgr_, "EnumMembers");
             dumpTable(db_mgr_, "CollectableTreeNodes");
+            dumpTable(db_mgr_, "QueueMaxSizes");
+            dumpTable(db_mgr_, "Notifications");
         }
     }
 
 private:
+    /// Entry to the DB pipeline (1st async stage input)
+    ConcurrentQueue<LedgerPtr>* pipeline_head_ = nullptr;
+
+    /// Entry to the DB writer stage's notifications
+    ConcurrentQueue<NotifEntry>* notif_head_ = nullptr;
+
+    /// Queued notifications prior to createPipeline()
+    ConcurrentQueue<NotifEntry> pending_notif_entries_;
+
+    /// Ledger of all collection activity at one simulation time point
+    LedgerPtr ledger_;
+
+    /// \class PipelineStager
+    /// \brief 1st async stage. Takes collected data from the Ledger and appends checkpoints to the
+    /// CID's checkpoint chains for snapshot-delta compression.
+    class PipelineStager : public pipeline::Stage
+    {
+    public:
+        PipelineStager(size_t heartbeat) :
+            heartbeat_(heartbeat)
+        {
+            addInPort_<LedgerPtr>("main_input_queue", main_input_queue_);
+            addOutPort_<CollectionEntries>("data_output_queue", data_output_queue_);
+        }
+
+        /// Must be called from main thread
+        void setCollectableClock(uint16_t cid, uint32_t clock_id)
+        {
+            collectable_clock_ids_[cid] = clock_id;
+            clock_ids_.insert(clock_id);
+        }
+
+        /// Must be called from main thread
+        void setScalarDataType(uint16_t cid)
+        {
+            // TODO: checkpointers
+            (void)cid;
+            ++num_scalars_;
+        }
+
+        /// Must be called from main thread
+        void setContainerDataType(uint16_t cid, bool sparse, size_t capacity)
+        {
+            if (sparse)
+            {
+                // TODO: checkpointers
+                (void)cid;
+                (void)capacity;
+                ++num_sparses_;
+            } else
+            {
+                // TODO: checkpointers
+                (void)cid;
+                (void)capacity;
+                ++num_contigs_;
+            }
+        }
+
+        size_t getNumScalars() const { return num_scalars_; }
+
+        size_t getNumContigs() const { return num_contigs_; }
+
+        size_t getNumSparses() const { return num_sparses_; }
+
+        /// Must be called from main thread
+        void writeMetaOnPostTeardown(DatabaseManager* db_mgr)
+        {
+            // TODO
+            (void)db_mgr;
+        }
+
+    private:
+        pipeline::PipelineAction run_(bool) override
+        {
+            // TODO (until this is filled in, the rest of the pipeline has nothing to do)
+            return pipeline::PipelineAction::SLEEP;
+        }
+
+        const size_t heartbeat_;
+
+        ConcurrentQueue<LedgerPtr>* main_input_queue_ = nullptr;
+        ConcurrentQueue<CollectionEntries>* data_output_queue_ = nullptr;
+
+        std::unordered_map<uint16_t, uint32_t> collectable_clock_ids_;
+        std::unordered_set<uint32_t> clock_ids_;
+        std::unordered_set<uint16_t> cids_with_data_;
+
+        std::unordered_map<uint16_t, uint16_t> container_max_sizes_;
+
+        size_t num_scalars_ = 0;
+        size_t num_contigs_ = 0;
+        size_t num_sparses_ = 0;
+    };
+
+    /// \class Compressor
+    /// \brief 2nd async stage. Performs zlib compression.
+    class Compressor : public pipeline::Stage
+    {
+    public:
+        Compressor()
+        {
+            addInPort_<CollectionEntries>("data_input_queue", input_queue_);
+            addOutPort_<CompressedCollectionEntries>("data_output_queue", output_queue_);
+        }
+
+    private:
+        pipeline::PipelineAction run_(bool) override
+        {
+            CollectionEntries collection_at_time;
+            if (input_queue_->try_pop(collection_at_time))
+            {
+                std::vector<char> uncompressed;
+                for (const auto& src : collection_at_time.entries)
+                {
+                    const auto& src_data = src->getData();
+                    uncompressed.insert(uncompressed.end(), src_data.begin(), src_data.end());
+                }
+
+                CompressedCollectionEntries compressed;
+                compressData(uncompressed, compressed.compressed_entries);
+                compressed.sim_time = collection_at_time.sim_time;
+                compressed.clock_ids = std::move(collection_at_time.clock_ids);
+                output_queue_->emplace(std::move(compressed));
+                return pipeline::PipelineAction::PROCEED;
+            }
+
+            return pipeline::PipelineAction::SLEEP;
+        }
+
+        ConcurrentQueue<CollectionEntries>* input_queue_ = nullptr;
+        ConcurrentQueue<CompressedCollectionEntries>* output_queue_ = nullptr;
+    };
+
+    /// \class Writer
+    /// \brief Final async stage. Writes collected/checkpointed/compressed data and notifications
+    /// to the database.
+    class Writer : public pipeline::DatabaseStage<ArgosCollector>
+    {
+    public:
+        Writer()
+        {
+            addInPort_<CompressedCollectionEntries>("data_input_queue", data_input_queue_);
+            addInPort_<NotifEntry>("notif_input_queue", notif_input_queue_);
+        }
+
+    private:
+        pipeline::PipelineAction run_(bool) override
+        {
+            auto action = pipeline::PipelineAction::SLEEP;
+
+            CompressedCollectionEntries collection_at_time;
+            if (data_input_queue_->try_pop(collection_at_time))
+            {
+                auto db_mgr = getDatabaseManager_();
+                auto id = Timestamp::createTimestampInDatabase(db_mgr, collection_at_time.sim_time);
+
+                auto inserter = getTableInserter_("CollectionRecords");
+                const auto& bytes = collection_at_time.compressed_entries;
+                inserter->createRecordWithColValues(id, bytes);
+
+                if (!collection_at_time.clock_ids.empty())
+                {
+                    auto clk_inserter = getTableInserter_("TimestampClocks");
+                    for (const auto clock_id : collection_at_time.clock_ids)
+                    {
+                        clk_inserter->createRecordWithColValues(id, static_cast<int>(clock_id));
+                    }
+                }
+
+                action = pipeline::PipelineAction::PROCEED;
+            }
+
+            // Notifications are expected to be "sporadic" / one-off. Flush all
+            // of the notifs now, and do not consider "notification-only" to mean
+            // "keep greedily processing / keep threads running". This is the
+            // reason why we use WHILE here instead of IF like above, and the
+            // returned action is not set to PROCEED based on the availability
+            // of new notifications.
+            NotifEntry notif;
+            while (notif_input_queue_->try_pop(notif))
+            {
+                auto inserter = getTableInserter_("Notifications");
+
+                const auto& notif_str = notif.notif;
+                const auto notif_type = notif.type;
+
+                if (notif.sim_time.isValid())
+                {
+                    inserter->setColumnValue(0, notif.sim_time.getValue());
+                }
+                inserter->setColumnValue(1, (int)notif_type);
+                inserter->setColumnValue(2, notif_str);
+                inserter->createRecord();
+            }
+
+            return action;
+        }
+
+        ConcurrentQueue<CompressedCollectionEntries>* data_input_queue_ = nullptr;
+        ConcurrentQueue<NotifEntry>* notif_input_queue_ = nullptr;
+    };
+
+    void assertLive_() const
+    {
+        if (!is_live_ || !timestamp_)
+        {
+            throw DBException("API call cannot be made until pipeline is open and "
+                              "timestampWith() was called");
+        }
+    }
+
+    void checkTimeAdvanced_()
+    {
+        assertLive_();
+
+        auto current_time = timestamp_->getTime();
+        if (!current_stage_time_.isValid())
+        {
+            current_stage_time_ = current_time;
+            ledger_ = std::make_unique<Ledger>(current_time, current_window_id_++, pipeline_stager_->getNumScalars(),
+                                               pipeline_stager_->getNumContigs(), pipeline_stager_->getNumSparses());
+        } else if (current_time < current_stage_time_.getValue())
+        {
+            throw DBException("Time must be monotonically increasing");
+        } else if (current_time > current_stage_time_.getValue())
+        {
+            if (ledger_)
+            {
+                // Send current ledger to the pipeline and create a new one.
+                pipeline_head_->emplace(std::move(ledger_));
+
+                ledger_ =
+                    std::make_unique<Ledger>(current_time, current_window_id_++, pipeline_stager_->getNumScalars(),
+                                             pipeline_stager_->getNumContigs(), pipeline_stager_->getNumSparses());
+            }
+
+            current_stage_time_ = current_time;
+        }
+    }
+
+    struct ContainerMeta
+    {
+        ValidValue<bool> sparse;
+        ValidValue<size_t> capacity;
+    };
+
+    static bool extractContainerMeta_(const std::string& encoded_dtype, ContainerMeta& meta)
+    {
+        auto extract_capacity = [&](const bool contig) {
+            const std::string lookfor = contig ? "_contig_capacity" : "_sparse_capacity";
+            if (auto idx = encoded_dtype.find(lookfor); idx != std::string::npos)
+            {
+                auto capacity = std::stoi(encoded_dtype.substr(idx + lookfor.size()));
+                meta.sparse = !contig;
+                meta.capacity = capacity;
+                return true;
+            }
+            return false;
+        };
+
+        return extract_capacity(true) || extract_capacity(false);
+    }
+
+    uint32_t getClockId_(const std::string& clk_name) const
+    {
+        for (size_t i = 0; i < clocks_.size(); ++i)
+        {
+            if (std::get<0>(clocks_[i]) == clk_name)
+            {
+                return static_cast<uint32_t>(i + 1);
+            }
+        }
+        throw DBException("Unknown clock: ") << clk_name;
+    }
+
     DatabaseManager* const db_mgr_;
     size_t heartbeat_ = DEFAULT_HEARTBEAT;
 
@@ -278,8 +647,12 @@ private:
 
     std::unique_ptr<Timestamp> timestamp_;
     std::vector<std::unique_ptr<EntryPoint>> entry_points_;
+    PipelineStager* pipeline_stager_ = nullptr;
+    ValidValue<uint64_t> current_stage_time_;
+    uint64_t current_window_id_ = 1;
     TinyStrings<> tiny_strings_;
     EnumInspector enum_inspector_;
+    bool is_live_ = false;
 };
 
 } // namespace simdb::argos
