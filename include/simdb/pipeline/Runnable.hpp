@@ -64,10 +64,23 @@ public:
     /// \param enable true to enable, false to disable.
     void enable(bool enable = true) { enabled_ = enable; }
 
+protected:
+    const PollingThread* getThread_() const
+    {
+        if (!thread_)
+        {
+            throw DBException("PollingThread never set");
+        }
+        return thread_;
+    }
+
 private:
     virtual std::string getDescription_() const = 0;
     std::string description_;
     bool enabled_ = true;
+
+    const PollingThread* thread_ = nullptr;
+    friend class PollingThread;
 };
 
 /*!
