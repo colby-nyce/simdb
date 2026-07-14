@@ -3,6 +3,7 @@
 #pragma once
 
 #include "simdb/apps/App.hpp"
+#include "simdb/apps/argos/Checkpointer.hpp"
 #include "simdb/apps/argos/EntryPoint.hpp"
 #include "simdb/apps/argos/EnumInspector.hpp"
 #include "simdb/apps/argos/PipelineStagerInterface.hpp"
@@ -389,8 +390,7 @@ private:
         /// Must be called from main thread
         void setScalarDataType(uint16_t cid)
         {
-            // TODO: checkpointers
-            (void)cid;
+            checkpointers_[cid] = std::make_unique<ScalarCheckpointer>(heartbeat_);
             ++num_scalars_;
         }
 
@@ -399,15 +399,11 @@ private:
         {
             if (sparse)
             {
-                // TODO: checkpointers
-                (void)cid;
-                (void)capacity;
+                checkpointers_[cid] = std::make_unique<SparseContainerCheckpointer>(heartbeat_, capacity);
                 ++num_sparses_;
             } else
             {
-                // TODO: checkpointers
-                (void)cid;
-                (void)capacity;
+                checkpointers_[cid] = std::make_unique<ContigContainerCheckpointer>(heartbeat_, capacity);
                 ++num_contigs_;
             }
         }
@@ -421,15 +417,194 @@ private:
         /// Must be called from main thread
         void writeMetaOnPostTeardown(DatabaseManager* db_mgr)
         {
-            // TODO
-            (void)db_mgr;
+            writeShowInUI_(db_mgr);
+            writeQueueMaxSizes_(db_mgr);
         }
 
     private:
         pipeline::PipelineAction run_(bool) override
         {
-            // TODO (until this is filled in, the rest of the pipeline has nothing to do)
-            return pipeline::PipelineAction::SLEEP;
+            auto action = pipeline::PipelineAction::SLEEP;
+
+            LedgerPtr ledger;
+            while (main_input_queue_->try_pop(ledger))
+            {
+                auto window_id = ledger->getWindowId();
+
+                auto scalars = ledger->releaseScalarEntries();
+                for (auto& scalar : scalars)
+                {
+                    auto cid = scalar.cid;
+                    auto data = std::move(scalar.scalar_bytes);
+                    checkpointers_.at(cid)->createCheckpoint(window_id, std::move(data));
+                }
+
+                auto contigs = ledger->releaseContigEntries();
+                for (auto& contig : contigs)
+                {
+                    auto cid = contig.cid;
+                    auto data = std::move(contig.contig_bin_bytes);
+                    checkpointers_.at(cid)->createCheckpoint(window_id, std::move(data));
+                    updateContainerMaxSize_(cid, detail::getContainerSize(data));
+                }
+
+                auto sparses = ledger->releaseSparseEntries();
+                for (auto& sparse : sparses)
+                {
+                    auto cid = sparse.cid;
+                    auto data = std::move(sparse.sparse_bin_bytes);
+                    checkpointers_.at(cid)->createCheckpoint(window_id, std::move(data));
+                    updateContainerMaxSize_(cid, detail::getContainerSize(data));
+                }
+
+                for (const auto cid : ledger->getClosedCIDs())
+                {
+                    checkpointers_.at(cid)->closeRecord(window_id);
+                }
+
+                CollectionEntries to_send;
+                auto sim_time = ledger->getSimTime();
+                to_send.sim_time = sim_time;
+
+                const auto multi_clock = clock_ids_.size() > 1;
+                for (auto& [cid, checkpointer] : checkpointers_)
+                {
+                    if (multi_clock && !checkpointer->participatedInWindow(window_id))
+                    {
+                        continue;
+                    }
+
+                    auto entries = checkpointer->encodeForPipeline(window_id, sim_time, cid);
+                    for (auto& entry : entries)
+                    {
+                        cids_with_data_.insert(cid);
+                        to_send.entries.emplace_back(std::move(entry));
+                        if (const auto clk_it = collectable_clock_ids_.find(cid);
+                            clk_it != collectable_clock_ids_.end())
+                        {
+                            to_send.clock_ids.insert(clk_it->second);
+                        }
+                    }
+                }
+
+                if (!to_send.entries.empty())
+                {
+                    data_output_queue_->emplace(std::move(to_send));
+                }
+
+                action = pipeline::PipelineAction::PROCEED;
+            }
+
+            return action;
+        }
+
+        void updateContainerMaxSize_(uint16_t cid, uint16_t size)
+        {
+            auto it = container_max_sizes_.find(cid);
+            if (it == container_max_sizes_.end())
+            {
+                container_max_sizes_.emplace(cid, size);
+            } else
+            {
+                it->second = std::max(it->second, size);
+            }
+        }
+
+        // Set ShowInUI=1 for all the collectables that actually collected data
+        void writeShowInUI_(DatabaseManager* db_mgr) const
+        {
+            const std::vector<int> valid_cids(cids_with_data_.begin(), cids_with_data_.end());
+            if (!valid_cids.empty())
+            {
+                std::ostringstream oss;
+                oss << "UPDATE CollectableTreeNodes SET ShowInUI=1 WHERE CID IN (";
+
+                bool comma = false;
+                for (const auto cid : valid_cids)
+                {
+                    if (comma)
+                    {
+                        oss << ",";
+                    }
+                    oss << cid;
+                    comma = true;
+                }
+                oss << ")";
+                db_mgr->EXECUTE(oss.str());
+            }
+
+            auto query = db_mgr->createQuery("CollectableTreeNodes");
+            query->addConstraintForInt("CID", SetConstraints::NOT_IN_SET, valid_cids);
+
+            struct CID_Info
+            {
+                std::string path;
+                std::string type;
+
+                CID_Info(const std::string& path, const std::string& type) :
+                    path(path),
+                    type(type)
+                {
+                }
+            };
+
+            std::string path;
+            query->select("FullPath", path);
+
+            std::string type;
+            query->select("TypeName", type);
+
+            std::vector<CID_Info> cid_infos;
+            auto results = query->getResultSet();
+            while (results.getNextRecord())
+            {
+                cid_infos.emplace_back(path, type);
+            }
+
+            if (!cid_infos.empty())
+            {
+                std::ostringstream oss;
+                oss << "No data was ever collected for the following collectables, and will not be shown in Argos:\n";
+                size_t leftcol_w = 0;
+                for (const auto& info : cid_infos)
+                {
+                    leftcol_w = std::max(leftcol_w, info.path.size());
+                }
+
+                leftcol_w += 12;
+                for (const auto& info : cid_infos)
+                {
+                    oss << std::left << std::setw(leftcol_w) << info.path;
+                    if (auto idx = info.type.find("_sparse"); idx != std::string::npos)
+                    {
+                        auto base_type = info.type.substr(0, idx);
+                        oss << "(Sparse container of '" << base_type << "')";
+                    } else if (auto idx = info.type.find("_contig"); idx != std::string::npos)
+                    {
+                        auto base_type = info.type.substr(0, idx);
+                        oss << "(Contig container of '" << base_type << "')";
+                    } else
+                    {
+                        oss << "(" << info.type << ")";
+                    }
+                    oss << "\n";
+                }
+
+                auto warning = oss.str();
+                warning.pop_back();
+
+                db_mgr->INSERT(SQL_TABLE("Notifications"), SQL_COLUMNS("NotifStr", "NotifType"),
+                               SQL_VALUES(warning, (int)NotifType::WARNING));
+            }
+        }
+
+        void writeQueueMaxSizes_(DatabaseManager* db_mgr) const
+        {
+            auto inserter = db_mgr->prepareINSERT(SQL_TABLE("QueueMaxSizes"));
+            for (const auto& [cid, max_size] : container_max_sizes_)
+            {
+                inserter->createRecordWithColValues((int)cid, (int)max_size);
+            }
         }
 
         const size_t heartbeat_;
@@ -441,6 +616,7 @@ private:
         std::unordered_set<uint32_t> clock_ids_;
         std::unordered_set<uint16_t> cids_with_data_;
 
+        std::unordered_map<uint16_t, std::unique_ptr<CollectableCheckpointer>> checkpointers_;
         std::unordered_map<uint16_t, uint16_t> container_max_sizes_;
 
         size_t num_scalars_ = 0;
