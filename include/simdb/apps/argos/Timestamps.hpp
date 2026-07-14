@@ -50,6 +50,30 @@ public:
         return stdfunction_();
     }
 
+    /// Create or look up a Timestamps table row for the given simulation time; return rowid.
+    static int createTimestampInDatabase(DatabaseManager* db_mgr, uint64_t time)
+    {
+        // Ensure we don't create multiple entries in the Timestamps table
+        // that have the same Timestamp column value (it will throw; must
+        // be unique).
+        //
+        // Note that this is called on the DB thread and it is not a big
+        // performance issue to query alongside the INSERT.
+        auto query = db_mgr->createQuery("Timestamps");
+        query->addConstraintForUInt64("Timestamp", Constraints::EQUAL, time);
+
+        int id;
+        query->select("Id", id);
+
+        if (query->getResultSet().getNextRecord())
+        {
+            assert(id > 0);
+            return id;
+        }
+
+        return db_mgr->INSERT(SQL_TABLE("Timestamps"), SQL_VALUES(time))->getId();
+    }
+
 private:
     const uint64_t* backpointer_ = nullptr;
     uint64_t (*cfuncpointer_)() = nullptr;
