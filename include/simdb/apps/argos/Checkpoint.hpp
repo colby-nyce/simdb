@@ -20,6 +20,9 @@ enum class Action : uint8_t {
     CLOSED = 0x00,
     FULL = 0x01,
     CARRY = 0x02,
+
+    CONTAINER_SWAP = 0x10,
+    CONTAINER_MULTI_SWAP = 0x11,
 };
 
 //! \class CollectableCheckpoint
@@ -299,6 +302,23 @@ private:
         return checkpoint;
     }
 
+    /// Maps a contig delta classification to its wire Action byte.
+    static Action contigActionFromKind_(ContigDeltaKind kind)
+    {
+        switch (kind)
+        {
+        case ContigDeltaKind::CARRY:
+            return Action::CARRY;
+        case ContigDeltaKind::SWAP:
+            return Action::CONTAINER_SWAP;
+        case ContigDeltaKind::MULTI_SWAP:
+            return Action::CONTAINER_MULTI_SWAP;
+        case ContigDeltaKind::FULL:
+            break;
+        }
+        throw DBException("Invalid contig delta kind");
+    }
+
     /// Appends the FULL tail for the current contig snapshot to \p buf.
     void appendFullTail_(StreamBuffer& buf) const { appendContigBins_(buf, full_bytes_); }
 
@@ -333,14 +353,38 @@ private:
         return encoded;
     }
 
-    /// Encodes CARRY when the contig snapshot is unchanged since the prior data checkpoint.
+    /// Encodes a classified contig delta to the wire buffer.
     std::unique_ptr<CollectedData> encodeDelta_(uint16_t cid, const ContigDeltaClassification& classification)
     {
-        assert(classification.kind == ContigDeltaKind::CARRY);
-        (void)classification;
         auto encoded = std::make_unique<CollectedData>(cid);
         auto& buf = encoded->getBuffer();
-        buf.append(Action::CARRY);
+        const auto action = contigActionFromKind_(classification.kind);
+        buf.append(action);
+
+        switch (action)
+        {
+        case Action::CONTAINER_SWAP:
+            assert(classification.swap_index.isValid());
+            assert(!classification.payload.empty());
+            buf.append(classification.swap_index.getValue());
+            buf.append(classification.payload);
+            break;
+        case Action::CONTAINER_MULTI_SWAP:
+            assert(classification.swap_indices.size() >= 2);
+            assert(classification.swap_indices.size() == classification.swap_payloads.size());
+            buf.append(static_cast<uint8_t>(classification.swap_indices.size()));
+            for (size_t i = 0; i < classification.swap_indices.size(); ++i)
+            {
+                buf.append(classification.swap_indices[i]);
+                buf.append(classification.swap_payloads[i]);
+            }
+            break;
+        case Action::CARRY:
+            break;
+        default:
+            throw DBException("Unexpected contig delta action");
+        }
+
         return encoded;
     }
 
@@ -441,6 +485,23 @@ private:
         return checkpoint;
     }
 
+    /// Maps a sparse delta classification to its wire Action byte.
+    static Action sparseActionFromKind_(SparseDeltaKind kind)
+    {
+        switch (kind)
+        {
+        case SparseDeltaKind::CARRY:
+            return Action::CARRY;
+        case SparseDeltaKind::SWAP:
+            return Action::CONTAINER_SWAP;
+        case SparseDeltaKind::MULTI_SWAP:
+            return Action::CONTAINER_MULTI_SWAP;
+        case SparseDeltaKind::FULL:
+            break;
+        }
+        throw DBException("Invalid sparse delta kind");
+    }
+
     /// Appends the FULL tail for the current sparse snapshot to \p buf.
     void appendFullTail_(StreamBuffer& buf) const { appendSparseBins_(buf, full_bytes_); }
 
@@ -479,14 +540,38 @@ private:
         return encoded;
     }
 
-    /// Encodes CARRY when the sparse snapshot is unchanged since the prior data checkpoint.
+    /// Encodes a classified sparse delta to the wire buffer.
     std::unique_ptr<CollectedData> encodeDelta_(uint16_t cid, const SparseDeltaClassification& classification)
     {
-        assert(classification.kind == SparseDeltaKind::CARRY);
-        (void)classification;
         auto encoded = std::make_unique<CollectedData>(cid);
         auto& buf = encoded->getBuffer();
-        buf.append(Action::CARRY);
+        const auto action = sparseActionFromKind_(classification.kind);
+        buf.append(action);
+
+        switch (action)
+        {
+        case Action::CONTAINER_SWAP:
+            assert(classification.bin_index.isValid());
+            assert(!classification.payload.empty());
+            buf.append(classification.bin_index.getValue());
+            buf.append(classification.payload);
+            break;
+        case Action::CONTAINER_MULTI_SWAP:
+            assert(classification.bin_indices.size() >= 2);
+            assert(classification.bin_indices.size() == classification.payloads.size());
+            buf.append(static_cast<uint8_t>(classification.bin_indices.size()));
+            for (size_t i = 0; i < classification.bin_indices.size(); ++i)
+            {
+                buf.append(classification.bin_indices[i]);
+                buf.append(classification.payloads[i]);
+            }
+            break;
+        case Action::CARRY:
+            break;
+        default:
+            throw DBException("Unexpected sparse delta action");
+        }
+
         return encoded;
     }
 
