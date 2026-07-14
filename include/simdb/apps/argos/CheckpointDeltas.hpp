@@ -3,7 +3,6 @@
 #pragma once
 
 #include "simdb/Exceptions.hpp"
-#include "simdb/utils/ValidValue.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -41,28 +40,12 @@ inline std::ostream& operator<<(std::ostream& os, ScalarDeltaKind kind)
 }
 
 //! Contiguous-container delta kinds.
-enum class ContigDeltaKind {
-    CARRY,
-    SWAP,
-    MULTI_SWAP,
-    BOOKENDS,
-    ARRIVE,
-    DEPART,
-    MIMO,
-    FULL,
-};
+enum class ContigDeltaKind { CARRY, FULL };
 
 //! Result of classifying a contig container transition.
 struct ContigDeltaClassification
 {
     ContigDeltaKind kind = ContigDeltaKind::FULL;
-    simdb::ValidValue<uint16_t> swap_index;
-    std::vector<char> payload;
-    uint8_t depart_count = 0;
-    uint8_t arrive_count = 0;
-    std::vector<std::vector<char>> arrive_payloads;
-    std::vector<uint16_t> swap_indices;
-    std::vector<std::vector<char>> swap_payloads;
 };
 
 inline uint16_t countContigElements(const std::vector<std::vector<char>>& contig_bins)
@@ -125,18 +108,6 @@ inline std::ostream& operator<<(std::ostream& os, ContigDeltaKind kind)
     {
     case ContigDeltaKind::CARRY:
         return os << "CARRY";
-    case ContigDeltaKind::SWAP:
-        return os << "SWAP";
-    case ContigDeltaKind::MULTI_SWAP:
-        return os << "MULTI_SWAP";
-    case ContigDeltaKind::BOOKENDS:
-        return os << "BOOKENDS";
-    case ContigDeltaKind::ARRIVE:
-        return os << "ARRIVE";
-    case ContigDeltaKind::DEPART:
-        return os << "DEPART";
-    case ContigDeltaKind::MIMO:
-        return os << "MIMO";
     case ContigDeltaKind::FULL:
         return os << "FULL";
     }
@@ -144,24 +115,12 @@ inline std::ostream& operator<<(std::ostream& os, ContigDeltaKind kind)
 }
 
 //! Sparse-container delta kinds.
-enum class SparseDeltaKind {
-    CARRY,
-    SWAP,
-    MULTI_SWAP,
-    REMOVE,
-    ADD,
-    MULTI_REMOVE,
-    FULL,
-};
+enum class SparseDeltaKind { CARRY, FULL };
 
 //! Result of classifying a sparse container transition.
 struct SparseDeltaClassification
 {
     SparseDeltaKind kind = SparseDeltaKind::FULL;
-    simdb::ValidValue<uint16_t> bin_index;
-    std::vector<char> payload;
-    std::vector<uint16_t> bin_indices;
-    std::vector<std::vector<char>> payloads;
 };
 
 inline uint16_t countSparseElements(const std::map<uint16_t, std::vector<char>>& sparse_bins)
@@ -209,16 +168,6 @@ inline std::ostream& operator<<(std::ostream& os, SparseDeltaKind kind)
     {
     case SparseDeltaKind::CARRY:
         return os << "CARRY";
-    case SparseDeltaKind::SWAP:
-        return os << "SWAP";
-    case SparseDeltaKind::MULTI_SWAP:
-        return os << "MULTI_SWAP";
-    case SparseDeltaKind::REMOVE:
-        return os << "REMOVE";
-    case SparseDeltaKind::ADD:
-        return os << "ADD";
-    case SparseDeltaKind::MULTI_REMOVE:
-        return os << "MULTI_REMOVE";
     case SparseDeltaKind::FULL:
         return os << "FULL";
     }

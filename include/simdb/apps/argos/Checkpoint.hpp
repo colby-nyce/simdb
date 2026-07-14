@@ -17,29 +17,9 @@ namespace simdb::argos {
 //!
 //! See CheckpointEncodings.hpp for full action / byte layout documentation.
 enum class Action : uint8_t {
-    // Tier 1: 0x00–0x0F — lifecycle / common (scalars + all collectables)
     CLOSED = 0x00,
     FULL = 0x01,
     CARRY = 0x02,
-    // 0x03–0x0F reserved
-
-    // Tier 2: 0x10–0x1F — any-container (identical wire for contig & sparse)
-    CONTAINER_SWAP = 0x10,
-    CONTAINER_MULTI_SWAP = 0x11,
-    // 0x12–0x1F reserved
-
-    // Tier 3: 0x20–0x2F — contig-specific (FIFO queue semantics)
-    CONTIG_ARRIVE = 0x20,
-    CONTIG_DEPART = 0x21,
-    CONTIG_BOOKENDS = 0x22,
-    CONTIG_MIMO = 0x23,
-    // 0x24–0x2F reserved
-
-    // Tier 4: 0x30–0x3F — sparse-specific (explicit bin indices)
-    SPARSE_REMOVE = 0x30,
-    SPARSE_ADD = 0x31,
-    SPARSE_MULTI_REMOVE = 0x32,
-    // 0x33–0x3F reserved
 };
 
 //! \class CollectableCheckpoint
@@ -319,21 +299,6 @@ private:
         return checkpoint;
     }
 
-    /// Maps a contig delta classification to its wire Action byte.
-    static Action contigActionFromKind_(ContigDeltaKind kind)
-    {
-        switch (kind)
-        {
-        case ContigDeltaKind::CARRY:
-            return Action::CARRY;
-        case ContigDeltaKind::FULL:
-            break;
-        default:
-            break;
-        }
-        throw DBException("Invalid contig delta kind");
-    }
-
     /// Appends the FULL tail for the current contig snapshot to \p buf.
     void appendFullTail_(StreamBuffer& buf) const { appendContigBins_(buf, full_bytes_); }
 
@@ -371,9 +336,11 @@ private:
     /// Encodes CARRY when the contig snapshot is unchanged since the prior data checkpoint.
     std::unique_ptr<CollectedData> encodeDelta_(uint16_t cid, const ContigDeltaClassification& classification)
     {
+        assert(classification.kind == ContigDeltaKind::CARRY);
+        (void)classification;
         auto encoded = std::make_unique<CollectedData>(cid);
         auto& buf = encoded->getBuffer();
-        buf.append(contigActionFromKind_(classification.kind));
+        buf.append(Action::CARRY);
         return encoded;
     }
 
@@ -474,21 +441,6 @@ private:
         return checkpoint;
     }
 
-    /// Maps a sparse delta classification to its wire Action byte.
-    static Action sparseActionFromKind_(SparseDeltaKind kind)
-    {
-        switch (kind)
-        {
-        case SparseDeltaKind::CARRY:
-            return Action::CARRY;
-        case SparseDeltaKind::FULL:
-            break;
-        default:
-            break;
-        }
-        throw DBException("Invalid sparse delta kind");
-    }
-
     /// Appends the FULL tail for the current sparse snapshot to \p buf.
     void appendFullTail_(StreamBuffer& buf) const { appendSparseBins_(buf, full_bytes_); }
 
@@ -530,9 +482,11 @@ private:
     /// Encodes CARRY when the sparse snapshot is unchanged since the prior data checkpoint.
     std::unique_ptr<CollectedData> encodeDelta_(uint16_t cid, const SparseDeltaClassification& classification)
     {
+        assert(classification.kind == SparseDeltaKind::CARRY);
+        (void)classification;
         auto encoded = std::make_unique<CollectedData>(cid);
         auto& buf = encoded->getBuffer();
-        buf.append(sparseActionFromKind_(classification.kind));
+        buf.append(Action::CARRY);
         return encoded;
     }
 

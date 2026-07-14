@@ -37,8 +37,7 @@
  *                                           rules apply.
  * \endverbatim
  *
- * Scalars only ever emit CLOSED, FULL, or CARRY. Container delta encodings (tiers 2–4)
- * are reserved in the Action enum and documented in follow-on PRs.
+ * Scalars only ever emit CLOSED, FULL, or CARRY.
  *
  * \par FULL forcing (checkpointer layer)
  *
@@ -62,16 +61,6 @@
  * | FULL (scalar)          | [scalar bytes]                                         |
  * | FULL (contig)          | [count][bin bytes]..[bin bytes]                        |
  * | FULL (sparse)          | [count][bin idx][bin bytes]..[bin idx][bin bytes]      |
- *
- * \par Action enum tiers (Checkpoint.hpp)
- *
- * - Tier 1 (`0x00`–`0x0F`): lifecycle / common — CLOSED, FULL, CARRY; `0x03`–`0x0F` reserved
- * - Tier 2 (`0x10`–`0x1F`): any-container — CONTAINER_SWAP, CONTAINER_MULTI_SWAP;
- *   `0x12`–`0x1F` reserved
- * - Tier 3 (`0x20`–`0x2F`): contig-specific — CONTIG_ARRIVE, CONTIG_DEPART, CONTIG_BOOKENDS,
- *   CONTIG_MIMO; `0x24`–`0x2F` reserved
- * - Tier 4 (`0x30`–`0x3F`): sparse-specific — SPARSE_REMOVE, SPARSE_ADD, SPARSE_MULTI_REMOVE;
- *   `0x33`–`0x3F` reserved
  *
  * \par Related implementation files
  *
