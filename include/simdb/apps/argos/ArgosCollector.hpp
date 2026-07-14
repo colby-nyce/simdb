@@ -8,8 +8,10 @@
 #include "simdb/apps/argos/EnumInspector.hpp"
 #include "simdb/apps/argos/PipelineStagerInterface.hpp"
 #include "simdb/apps/argos/Timestamps.hpp"
+#include "simdb/pipeline/PipelineManager.hpp"
 #include "simdb/sqlite/Dump.hpp"
 #include "simdb/utils/Compress.hpp"
+#include "simdb/utils/ConcurrentQueue.hpp"
 #include "simdb/utils/TinyStrings.hpp"
 
 namespace simdb::argos {
