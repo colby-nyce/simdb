@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/Exceptions.hpp"
 #include <cstring>
 #include <vector>
@@ -100,10 +101,7 @@ template <typename T> inline void decompressData(const std::vector<char>& in, st
     stream.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(in.data()));
     stream.avail_in = static_cast<uInt>(in.size());
 
-    if (inflateInit(&stream) != Z_OK)
-    {
-        throw DBException("Failed to initialize zlib inflate stream.");
-    }
+    simdb_assert(inflateInit(&stream) == Z_OK, "Failed to initialize zlib inflate stream.");
 
     do
     {
@@ -117,8 +115,9 @@ template <typename T> inline void decompressData(const std::vector<char>& in, st
         if (ret != Z_OK && ret != Z_STREAM_END)
         {
             inflateEnd(&stream);
-            throw DBException("Decompression failed with zlib error code: " + std::to_string(ret));
         }
+        simdb_assert(ret == Z_OK || ret == Z_STREAM_END,
+                     "Decompression failed with zlib error code: " + std::to_string(ret));
     } while (stream.avail_out == 0);
 
     // Adjust actual used size
@@ -128,10 +127,7 @@ template <typename T> inline void decompressData(const std::vector<char>& in, st
 
     // Convert decompressed bytes to std::vector<T>
     size_t byte_count = decompressed_buffer.size();
-    if (byte_count % sizeof(T) != 0)
-    {
-        throw DBException("Decompressed data size is not aligned with type T.");
-    }
+    simdb_assert(byte_count % sizeof(T) == 0, "Decompressed data size is not aligned with type T.");
 
     size_t elem_count = byte_count / sizeof(T);
     out.resize(elem_count);

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/sqlite/Transaction.hpp"
 #include "simdb/utils/utf16.hpp"
 
@@ -53,10 +54,7 @@ inline bool columnIsNull(sqlite3_stmt* stmt, const int idx)
 
 inline void requireNonNullColumn(sqlite3_stmt* stmt, const int idx, const std::string& col_name)
 {
-    if (columnIsNull(stmt, idx))
-    {
-        throw DBException("Column '") << col_name << "' is NULL; use std::optional overload";
-    }
+    simdb_assert(!columnIsNull(stmt, idx), "Column '" << col_name << "' is NULL; use std::optional overload");
 }
 } // namespace detail
 
@@ -182,10 +180,7 @@ public:
 
         sqlite3_int64 tmp = sqlite3_column_int64(stmt, idx);
 
-        if (tmp < 0 || tmp > UINT32_MAX)
-        {
-            throw DBException("Value out of range for uint32_t");
-        }
+        simdb_assert(tmp >= 0 && tmp <= UINT32_MAX, "Value out of range for uint32_t");
 
         *user_var_ = static_cast<uint32_t>(tmp);
     }
@@ -476,9 +471,9 @@ public:
                 result_writers_[idx]->writeToUserVar(stmt_, (int)idx);
             }
             return true;
-        } else if (rc != SQLITE_DONE)
+        } else
         {
-            throw DBException(sqlite3_errmsg(sqlite3_db_handle(stmt_)));
+            simdb_assert(rc == SQLITE_DONE, sqlite3_errmsg(sqlite3_db_handle(stmt_)));
         }
 
         return false;
@@ -486,13 +481,7 @@ public:
 
     /// Go back to the beginning of the result set if you need
     /// to iterate over it again.
-    void reset()
-    {
-        if (SQLiteReturnCode(sqlite3_reset(stmt_)))
-        {
-            throw DBException(sqlite3_errmsg(sqlite3_db_handle(stmt_)));
-        }
-    }
+    void reset() { simdb_assert(!SQLiteReturnCode(sqlite3_reset(stmt_)), sqlite3_errmsg(sqlite3_db_handle(stmt_))); }
 
 private:
     /// Prepared statement

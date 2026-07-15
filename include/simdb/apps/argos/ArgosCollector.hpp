@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/apps/App.hpp"
 #include "simdb/apps/argos/Checkpointer.hpp"
 #include "simdb/apps/argos/EntryPoint.hpp"
@@ -107,10 +108,7 @@ public:
 
     void setHeartbeat(size_t heartbeat)
     {
-        if (heartbeat == 0)
-        {
-            throw DBException("Cannot use 0 for Argos collector heartbeat");
-        }
+        simdb_assert(heartbeat != 0, "Cannot use 0 for Argos collector heartbeat");
         heartbeat_ = heartbeat;
     }
 
@@ -122,10 +120,8 @@ public:
         {
             if (clk_name == _clk_name)
             {
-                if (period != _period || numer != _numer || denom != _denom)
-                {
-                    throw DBException("Clock mismatch - already registered with different params: ") << clk_name;
-                }
+                simdb_assert(period == _period && numer == _numer && denom == _denom,
+                             "Clock mismatch - already registered with different params: " << clk_name);
             }
         }
 
@@ -135,28 +131,19 @@ public:
 
     void timestampWith(const uint64_t* backpointer)
     {
-        if (timestamp_ != nullptr)
-        {
-            throw DBException("Cannot change timestamp object once created!");
-        }
+        simdb_assert(timestamp_ == nullptr, "Cannot change timestamp object once created!");
         timestamp_ = std::make_unique<Timestamp>(backpointer);
     }
 
     void timestampWith(uint64_t (*fn)())
     {
-        if (timestamp_ != nullptr)
-        {
-            throw DBException("Cannot change timestamp object once created!");
-        }
+        simdb_assert(timestamp_ == nullptr, "Cannot change timestamp object once created!");
         timestamp_ = std::make_unique<Timestamp>(fn);
     }
 
     void timestampWith(std::function<uint64_t()> fn)
     {
-        if (timestamp_ != nullptr)
-        {
-            throw DBException("Cannot change timestamp object once created!");
-        }
+        simdb_assert(timestamp_ == nullptr, "Cannot change timestamp object once created!");
         timestamp_ = std::make_unique<Timestamp>(fn);
     }
 
@@ -736,11 +723,8 @@ private:
 
     void assertLive_() const
     {
-        if (!is_live_ || !timestamp_)
-        {
-            throw DBException("API call cannot be made until pipeline is open and "
-                              "timestampWith() was called");
-        }
+        simdb_assert(is_live_ && timestamp_, "API call cannot be made until pipeline is open and "
+                                             "timestampWith() was called");
     }
 
     void checkTimeAdvanced_()
@@ -755,7 +739,7 @@ private:
                                                pipeline_stager_->getNumContigs(), pipeline_stager_->getNumSparses());
         } else if (current_time < current_stage_time_.getValue())
         {
-            throw DBException("Time must be monotonically increasing");
+            simdb_assert(current_time >= current_stage_time_.getValue(), "Time must be monotonically increasing");
         } else if (current_time > current_stage_time_.getValue())
         {
             if (ledger_)
