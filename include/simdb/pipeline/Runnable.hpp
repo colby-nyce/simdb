@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/Exceptions.hpp"
+#include "simdb/Assert.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 
 #include <iostream>
@@ -67,10 +67,7 @@ public:
 protected:
     const PollingThread* getThread_() const
     {
-        if (!thread_)
-        {
-            throw DBException("PollingThread never set");
-        }
+        simdb_assert(thread_, "PollingThread never set");
         return thread_;
     }
 

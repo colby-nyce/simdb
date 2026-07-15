@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/sqlite/Constraints.hpp"
 #include "simdb/sqlite/Iterator.hpp"
 #include <iomanip>
@@ -72,10 +73,7 @@ public:
     /// Add a GROUP BY clause. Only one allowed.
     void groupBy(const char* col_name)
     {
-        if (!group_by_column_.empty())
-        {
-            throw DBException("Only one GROUP BY clause allowed");
-        }
+        simdb_assert(group_by_column_.empty(), "Only one GROUP BY clause allowed");
         group_by_column_ = col_name;
     }
 
@@ -559,10 +557,7 @@ public:
 
         const auto cmd = oss.str();
         auto stmt = SQLitePreparedStatement(db_conn_, cmd);
-        if (SQLiteReturnCode(sqlite3_step(stmt) != SQLITE_DONE))
-        {
-            throw DBException(sqlite3_errmsg(db_conn_));
-        }
+        simdb_assert(sqlite3_step(stmt) == SQLITE_DONE, sqlite3_errmsg(db_conn_));
     }
 
     /// Execute the query. Returns an iterator to walk the result set

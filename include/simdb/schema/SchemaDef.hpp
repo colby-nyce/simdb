@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/Exceptions.hpp"
 
 #include <algorithm>
@@ -91,57 +92,37 @@ public:
     /// throw if you attempt to set a SqlBlob default value.
     template <typename T> void setDefaultValue(const T val)
     {
-        if (dt_ == SqlDataType::blob_t)
-        {
-            throw DBException("Cannot set default value for a database "
-                              "column with blob data type");
-        }
+        simdb_assert(dt_ != SqlDataType::blob_t, "Cannot set default value for a database "
+                                                 "column with blob data type");
 
         if constexpr (std::is_integral_v<T> && sizeof(T) == 64)
         {
-            if (dt_ == SqlDataType::int32_t)
-            {
-                throw DBException("Cannot assign 64-bit default value to 32-bit column");
-            }
+            simdb_assert(dt_ != SqlDataType::int32_t, "Cannot assign 64-bit default value to 32-bit column");
         }
 
         if constexpr (std::is_integral_v<T>)
         {
-            if (dt_ == SqlDataType::string_t)
-            {
-                throw DBException("Cannot assign integral default value to string column");
-            }
+            simdb_assert(dt_ != SqlDataType::string_t, "Cannot assign integral default value to string column");
         }
 
         if constexpr (std::is_same_v<T, const char*>)
         {
-            if (dt_ == SqlDataType::int32_t || dt_ == SqlDataType::int64_t)
-            {
-                throw DBException("Cannot assign string default value to an integer column");
-            }
+            simdb_assert(dt_ != SqlDataType::int32_t&& dt_ != SqlDataType::int64_t,
+                         "Cannot assign string default value to an integer column");
         }
 
         std::ostringstream ss;
         writeDefaultValue_(ss, val);
         setDefaultValueStr_(ss.str());
 
-        if (default_val_string_.empty())
-        {
-            throw DBException("Unable to convert default value ") << val << " into a std::string";
-        }
+        simdb_assert(!default_val_string_.empty(), "Unable to convert default value " << val << " into a std::string");
     }
 
     /// Called in order to set default values for TEXT columns.
     void setDefaultValue(const std::string& val)
     {
-        if (dt_ != SqlDataType::string_t)
-        {
-            throw DBException("Unable to set default value string (data type mismatch)");
-        }
-        if (unique_col_)
-        {
-            throw DBException("Cannot set default column value on a unique column");
-        }
+        simdb_assert(dt_ == SqlDataType::string_t, "Unable to set default value string (data type mismatch)");
+        simdb_assert(!unique_col_, "Cannot set default column value on a unique column");
 
         setDefaultValueStr_(val);
     }
@@ -161,10 +142,7 @@ public:
     ///   );
     void ensureUnique()
     {
-        if (hasDefaultValue())
-        {
-            throw DBException("Column has default value; cannot make unique");
-        }
+        simdb_assert(!hasDefaultValue(), "Column has default value; cannot make unique");
         unique_col_ = true;
     }
 
@@ -236,14 +214,8 @@ public:
     /// Add a column to this table's schema with a name and data type.
     Table& addColumn(const std::string& name, const SqlDataType dt)
     {
-        if (hasColumn(name))
-        {
-            throw DBException("Table already has a column named ") << name;
-        }
-        if (name == "Id")
-        {
-            throw DBException("Cannot explicitly create the Id column; call Table::setPrimaryKey(\"Id\")");
-        }
+        simdb_assert(!hasColumn(name), "Table already has a column named " << name);
+        simdb_assert(name != "Id", "Cannot explicitly create the Id column; call Table::setPrimaryKey(\"Id\")");
 
         columns_.emplace_back(new Column(name, dt));
         columns_by_name_[name] = columns_.back();
@@ -254,10 +226,7 @@ public:
     const Column& getColumn(const std::string& col_name) const
     {
         auto iter = columns_by_name_.find(col_name);
-        if (iter == columns_by_name_.end())
-        {
-            throw DBException("No column named ") << col_name << " in table " << name_;
-        }
+        simdb_assert(iter != columns_by_name_.end(), "No column named " << col_name << " in table " << name_);
 
         return *(iter->second);
     }
@@ -272,10 +241,7 @@ public:
     template <typename T> Table& setColumnDefaultValue(const std::string& col_name, const T default_val)
     {
         auto iter = columns_by_name_.find(col_name);
-        if (iter == columns_by_name_.end())
-        {
-            throw DBException("No column named ") << col_name << " in table " << name_;
-        }
+        simdb_assert(iter != columns_by_name_.end(), "No column named " << col_name << " in table " << name_);
 
         iter->second->setDefaultValue(default_val);
         return *this;
@@ -285,10 +251,7 @@ public:
     Table& setColumnDefaultValue(const std::string& col_name, const std::string& default_val)
     {
         auto iter = columns_by_name_.find(col_name);
-        if (iter == columns_by_name_.end())
-        {
-            throw DBException("No column named ") << col_name << " in table " << name_;
-        }
+        simdb_assert(iter != columns_by_name_.end(), "No column named " << col_name << " in table " << name_);
 
         iter->second->setDefaultValue(default_val);
         return *this;
@@ -302,10 +265,7 @@ public:
     Table& ensureUnique(const std::string& col_name)
     {
         auto iter = columns_by_name_.find(col_name);
-        if (iter == columns_by_name_.end())
-        {
-            throw DBException("No column named ") << col_name << " in table " << name_;
-        }
+        simdb_assert(iter != columns_by_name_.end(), "No column named " << col_name << " in table " << name_);
 
         iter->second->ensureUnique();
         return *this;
@@ -327,10 +287,8 @@ public:
     {
         for (const auto& col_name : col_names)
         {
-            if (columns_by_name_.find(col_name) == columns_by_name_.end())
-            {
-                throw DBException("Column ") << col_name << " does not exist in table " << name_;
-            }
+            simdb_assert(columns_by_name_.find(col_name) != columns_by_name_.end(),
+                         "Column " << col_name << " does not exist in table " << name_);
         }
 
         std::ostringstream oss;
@@ -411,10 +369,8 @@ public:
             return unsetPrimaryKey();
         }
 
-        if (!hasColumn(pkey_column) && pkey_column != "Id")
-        {
-            throw DBException("Primary key column does not exist: ") << pkey_column;
-        }
+        simdb_assert(hasColumn(pkey_column) || pkey_column == "Id",
+                     "Primary key column does not exist: " << pkey_column);
         primary_key_column_ = pkey_column;
         return *this;
     }
@@ -474,10 +430,7 @@ private:
     Column& getColumn_(const std::string& col_name)
     {
         auto iter = columns_by_name_.find(col_name);
-        if (iter == columns_by_name_.end())
-        {
-            throw DBException("No column named ") << col_name << " in table " << name_;
-        }
+        simdb_assert(iter != columns_by_name_.end(), "No column named " << col_name << " in table " << name_);
 
         return *(iter->second);
     }
@@ -523,11 +476,8 @@ public:
     {
         for (auto& lhs : tables_)
         {
-            if (lhs.getName() == table_name)
-            {
-                throw DBException("Cannot add table '" + table_name +
-                                  "' to schema. A table with that name already exists.");
-            }
+            simdb_assert(lhs.getName() != table_name,
+                         "Cannot add table '" + table_name + "' to schema. A table with that name already exists.");
         }
 
         tables_.emplace_back(table_name);
@@ -542,12 +492,9 @@ public:
             if (hasTable(table.getName()))
             {
                 auto& existing_table = getTable(table.getName());
-                if (existing_table != table)
-                {
-                    throw DBException("Cannot append schema - it has a table "
-                                      "we already have by that name ")
-                        << "(" << table.getName() << ")";
-                }
+                simdb_assert(existing_table == table, "Cannot append schema - it has a table "
+                                                      "we already have by that name "
+                                                          << "(" << table.getName() << ")");
             } else
             {
                 tables_.push_back(table);

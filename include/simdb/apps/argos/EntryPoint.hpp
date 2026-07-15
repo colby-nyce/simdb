@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/apps/argos/EnumInspector.hpp"
 #include "simdb/apps/argos/PipelineDataTypes.hpp"
 #include "simdb/apps/argos/PipelineStagerInterface.hpp"
@@ -73,10 +74,7 @@ private:
     static uint16_t& nextCID_()
     {
         static uint16_t counter = 0;
-        if (counter == UINT16_MAX)
-        {
-            throw DBException("Max number of collectables exceeded (") << UINT16_MAX << ")";
-        }
+        simdb_assert(counter != UINT16_MAX, "Max number of collectables exceeded (" << UINT16_MAX << ")");
         ++counter;
         return counter;
     }

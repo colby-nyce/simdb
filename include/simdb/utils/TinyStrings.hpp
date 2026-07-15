@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/Exceptions.hpp"
 #include "simdb/sqlite/DatabaseManager.hpp"
 #include "simdb/sqlite/PreparedINSERT.hpp"
@@ -79,10 +80,7 @@ public:
     /// Serialize newly seen string mappings to the database.
     void serialize(DatabaseManager* db_mgr)
     {
-        if (!db_mgr)
-        {
-            throw DBException("TinyStrings::serialize requires a DatabaseManager");
-        }
+        simdb_assert(db_mgr, "TinyStrings::serialize requires a DatabaseManager");
 
         db_mgr->safeTransaction([&]() {
             DeferredLock<std::mutex> lock(mutex_);
@@ -94,9 +92,9 @@ public:
             if (allowed_db_ == nullptr)
             {
                 allowed_db_ = db_mgr;
-            } else if (allowed_db_ != db_mgr)
+            } else
             {
-                throw DBException("TinyStrings::serialize may only target one DatabaseManager");
+                simdb_assert(allowed_db_ == db_mgr, "TinyStrings::serialize may only target one DatabaseManager");
             }
 
             const auto& schema = db_mgr->getSchema();
@@ -126,10 +124,7 @@ private:
         auto iter = map_->find(s);
         if (iter == map_->end())
         {
-            if (map_->size() == UINT32_MAX)
-            {
-                throw DBException("Too many TinyStrings created. UINT32_MAX has been reached.");
-            }
+            simdb_assert(map_->size() != UINT32_MAX, "Too many TinyStrings created. UINT32_MAX has been reached.");
 
             uint32_t id = map_->size() + 1;
             map_->insert({s, id});

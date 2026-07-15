@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/Exceptions.hpp"
+#include "simdb/Assert.hpp"
 #include "simdb/pipeline/DatabaseAccessor.hpp"
 #include "simdb/pipeline/DatabaseThread.hpp"
 #include "simdb/pipeline/PollingThread.hpp"
@@ -164,19 +164,13 @@ template <typename AppT> class DatabaseStage : public DatabaseStageBase
 protected:
     DatabaseManager* getDatabaseManager_()
     {
-        if (!db_accessor_)
-        {
-            throw DBException("DatabaseAccessor not initialized");
-        }
+        simdb_assert(db_accessor_, "DatabaseAccessor not initialized");
         return db_accessor_->getDatabaseManager();
     }
 
     PreparedINSERT* getTableInserter_(const std::string& tbl_name)
     {
-        if (!db_accessor_)
-        {
-            throw DBException("DatabaseAccessor not initialized");
-        }
+        simdb_assert(db_accessor_, "DatabaseAccessor not initialized");
         return db_accessor_->template getTableInserter<AppT>(tbl_name);
     }
 

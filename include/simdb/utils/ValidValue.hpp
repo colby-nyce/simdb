@@ -1,5 +1,6 @@
 #pragma once
 
+#include "simdb/Assert.hpp"
 #include "simdb/Exceptions.hpp"
 #include "simdb/utils/TypeTraits.hpp"
 #include <iostream>
@@ -44,19 +45,13 @@ public:
 
     const T& getValue() const
     {
-        if (!valid_)
-        {
-            throw DBException("Invalid value - not set");
-        }
+        simdb_assert(valid_, "Invalid value - not set");
         return value_;
     }
 
     T& getValue()
     {
-        if (!valid_)
-        {
-            throw DBException("Invalid value - not set");
-        }
+        simdb_assert(valid_, "Invalid value - not set");
         return value_;
     }
 

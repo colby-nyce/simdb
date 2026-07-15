@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "simdb/Exceptions.hpp"
+#include "simdb/Assert.hpp"
 #include "simdb/pipeline/Runnable.hpp"
 #include "simdb/utils/StreamFormatters.hpp"
 
@@ -44,10 +44,7 @@ public:
     /// \throws DBException if called while the thread is running.
     void addRunnable(Runnable* runnable)
     {
-        if (is_running_)
-        {
-            throw DBException("Cannot add runnables while thread is running");
-        }
+        simdb_assert(!is_running_, "Cannot add runnables while thread is running");
         runnables_.emplace_back(runnable);
         runnable->thread_ = this;
     }
